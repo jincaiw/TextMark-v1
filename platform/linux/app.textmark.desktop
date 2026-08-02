@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=TextMark
+Name[zh_CN]=TextMark Markdown 阅读器
+Comment=Preview and edit Markdown documents
+Comment[zh_CN]=预览和编辑 Markdown 文档
+Exec=textmark %U
+Icon=textmark
+Terminal=false
+Categories=Office;Utility;TextEditor;
+MimeType=text/markdown;text/plain;
+Actions=QuickPreview;
+
+[Desktop Action QuickPreview]
+Name=Quick Preview with TextMark
+Name[zh_CN]=使用 TextMark 快速预览
+Exec=textmark --new-window %U
