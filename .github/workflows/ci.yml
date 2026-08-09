@@ -2,7 +2,7 @@ name: TextMark CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "agent/**"]
   pull_request:
 
 jobs:
@@ -10,20 +10,65 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-latest, ubuntu-24.04]
+        os: [macos-15, windows-2025, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { components: clippy }
       - name: Linux system dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: npm ci --include=dev
-      - run: npm test
+      - run: npm test -- --run
       - run: npm run build
+      - run: npm audit --audit-level=high
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+  architecture-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { targets: "${{ matrix.target }}" }
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci --include=dev
+      - run: npm run tauri build -- --target ${{ matrix.target }} --config src-tauri/tauri.ci.conf.json
+
+  native-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+      - run: npm ci --include=dev
+      - run: npm run build:e2e
+      - name: Embedded WebDriver E2E
+        if: runner.os != 'Linux'
+        run: npm run test:e2e
+      - name: Embedded WebDriver E2E (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:e2e

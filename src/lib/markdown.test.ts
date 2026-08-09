@@ -43,4 +43,23 @@ describe("renderMarkdown", () => {
     expect(rendered.frontmatter).toEqual([{ key: "title", value: "Demo" }, { key: "tags", value: "docs" }]);
     expect(rendered.html).not.toContain("title: Demo");
   });
+
+  it("maps task and table source locations for source-aware editing", () => {
+    const rendered = renderMarkdown("# Title\n\n- [x] done\n\n| A | B |\n| --- | --- |\n| 1 | 2 |");
+    expect(rendered.tasks).toEqual([{ index: 0, line: 3, checked: true }]);
+    expect(rendered.tables[0]).toMatchObject({ startLine: 5, endLine: 7, rows: 2, columns: 2 });
+    expect(rendered.sourceMap.map((entry) => entry.kind)).toEqual(["heading", "task", "table"]);
+  });
+
+  it("renders canonical LaTeX delimiters but keeps code literal", () => {
+    const rendered = renderMarkdown("\\(x + y\\) and `\\(literal\\)`\n\n\\[z^2\\]");
+    expect(rendered.html).toContain("katex");
+    expect(rendered.html).toContain("\\(literal\\)");
+  });
+
+  it("uses a real HCL grammar for Terraform fences", () => {
+    const rendered = renderMarkdown("```terraform\nresource \"aws_s3_bucket\" \"example\" { enabled = true }\n```");
+    expect(rendered.html).toContain("hljs-keyword");
+    expect(rendered.html).toContain("hljs-attr");
+  });
 });

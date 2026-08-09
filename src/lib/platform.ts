@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppError, FileNode, TextDocument } from "../types";
+import type { AppError, ExternalApplication, FileNode, TextDocument } from "../types";
 
 declare global {
   interface Window {
@@ -41,19 +41,32 @@ export async function readDocument(path: string): Promise<TextDocument> {
   return invoke<TextDocument>("read_text_file", { path });
 }
 
-export async function readStartupDocument(): Promise<TextDocument | null> {
-  if (!isTauri()) return null;
-  return invoke<TextDocument | null>("startup_document");
+export async function readStartupDocuments(): Promise<TextDocument[]> {
+  if (!isTauri()) return [];
+  return invoke<TextDocument[]>("startup_documents");
 }
 
-export async function writeDocument(path: string, contents: string): Promise<void> {
-  await invoke("write_text_file", { path, contents });
+export async function writeDocument(path: string, contents: string, expectedRevision?: string, force = false): Promise<TextDocument> {
+  return invoke<TextDocument>("write_text_file", { path, contents, expectedRevision, force });
 }
 
 export async function scanFolder(path: string): Promise<FileNode[]> {
   return invoke<FileNode[]>("list_directory", { path });
 }
 
-export async function loadLocalAsset(baseDir: string, relativePath: string): Promise<string> {
-  return invoke<string>("read_local_asset", { baseDir, relativePath });
+export async function loadLocalAsset(baseDir: string, relativePath: string, workspaceRoot?: string | null): Promise<string> {
+  return invoke<string>("read_local_asset", { baseDir, relativePath, workspaceRoot: workspaceRoot ?? null });
+}
+
+export async function setNativeMenuLocale(locale: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("set_menu_locale", { locale });
+}
+
+export async function discoverApplications(): Promise<ExternalApplication[]> {
+  if (!isTauri()) return [
+    { id: "system", name: "System Default", kind: "system", available: true },
+    { id: "chatgpt", name: "ChatGPT", kind: "llm", available: true },
+  ];
+  return invoke<ExternalApplication[]>("discover_applications");
 }

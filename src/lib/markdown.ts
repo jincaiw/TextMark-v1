@@ -1,4 +1,3 @@
-import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
@@ -15,6 +14,7 @@ import texmath from "markdown-it-texmath";
 import katex from "katex";
 import type { OutlineItem, RenderedMarkdown } from "../types";
 import { splitFrontmatter } from "./frontmatter";
+import { sanitizeRenderedMarkdown } from "./sanitize";
 
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
@@ -27,11 +27,25 @@ hljs.registerLanguage("rust", rust);
 hljs.registerLanguage("typescript", typescript);
 hljs.registerLanguage("tsx", typescript);
 hljs.registerLanguage("xml", xml);
-// highlight.js does not ship an HCL grammar in its core distribution. Bash
-// preserves comments, strings and braces safely until the optional grammar is
-// available, rather than treating Terraform as untrusted raw HTML.
-hljs.registerLanguage("hcl", bash);
-hljs.registerLanguage("terraform", bash);
+const hcl = (api: typeof hljs) => ({
+  name: "HCL",
+  aliases: ["terraform", "tf"],
+  keywords: {
+    keyword: "resource data variable output module provider terraform locals dynamic for in if",
+    literal: "true false null",
+  },
+  contains: [
+    api.COMMENT("#", "$"),
+    api.COMMENT("//", "$"),
+    api.COMMENT("/\\*", "\\*/"),
+    api.QUOTE_STRING_MODE,
+    api.NUMBER_MODE,
+    { className: "attr", begin: /[A-Za-z_][\w-]*(?=\s*=)/ },
+  ],
+});
+hljs.registerLanguage("hcl", hcl);
+hljs.registerLanguage("terraform", hcl);
+hljs.registerLanguage("tf", hcl);
 hljs.registerLanguage("sh", bash);
 hljs.registerLanguage("shell", bash);
 
@@ -122,31 +136,74 @@ function makeRenderer() {
 
 const renderer = makeRenderer();
 
-export function renderMarkdown(source: string): RenderedMarkdown {
+function normalizeMath(source: string) {
+  const protectedBlocks: string[] = [];
+  const protect = (value: string) => `TEXTMARKPROTECTED${protectedBlocks.push(value) - 1}TOKEN`;
+  let normalized = source.replace(/^(`{3,}|~{3,})(?!math\s*$)[^\n]*\n[\s\S]*?^\1\s*$/gim, protect);
+  normalized = normalized.replace(/(`+)([^\n]*?)\1/g, protect);
+  normalized = normalized
+    .replace(/\\\[([\s\S]*?)\\\]/g, "$$$$$1$$$$")
+    .replace(/\\\(([^\n]*?)\\\)/g, "$$$1$")
+    .replace(/^```math\s*\n([\s\S]*?)^```/gim, "$$$$$1$$$$");
+  return normalized.replace(/TEXTMARKPROTECTED(\d+)TOKEN/g, (_match, index: string) => protectedBlocks[Number(index)] ?? "");
+}
+
+function buildSourceMaps(source: string) {
+  const lines = source.split(/\r?\n/);
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    offsets.push(offset);
+    offset += line.length + 1;
+  }
+  const sourceMap: RenderedMarkdown["sourceMap"] = [];
+  const tables: RenderedMarkdown["tables"] = [];
+  const tasks: RenderedMarkdown["tasks"] = [];
+  let taskIndex = 0;
+  let tableIndex = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^\s{0,3}#{1,6}\s+/.test(line)) sourceMap.push({ kind: "heading", start: offsets[index], end: offsets[index] + line.length, line: index + 1 });
+    const task = line.match(/^\s*(?:>|\d+\.|[-+*])\s+\[([ xX])\]/);
+    if (task) {
+      sourceMap.push({ kind: "task", start: offsets[index], end: offsets[index] + line.length, line: index + 1 });
+      tasks.push({ index: taskIndex++, line: index + 1, checked: task[1].toLowerCase() === "x" });
+    }
+    if (line.includes("|") && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[index + 1])) {
+      let end = index + 2;
+      while (end < lines.length && lines[end].includes("|") && lines[end].trim()) end += 1;
+      const columns = line.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).length;
+      tables.push({ index: tableIndex++, startLine: index + 1, endLine: end, rows: end - index - 1, columns });
+      sourceMap.push({ kind: "table", start: offsets[index], end: offsets[end - 1] + lines[end - 1].length, line: index + 1 });
+      index = end - 1;
+    }
+  }
+  return { sourceMap, tables, tasks };
+}
+
+export function renderMarkdownUnsafe(source: string): RenderedMarkdown {
   const frontmatter = splitFrontmatter(source);
   const environment: { outline?: OutlineItem[]; slugs?: Map<string, number> } = {};
   // markdown-it-texmath handles dollar delimiters. Normalize the two canonical
   // LaTex delimiters before parsing so all renderers (including exports) agree.
-  const mathNormalized = frontmatter.body
-    .replace(/\\\[([\s\S]*?)\\\]/g, "$$$1$$")
-    .replace(/\\\(([^\n]*?)\\\)/g, "$$1$")
-    .replace(/^```math\s*\n([\s\S]*?)^```/gim, "$$$1$$");
+  const mathNormalized = normalizeMath(frontmatter.body);
   let raw = renderer.render(mathNormalized, environment);
   const outline = environment.outline ?? [];
   const toc = `<nav class="table-of-contents" aria-label="Table of contents"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join("")}</ol></nav>`;
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc);
   raw = raw.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br>)?([\s\S]*?)<\/p>([\s\S]*?)<\/blockquote>/gi,
     (_match, kind: string, title: string, body: string) => `<div class="markdown-alert markdown-alert-${kind.toLowerCase()}"><p class="markdown-alert-title">${kind[0]}${kind.slice(1).toLowerCase()}${title ? ` · ${title}` : ""}</p>${body}</div>`);
-  const html = DOMPurify.sanitize(raw, {
-    ADD_ATTR: ["target", "rel", "data-local-src", "data-mermaid-source"],
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "style", "link", "meta", "base"],
-    FORBID_ATTR: ["style"],
-  });
+  const maps = buildSourceMaps(source);
   return {
-    html,
+    html: raw,
     outline,
     hasMermaid: source.includes("```mermaid"),
     hasMath: /\$[^$]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|```math/i.test(frontmatter.body),
     frontmatter: frontmatter.entries,
+    ...maps,
   };
+}
+
+export function renderMarkdown(source: string): RenderedMarkdown {
+  return sanitizeRenderedMarkdown(renderMarkdownUnsafe(source));
 }
