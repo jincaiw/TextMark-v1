@@ -1,6 +1,7 @@
 describe("TextMark desktop shell", () => {
   it("starts in Chinese, renders in the Worker and switches language immediately", async () => {
-    await browser.execute(() => { localStorage.clear(); location.reload(); });
+    await browser.execute(() => localStorage.clear());
+    await browser.refresh();
     const heading = await $(".markdown-body h1");
     await heading.waitForDisplayed();
     await expect(heading).toHaveText("Welcome to TextMark");
