@@ -14,40 +14,73 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { components: clippy }
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - run: npm ci --include=dev
+      - run: npm test -- --run
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+  bundle:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-15
+            target: universal-apple-darwin
             args: --target universal-apple-darwin
-          - os: windows-latest
+            architecture: universal
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
             args: --target x86_64-pc-windows-msvc
+            architecture: x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc
+            architecture: arm64
           - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu
+            architecture: x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            args: --target aarch64-unknown-linux-gnu
+            architecture: arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install macOS Universal 2 target
-        if: runner.os == 'macOS'
-        run: rustup target add x86_64-apple-darwin
-      - name: Linux system dependencies
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - run: npm ci --include=dev
-      - run: npm test && npm run build && cargo test --manifest-path src-tauri/Cargo.toml
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build and upload signed updater artifacts
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: TextMark ${{ inputs.tag || github.ref_name }}
-          releaseDraft: false
+          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
       - name: Package Windows portable ZIP
@@ -56,10 +89,59 @@ jobs:
         run: |
           $tag = "${{ inputs.tag || github.ref_name }}"
           $version = $tag.TrimStart('v')
-          $binary = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release -Filter TextMark.exe -Recurse | Select-Object -First 1
-          if ($null -eq $binary) { throw "TextMark.exe was not produced by the Windows build." }
-          $archive = "TextMark_${version}_windows_x64_portable.zip"
-          Compress-Archive -Path $binary.FullName -DestinationPath $archive -Force
-          gh release upload $tag $archive --clobber
+          $binary = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "textmark.exe" | Select-Object -First 1
+          if ($null -eq $binary) { throw "textmark.exe was not produced by the Windows build." }
+          $folder = "TextMark_${version}_windows_${{ matrix.architecture }}_portable"
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          Copy-Item $binary.FullName "$folder/TextMark.exe"
+          Copy-Item LICENSE "$folder/LICENSE.txt"
+          Copy-Item platform/windows/PORTABLE_README.txt "$folder/README.txt"
+          Compress-Archive -Path "$folder/*" -DestinationPath "$folder.zip" -Force
+          gh release upload $tag "$folder.zip" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  publish:
+    needs: bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download release artifacts
+        run: gh release download "$TAG" --dir release-assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - name: Verify updater metadata and signatures
+        run: |
+          test -s release-assets/latest.json
+          find release-assets -type f -name '*.sig' -size +0 | grep -q .
+      - name: Create SHA-256 checksums
+        working-directory: release-assets
+        run: find . -maxdepth 1 -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: release-assets/TextMark-${{ inputs.tag || github.ref_name }}-sbom.cdx.json
+      - name: Upload release metadata
+        run: gh release upload "$TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json RELEASE_NOTES.md --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - name: Publish as a final release
+        run: gh release edit "$TAG" --draft=false --prerelease=false --latest --notes-file RELEASE_NOTES.md --title "TextMark $TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - name: Assert public release state
+        run: test "$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$TAG" --jq '.draft or .prerelease')" = "false"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - name: Refresh opt-in beta update channel
+        run: |
+          gh release view textmark-beta >/dev/null 2>&1 || gh release create textmark-beta --target "$GITHUB_SHA" --title "TextMark Beta Update Channel" --prerelease --notes "Machine-readable assets for the opt-in TextMark beta updater channel."
+          gh release upload textmark-beta release-assets/latest.json --clobber
         env:
           GH_TOKEN: ${{ github.token }}

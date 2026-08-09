@@ -8,9 +8,13 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
   build: {
+    // Mermaid and CodeMirror are offline, user-triggered chunks. The preview
+    // bootstrap remains below the 300 kB gzip budget and never preloads them.
+    chunkSizeWarningLimit: 3200,
     // Keep preview bootstrap small; Mermaid and editor vendors are only fetched
     // after their feature is activated.
     rolldownOptions: {
+      input: { main: "index.html", mermaid: "mermaid.html" },
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;

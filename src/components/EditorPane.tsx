@@ -3,6 +3,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
+import { indentLess, indentMore } from "@codemirror/commands";
+import { keymap } from "@codemirror/view";
 import type { ContentWidth, FormatCommand } from "../types";
 
 export interface EditorPaneHandle {
@@ -72,7 +74,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           value={props.value}
           height="100%"
           theme={props.theme === "dark" ? oneDark : "light"}
-          extensions={[markdown(), EditorView.lineWrapping]}
+          extensions={[markdown(), EditorView.lineWrapping, EditorView.contentAttributes.of({ spellcheck: "true", autocapitalize: "sentences" }), keymap.of([{ key: "Tab", run: indentMore }, { key: "Shift-Tab", run: indentLess }])]}
           onCreateEditor={(view) => { viewRef.current = view; }}
           onChange={props.onChange}
           onUpdate={(update) => {
