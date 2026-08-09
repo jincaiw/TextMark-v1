@@ -47,8 +47,8 @@ jobs:
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: TextMark ${{ inputs.tag || github.ref_name }}
-          releaseDraft: true
-          prerelease: true
+          releaseDraft: false
+          prerelease: false
           args: ${{ matrix.args }}
       - name: Package Windows portable ZIP
         if: runner.os == 'Windows'
