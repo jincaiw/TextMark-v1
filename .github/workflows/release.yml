@@ -50,3 +50,16 @@ jobs:
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}
+      - name: Package Windows portable ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag || github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $binary = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release -Filter TextMark.exe -Recurse | Select-Object -First 1
+          if ($null -eq $binary) { throw "TextMark.exe was not produced by the Windows build." }
+          $archive = "TextMark_${version}_windows_x64_portable.zip"
+          Compress-Archive -Path $binary.FullName -DestinationPath $archive -Force
+          gh release upload $tag $archive --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
