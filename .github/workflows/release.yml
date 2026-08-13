@@ -304,6 +304,7 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json
+          upload-release-assets: false
       - name: Add bilingual notes and third-party notices
         run: cp RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
       - name: Create SHA-256 checksums
