@@ -11,15 +11,17 @@ if (!existsSync(chrome)) throw new Error(`Chrome is unavailable: ${chrome}`);
 
 const profile = mkdtempSync(join(tmpdir(), "textmark-chrome-"));
 const processHandle = spawn(chrome, [
-  "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars", "--remote-debugging-port=0",
+  "--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--hide-scrollbars", "--remote-debugging-port=0",
   `--window-size=${width},${height}`, `--user-data-dir=${profile}`, url,
 ], { stdio: ["ignore", "ignore", "pipe"] });
 let chromeLog = "";
+let chromeExitCode;
 processHandle.stderr.on("data", (chunk) => { chromeLog += chunk.toString(); });
+processHandle.once("exit", (code) => { chromeExitCode = code; });
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-for (let attempt = 0; attempt < 100 && !existsSync(join(profile, "DevToolsActivePort")); attempt += 1) await delay(50);
-if (!existsSync(join(profile, "DevToolsActivePort"))) throw new Error(`Chrome debugging endpoint did not start.\n${chromeLog}`);
+for (let attempt = 0; attempt < 600 && !existsSync(join(profile, "DevToolsActivePort")) && chromeExitCode === undefined; attempt += 1) await delay(50);
+if (!existsSync(join(profile, "DevToolsActivePort"))) throw new Error(`Chrome debugging endpoint did not start (exit ${chromeExitCode ?? "still running"}).\n${chromeLog}`);
 const [port] = readFileSync(join(profile, "DevToolsActivePort"), "utf8").trim().split("\n");
 
 let page;
