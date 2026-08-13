@@ -11,6 +11,7 @@ $previewShellex = "{8895B1C6-B41F-4C1C-A562-0D564250836F}"
 $extensions = @(".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdwn", ".mdtxt", ".mdtext", ".rmd", ".txt")
 $installerPath = (Resolve-Path $Installer).Path
 $smokeHostPath = (Resolve-Path $PreviewSmokeHost).Path
+$installedPreviewDll = $null
 
 function Invoke-CheckedProcess([string]$FilePath, [string[]]$Arguments) {
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -69,6 +70,25 @@ function Find-TextMarkUninstaller {
   throw "TextMark uninstaller registration was not found"
 }
 
+function Test-InstallationRemoved {
+  $clsidKey = "Registry::HKEY_LOCAL_MACHINE\Software\Classes\CLSID\$previewClsid"
+  if (Test-Path $clsidKey) { return $false }
+  foreach ($extension in $extensions) {
+    if (Test-Path "Registry::HKEY_LOCAL_MACHINE\Software\Classes\$extension\shellex\$previewShellex") { return $false }
+  }
+  if ($null -ne $installedPreviewDll -and (Test-Path $installedPreviewDll)) { return $false }
+  return $true
+}
+
+function Wait-InstallationRemoved([int]$TimeoutSeconds = 30) {
+  $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    if (Test-InstallationRemoved) { return }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $deadline)
+  throw "TextMark installation state was not removed within $TimeoutSeconds seconds"
+}
+
 try {
   if ($Kind -eq "msi") {
     Invoke-CheckedProcess "msiexec.exe" @("/i", $installerPath, "/qn", "/norestart")
@@ -78,6 +98,7 @@ try {
 
   Assert-Registration
   $previewDll = Get-InstalledPreviewDll
+  $installedPreviewDll = $previewDll
   if (-not (Test-Path $previewDll)) { throw "Installed preview DLL is missing: $previewDll" }
   if (-not (Test-Path (Join-Path (Split-Path $previewDll) "web\preview.html"))) { throw "Shared preview web host is missing" }
   $installRoot = Split-Path (Split-Path $previewDll)
@@ -104,9 +125,5 @@ try {
   }
 }
 
-$clsidKey = "Registry::HKEY_LOCAL_MACHINE\Software\Classes\CLSID\$previewClsid"
-if (Test-Path $clsidKey) { throw "Explorer preview CLSID was not removed during uninstall" }
-foreach ($extension in $extensions) {
-  if (Test-Path "Registry::HKEY_LOCAL_MACHINE\Software\Classes\$extension\shellex\$previewShellex") { throw "Preview registration for $extension was not removed" }
-}
+Wait-InstallationRemoved
 Write-Host "TextMark $Kind $Architecture install/preview/uninstall smoke passed."

@@ -57,6 +57,20 @@ describe("native desktop package integration", () => {
     );
   });
 
+  it("waits for the detached NSIS uninstaller to finish registry cleanup", () => {
+    expect(windowsInstallerTest).toContain(
+      "function Wait-InstallationRemoved",
+    );
+    expect(windowsInstallerTest).toContain("Start-Sleep -Milliseconds 250");
+    expect(windowsInstallerTest).toContain(
+      "TextMark installation state was not removed within $TimeoutSeconds seconds",
+    );
+    expect(windowsInstallerTest).toContain(
+      "Test-Path $installedPreviewDll",
+    );
+    expect(windowsInstallerTest).toContain("Wait-InstallationRemoved");
+  });
+
   it("keeps the macOS CLI smoke thumbnail's PNG extension intact", () => {
     expect(macosPackageTest).toContain(
       'thumbnail="$cli_temp_dir/thumbnail.png"',
