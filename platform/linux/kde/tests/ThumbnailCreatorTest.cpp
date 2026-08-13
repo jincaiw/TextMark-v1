@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 #include <QFile>
+#include <QImage>
+#include <QSize>
 #include <QTemporaryDir>
 #include <QUrl>
 

@@ -63,7 +63,7 @@ std::wstring UserDataDirectory() {
 class PreviewHandler final : public IPreviewHandler, public IInitializeWithFile, public IOleWindow, public IObjectWithSite {
  public:
   PreviewHandler() { ++g_objects; }
-  ~PreviewHandler() override { Unload(); --g_objects; }
+  ~PreviewHandler() { Unload(); --g_objects; }
 
   IFACEMETHODIMP QueryInterface(REFIID iid, void** result) override {
     if (!result) return E_POINTER;

@@ -18,9 +18,9 @@ targets:
     sources:
       - path: quicklook
         excludes: [Info.plist, TextMarkQuickLook.entitlements]
-    resources:
       - path: ../../dist
         type: folder
+        buildPhase: resources
     dependencies:
       - sdk: Quartz.framework
       - sdk: WebKit.framework
@@ -38,9 +38,9 @@ targets:
       - path: quicklook
         excludes: [Info.plist, TextMarkQuickLook.entitlements]
       - path: quicklook-tests
-    resources:
       - path: ../../dist
         type: folder
+        buildPhase: resources
     dependencies:
       - sdk: Quartz.framework
       - sdk: WebKit.framework
