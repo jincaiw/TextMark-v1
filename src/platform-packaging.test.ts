@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import windowsWixFragment from "../platform/windows/installer/TextMarkPreview.wxs?raw";
+import windowsInstallerTest from "../platform/windows/test-installer.ps1?raw";
+import macosPackageTest from "../platform/macos/test-package.sh?raw";
 import linuxConfig from "../src-tauri/tauri.linux.conf.json";
 import kdeConfig from "../src-tauri/tauri.linux-kde.conf.json";
 import macosConfig from "../src-tauri/tauri.macos.conf.json";
@@ -41,5 +43,36 @@ describe("native desktop package integration", () => {
     );
     expect(windowsWixFragment).toContain('Win64="yes"');
     expect(windowsWixFragment).not.toContain("INSTALLFOLDER");
+  });
+
+  it("preserves spaced Windows installer and preview paths as single arguments", () => {
+    expect(windowsInstallerTest).toContain(
+      "[System.Diagnostics.ProcessStartInfo]::new()",
+    );
+    expect(windowsInstallerTest).toContain(
+      "$startInfo.ArgumentList.Add($argument)",
+    );
+    expect(windowsInstallerTest).not.toContain(
+      "Start-Process -FilePath $FilePath -ArgumentList $Arguments",
+    );
+  });
+
+  it("keeps the macOS CLI smoke thumbnail's PNG extension intact", () => {
+    expect(macosPackageTest).toContain(
+      'thumbnail="$cli_temp_dir/thumbnail.png"',
+    );
+    expect(macosPackageTest).not.toContain("textmark-cli.XXXXXX.png");
+  });
+
+  it("strictly validates Quick Look metadata while accounting for ad-hoc signing", () => {
+    expect(macosConfig.bundle.macOS.signingIdentity).toBe("-");
+    expect(macosPackageTest).toContain(
+      "NSExtension.NSExtensionPointIdentifier",
+    );
+    expect(macosPackageTest).toContain("QLSupportedContentTypes");
+    expect(macosPackageTest).toContain("Signature=adhoc");
+    expect(macosPackageTest).toContain(
+      "Developer ID Quick Look extension was not accepted by PlugInKit.",
+    );
   });
 });
