@@ -3,6 +3,7 @@ export type Locale = "zh-CN" | "en";
 export type ThemeMode = "dark" | "light" | "system";
 export type SidebarMode = "outline" | "files";
 export type ContentWidth = "normal" | "full";
+export type ToolbarDisplayMode = "iconOnly" | "iconAndLabel";
 export type SearchMode = "contains" | "beginsWith";
 export type FormatCommand = "h0" | "h1" | "h2" | "h3" | "bold" | "italic" | "strikethrough" | "code" | "link" | "bulletList" | "orderedList" | "taskList" | "quote";
 
@@ -16,14 +17,37 @@ export interface TextDocument {
   revision?: string;
 }
 
+export interface OpenPathRequest {
+  path: string;
+  isDirectory: boolean;
+}
+
+export interface StartupRequest {
+  paths: OpenPathRequest[];
+  newWindow: boolean;
+}
+
+export interface DiskChangeEvent {
+  kind: "create" | "modify" | "rename" | "remove" | "other";
+  paths: string[];
+}
+
+export type ExternalDocumentChange =
+  | { kind: "modified"; document: TextDocument }
+  | { kind: "renamed"; document: TextDocument; previousPath: string }
+  | { kind: "deleted"; previousPath: string };
+
+export type ExternalChangeResolution = "reload" | "overwrite" | "saveAs" | "cancel";
+
 export interface AppSettings {
-  schemaVersion: 2;
+  schemaVersion: 3;
   locale: Locale;
   theme: ThemeMode;
   contentWidth: ContentWidth;
   zoom: number;
   editorFontSize: number;
   toolbar: ToolbarItem[];
+  toolbarDisplay: ToolbarDisplayMode;
   defaultOpenTarget: string;
   crashReports: boolean;
   updateChannel: "stable" | "beta";
@@ -72,12 +96,14 @@ export interface RenderedMarkdown {
   sourceMap: SourceRange[];
   tables: TableSourceMap[];
   tasks: TaskSourceMap[];
+  optionalRenderers: Array<"highlight" | "katex" | "mermaid">;
+  direction: "auto" | "ltr" | "rtl";
 }
 
 export type RenderResult = RenderedMarkdown;
 
 export interface SourceRange {
-  kind: "heading" | "paragraph" | "code" | "table" | "task";
+  kind: "heading" | "paragraph" | "code" | "table" | "task" | "footnote";
   start: number;
   end: number;
   line: number;
@@ -89,6 +115,13 @@ export interface TableSourceMap {
   endLine: number;
   rows: number;
   columns: number;
+  cells: TableCellSource[];
+}
+
+export interface TableCellSource {
+  row: number;
+  column: number;
+  markdown: string;
 }
 
 export interface TaskSourceMap {
@@ -100,6 +133,7 @@ export interface TaskSourceMap {
 export interface FrontmatterEntry {
   key: string;
   value: string;
+  items?: string[];
 }
 
 export interface DocumentStats {
@@ -111,7 +145,7 @@ export interface DocumentStats {
   images: number;
 }
 
-export type ToolbarItem = "sidebar" | "openWith" | "zoom" | "inspector" | "share" | "edit" | "search" | "print" | "copy" | "export" | "flexibleSpace" | "space";
+export type ToolbarItem = "navigation" | "sidebar" | "openWith" | "zoom" | "inspector" | "share" | "edit" | "search" | "print" | "copy" | "export" | "flexibleSpace" | "space";
 export type TableEdit = "setCell" | "addRowBefore" | "addRowAfter" | "duplicateRow" | "deleteRow" | "addColumnBefore" | "addColumnAfter" | "duplicateColumn" | "deleteColumn";
 
 export interface TableEditRequest {

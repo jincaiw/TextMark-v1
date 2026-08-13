@@ -1,0 +1,12 @@
+{
+  "CacheThumbnail": true,
+  "ThumbnailerVersion": 1,
+  "KPlugin": {
+    "Description": "Safe offline thumbnails for Markdown documents",
+    "Description[zh_CN]": "为 Markdown 文档生成安全的离线缩略图",
+    "MimeTypes": ["text/markdown", "text/plain"],
+    "Name": "TextMark Markdown Documents",
+    "Name[zh_CN]": "TextMark Markdown 文档"
+  },
+  "MimeType": "text/markdown;text/plain;"
+}

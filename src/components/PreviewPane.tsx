@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
+import morphdom from "morphdom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri, loadLocalAsset } from "../lib/platform";
 import { t } from "../lib/i18n";
+import { attachDiagramInteractions, getDiagramController } from "../lib/diagramInteractions";
+import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from "../lib/table";
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from "../types";
 
 interface PreviewPaneProps {
@@ -20,6 +23,7 @@ interface PreviewPaneProps {
   searchMode: SearchMode;
   locale: Locale;
   onSearchCount: (count: number) => void;
+  onActiveHeading: (id: string | null) => void;
   onOpenRelative: (path: string) => void;
   onToggleTask: (index: number, checked: boolean) => void;
   onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void;
@@ -27,6 +31,40 @@ interface PreviewPaneProps {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value);
+const disclosureKey = (details: HTMLDetailsElement, index: number) => `${index}:${details.querySelector("summary")?.textContent?.trim() ?? ""}`;
+
+function DiagramLightbox({ html, locale, onClose }: { html: string; locale: Locale; onClose: () => void }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const stage = viewport?.querySelector<HTMLElement>(".diagram-lightbox-stage");
+    if (!viewport || !stage) return;
+    const output = viewport.parentElement?.querySelector<HTMLOutputElement>(".diagram-lightbox-hud output");
+    const fit = viewport.parentElement?.querySelector<HTMLButtonElement>('[data-lightbox-action="fit"]');
+    const controller = attachDiagramInteractions(viewport, stage, { minimumZoom: 25, maximumZoom: 400, onChange: (state) => {
+      if (output) output.value = `${state.zoom}%`;
+      if (fit) { fit.setAttribute("aria-pressed", String(state.fitWidth)); fit.title = t(locale, state.fitWidth ? "actualSize" : "fitWidth"); }
+    } });
+    return () => controller.destroy();
+  }, [html, locale]);
+  return <div className="diagram-lightbox" role="dialog" aria-modal="true" aria-label={t(locale, "diagramWindow")} onClick={onClose}>
+    <div className="diagram-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+      <div ref={viewportRef} className="diagram-lightbox-viewport"><div className="diagram-lightbox-stage" dangerouslySetInnerHTML={{ __html: html }} /></div>
+      <div className="diagram-lightbox-hud" onClick={(event) => {
+        const action = (event.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.lightboxAction;
+        const controller = getDiagramController(viewportRef.current);
+        if (action === "in") controller?.zoomIn();
+        else if (action === "out") controller?.zoomOut();
+        else if (action === "reset") controller?.reset();
+        else if (action === "fit") controller?.toggleFitWidth();
+      }}>
+        <button data-lightbox-action="out" aria-label={t(locale, "zoomOut")}>−</button><output>100%</output><button data-lightbox-action="in" aria-label={t(locale, "zoomIn")}>+</button>
+        <button data-lightbox-action="reset" title={t(locale, "actualSize")}>1:1</button><button data-lightbox-action="fit" title={t(locale, "actualSize")} aria-pressed="true">↔</button>
+      </div>
+    </div>
+    <button className="diagram-lightbox-close" aria-label={t(locale, "close")} onClick={onClose}>×</button>
+  </div>;
+}
 
 export function PreviewPane(props: PreviewPaneProps) {
   const paneRef = useRef<HTMLElement>(null);
@@ -38,11 +76,32 @@ export function PreviewPane(props: PreviewPaneProps) {
   useEffect(() => { if (paneRef.current) paneRef.current.scrollTop = props.initialScrollTop; }, [props.documentKey, props.initialScrollTop]);
 
   useEffect(() => {
+    const pane = paneRef.current;
+    const root = containerRef.current;
+    if (!pane || !root) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const top = pane.getBoundingClientRect().top + 28;
+      let active: string | null = null;
+      for (const heading of root.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]")) {
+        if (heading.getBoundingClientRect().top <= top) active = heading.id;
+        else break;
+      }
+      props.onActiveHeading(active ?? root.querySelector<HTMLElement>("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]")?.id ?? null);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    pane.addEventListener("scroll", schedule, { passive: true });
+    update();
+    return () => { pane.removeEventListener("scroll", schedule); cancelAnimationFrame(frame); };
+  }, [props.documentKey, props.rendered.html, props.onActiveHeading]);
+
+  useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     root.querySelectorAll(".table-cell-selected").forEach((cell) => cell.classList.remove("table-cell-selected"));
     if (!tableSelection) return;
-    const table = root.querySelectorAll("table")[tableSelection.table];
+    const table = editableMarkdownTables(root)[tableSelection.table];
     const minRow = Math.min(tableSelection.startRow, tableSelection.endRow);
     const maxRow = Math.max(tableSelection.startRow, tableSelection.endRow);
     const minColumn = Math.min(tableSelection.startColumn, tableSelection.endColumn);
@@ -60,7 +119,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     const row = cell?.closest("tr");
     if (!cell || !table || !row || !containerRef.current) return null;
     return {
-      table: Array.from(containerRef.current.querySelectorAll("table")).indexOf(table),
+      table: editableMarkdownTables(containerRef.current).indexOf(table),
       row: Array.from(table.querySelectorAll("tr")).indexOf(row),
       column: Array.from(row.querySelectorAll("th, td")).indexOf(cell),
     };
@@ -76,14 +135,35 @@ export function PreviewPane(props: PreviewPaneProps) {
       catch { localStorage.removeItem(`textmark.${id}`); setDiagram(figure.innerHTML); }
       return;
     }
-    setDiagram(figure.innerHTML);
+    setDiagram(sourceNode?.innerHTML ?? figure.innerHTML);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-    root.innerHTML = props.rendered.html;
+    const disclosureStates = new Map(Array.from(root.querySelectorAll<HTMLDetailsElement>("details"))
+      .map((details, index) => [disclosureKey(details, index), details.open] as const));
+    const next = document.createElement("article");
+    next.innerHTML = props.rendered.html;
+    morphdom(root, next, {
+      childrenOnly: true,
+      onBeforeElUpdated(from, to) {
+        if (from instanceof HTMLDetailsElement && from.open) (to as HTMLDetailsElement).open = true;
+        if (from instanceof HTMLElement && to instanceof HTMLElement
+          && from.matches('.mermaid[data-mermaid-rendered="true"]')
+          && from.dataset.mermaidSource === to.dataset.mermaidSource) return false;
+        if (from instanceof HTMLElement && from.isContentEditable) return false;
+        return true;
+      },
+    });
+    Array.from(root.querySelectorAll<HTMLDetailsElement>("details")).forEach((details, index) => {
+      const open = disclosureStates.get(disclosureKey(details, index));
+      if (open !== undefined) details.open = open;
+    });
+    synchronizeTableSourceCoordinates(root, props.rendered.tables);
+    synchronizeTableHeaderAccessibility(root, (index) => t(props.locale, "unnamedColumn", { index }));
     let cancelled = false;
+    const diagramControllers: ReturnType<typeof attachDiagramInteractions>[] = [];
 
     root.querySelectorAll<HTMLElement>("p, li, blockquote, td, th").forEach((node) => {
       if (hasRtl(node.textContent ?? "")) node.dir = "rtl";
@@ -145,33 +225,42 @@ export function PreviewPane(props: PreviewPaneProps) {
       if (props.rendered.hasMermaid) {
         const { default: mermaid } = await import("mermaid");
         mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: document.documentElement.dataset.theme === "dark" ? "dark" : "neutral", fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" });
-        await Promise.all(Array.from(root.querySelectorAll<HTMLElement>(".mermaid[data-mermaid-source]")).map(async (node, index) => {
+        await Promise.all(Array.from(root.querySelectorAll<HTMLElement>('.mermaid[data-mermaid-source]:not([data-mermaid-rendered="true"])')).map(async (node, index) => {
           try {
             const source = decodeURIComponent(node.dataset.mermaidSource ?? "");
             const { svg } = await mermaid.render(`textmark-diagram-${Date.now()}-${index}`, source);
             if (!cancelled) {
               node.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
+              node.dataset.mermaidRendered = "true";
               const figure = node.closest("figure");
               if (figure && !figure.querySelector(".diagram-hud")) {
                 const hud = document.createElement("div");
                 hud.className = "diagram-hud";
-                hud.innerHTML = `<button data-diagram-action="out" aria-label="−">−</button><output>100%</output><button data-diagram-action="in" aria-label="+">+</button><button data-diagram-action="fit">↔</button><button data-diagram-action="open">↗</button>`;
+                hud.innerHTML = `<button data-diagram-action="out" aria-label="${t(props.locale, "zoomOut")}">−</button><output>100%</output><button data-diagram-action="in" aria-label="${t(props.locale, "zoomIn")}">+</button><button data-diagram-action="reset" title="${t(props.locale, "actualSize")}">1:1</button><button data-diagram-action="fit" title="${t(props.locale, "actualSize")}" aria-pressed="true">↔</button><button data-diagram-action="open" title="${t(props.locale, "openDiagramWindow")}">↗</button>`;
                 figure.append(hud);
               }
+              if (figure) {
+                const output = figure.querySelector<HTMLOutputElement>(".diagram-hud output");
+                const fit = figure.querySelector<HTMLButtonElement>('[data-diagram-action="fit"]');
+                diagramControllers.push(attachDiagramInteractions(figure, node, { onChange: (state) => {
+                  if (output) output.value = `${state.zoom}%`;
+                  if (fit) { fit.setAttribute("aria-pressed", String(state.fitWidth)); fit.title = t(props.locale, state.fitWidth ? "actualSize" : "fitWidth"); }
+                } }));
+              }
             }
-          } catch { if (!cancelled) node.textContent = "Unable to render this Mermaid diagram."; }
+          } catch { if (!cancelled) node.textContent = props.locale === "zh-CN" ? "无法渲染 Mermaid 图表。" : "Unable to render this Mermaid diagram."; }
         }));
       }
     };
     void hydrate();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; diagramControllers.forEach((controller) => controller.destroy()); };
   }, [props.rendered.html, props.rendered.hasMermaid, props.baseDirectory, props.workspacePath, props.searchQuery, props.searchIndex, props.matchCase, props.searchMode, props.locale]);
 
   return (
     <section ref={paneRef} className="preview-pane" aria-label="Rendered Markdown preview" tabIndex={0}
       onCopy={(event) => {
         if (!tableSelection || !containerRef.current) return;
-        const table = containerRef.current.querySelectorAll("table")[tableSelection.table];
+        const table = editableMarkdownTables(containerRef.current)[tableSelection.table];
         const rows = Array.from(table?.querySelectorAll("tr") ?? []);
         const minRow = Math.min(tableSelection.startRow, tableSelection.endRow);
         const maxRow = Math.max(tableSelection.startRow, tableSelection.endRow);
@@ -184,8 +273,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       <article
         ref={containerRef}
         className={`markdown-body content-${props.contentWidth}`}
-        style={{ fontSize: `${props.zoom}%` }}
-        dangerouslySetInnerHTML={{ __html: props.rendered.html }}
+        style={{ fontSize: `${15 * props.zoom / 100}px` }}
         onPointerDown={(event) => {
           if (event.button !== 0 || (event.target as HTMLElement).closest("a, button, input, [contenteditable=true]")) return;
           const cell = cellCoordinates(event.target);
@@ -202,7 +290,7 @@ export function PreviewPane(props: PreviewPaneProps) {
         }}
         onDoubleClick={(event) => {
           const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>("td, th");
-          if (cell && cell.tagName === "TD") {
+          if (cell) {
             event.preventDefault();
             cell.contentEditable = "plaintext-only";
             cell.classList.add("editing");
@@ -211,15 +299,13 @@ export function PreviewPane(props: PreviewPaneProps) {
             selection?.selectAllChildren(cell);
             return;
           }
-          const figure = (event.target as HTMLElement).closest<HTMLElement>(".diagram");
-          if (figure) void openDiagram(figure);
         }}
         onContextMenu={(event) => {
           const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>("td, th");
           const table = cell?.closest("table");
           if (!cell || !table || !containerRef.current) return;
           event.preventDefault();
-          const tables = Array.from(containerRef.current.querySelectorAll("table"));
+          const tables = editableMarkdownTables(containerRef.current);
           const rows = Array.from(table.querySelectorAll("tr"));
           const cells = Array.from(cell.parentElement?.querySelectorAll("th, td") ?? []);
           setTableMenu({ x: event.clientX, y: event.clientY, table: tables.indexOf(table), row: rows.indexOf(cell.parentElement as HTMLTableRowElement), column: cells.indexOf(cell) });
@@ -230,13 +316,26 @@ export function PreviewPane(props: PreviewPaneProps) {
           const boxes = Array.from(containerRef.current?.querySelectorAll("input.task-list-item-checkbox") ?? []);
           props.onToggleTask(boxes.indexOf(checkbox), checkbox.checked);
         }}
+        onInput={(event) => {
+          const header = (event.target as HTMLElement).closest<HTMLTableCellElement>("th[data-table-column]");
+          if (!header) return;
+          const index = Number(header.dataset.tableColumn ?? 0) + 1;
+          if (header.textContent?.trim()) {
+            header.removeAttribute("data-placeholder");
+            header.removeAttribute("aria-label");
+          } else {
+            const placeholder = t(props.locale, "unnamedColumn", { index });
+            header.dataset.placeholder = placeholder;
+            header.setAttribute("aria-label", placeholder);
+          }
+        }}
         onBlur={(event) => {
-          const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>("td[contenteditable]");
+          const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>("td[contenteditable], th[contenteditable]");
           if (!cell || !containerRef.current) return;
           const table = cell.closest("table");
           const row = cell.closest("tr");
           if (!table || !row) return;
-          const tables = Array.from(containerRef.current.querySelectorAll("table"));
+          const tables = editableMarkdownTables(containerRef.current);
           const rows = Array.from(table.querySelectorAll("tr"));
           const cells = Array.from(row.querySelectorAll("th, td"));
           cell.contentEditable = "false";
@@ -251,15 +350,14 @@ export function PreviewPane(props: PreviewPaneProps) {
           const diagramAction = target.closest<HTMLButtonElement>("[data-diagram-action]");
           if (diagramAction) {
             const figure = diagramAction.closest<HTMLElement>(".diagram");
-            const svg = figure?.querySelector<SVGSVGElement>("svg");
-            if (!figure || !svg) return;
+            if (!figure) return;
             const action = diagramAction.dataset.diagramAction;
             if (action === "open") { void openDiagram(figure); return; }
-            const current = Number(figure.dataset.diagramZoom ?? 100);
-            const next = action === "fit" ? 100 : Math.max(50, Math.min(300, current + (action === "in" ? 25 : -25)));
-            figure.dataset.diagramZoom = String(next);
-            svg.style.width = action === "fit" ? "100%" : `${next}%`;
-            figure.querySelector(".diagram-hud output")!.textContent = `${next}%`;
+            const controller = getDiagramController(figure);
+            if (action === "in") controller?.zoomIn();
+            else if (action === "out") controller?.zoomOut();
+            else if (action === "reset") controller?.reset();
+            else if (action === "fit") controller?.toggleFitWidth();
             return;
           }
           const formula = target.closest<HTMLElement>(".katex");
@@ -285,7 +383,7 @@ export function PreviewPane(props: PreviewPaneProps) {
           return <button key={edit} role="menuitem" onClick={() => { props.onEditTable(tableMenu.table, tableMenu.row, tableMenu.column, { edit }); setTableMenu(null); }}>{t(props.locale, labels[edit as Exclude<TableEdit, "setCell">])}</button>;
         })}
       </div> : null}
-      {diagram ? <div className="diagram-lightbox" role="dialog" aria-modal="true" aria-label={t(props.locale, "diagramWindow")} onClick={() => setDiagram(null)}><div onClick={(event) => event.stopPropagation()} dangerouslySetInnerHTML={{ __html: diagram }} /><button aria-label={t(props.locale, "close")} onClick={() => setDiagram(null)}>×</button></div> : null}
+      {diagram ? <DiagramLightbox html={diagram} locale={props.locale} onClose={() => setDiagram(null)} /> : null}
     </section>
   );
 }

@@ -1,0 +1,4 @@
+LIBRARY "TextMarkPreviewHandler"
+EXPORTS
+  DllCanUnloadNow PRIVATE
+  DllGetClassObject PRIVATE

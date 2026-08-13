@@ -1,0 +1,3 @@
+.derived-data/
+build/
+*.xcodeproj/

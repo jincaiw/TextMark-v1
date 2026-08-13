@@ -1,7 +1,7 @@
-import { renderMarkdownUnsafe } from "../lib/markdown";
+import { renderMarkdownEnhancedUnsafe } from "../lib/markdown";
 
-self.addEventListener("message", (event: MessageEvent<{ id: number; source: string }>) => {
-  const { id, source } = event.data;
-  try { self.postMessage({ id, result: renderMarkdownUnsafe(source) }); }
+self.addEventListener("message", async (event: MessageEvent<{ id: number; source: string; locale?: "zh-CN" | "en" }>) => {
+  const { id, source, locale } = event.data;
+  try { self.postMessage({ id, result: await renderMarkdownEnhancedUnsafe(source, locale) }); }
   catch { self.postMessage({ id, error: "render_failed" }); }
 });

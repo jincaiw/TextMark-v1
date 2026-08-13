@@ -1,8 +1,10 @@
 [package]
 name = "textmark"
-version = "0.2.0"
+version = "0.3.0"
 description = "A fast, secure, cross-platform Markdown reader and editor"
 authors = ["TextMark contributors"]
+license = "MIT"
+repository = "https://github.com/jincaiw/TextMark-v1"
 edition = "2024"
 
 [features]
@@ -32,6 +34,8 @@ mime_guess = "2"
 percent-encoding = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+dirs = "6"
+notify = "8"
 atomic-write-file = "0.3"
 image = { version = "0.25", default-features = false, features = ["png"] }
 font8x8 = "0.3"

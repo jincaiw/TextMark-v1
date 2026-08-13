@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "../platform/windows/build/package/": "TextMarkPreview/",
+      "../platform/windows/tm.cmd": "tm.cmd",
+      "../platform/windows/text-mark.cmd": "text-mark.cmd"
+    },
+    "windows": {
+      "minimumWebview2Version": "109.0.1518.78",
+      "allowDowngrades": false,
+      "wix": {
+        "upgradeCode": "67A9C3E9-A667-5DCE-AC8A-456357B93D07",
+        "language": ["zh-CN", "en-US"],
+        "fragmentPaths": ["../platform/windows/installer/TextMarkPreview.wxs"],
+        "componentGroupRefs": ["TextMarkExplorerPreviewComponents"]
+      },
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "installerHooks": "../platform/windows/installer/preview-handler.nsh"
+      }
+    }
+  }
+}

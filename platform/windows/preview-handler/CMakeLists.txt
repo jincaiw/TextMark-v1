@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.25)
+project(TextMarkPreviewHandler LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(WEBVIEW2_ROOT "" CACHE PATH "Microsoft.Web.WebView2 NuGet package root")
+set(TEXTMARK_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../../../dist" CACHE PATH "Built TextMark preview host")
+if(NOT EXISTS "${WEBVIEW2_ROOT}/build/native/include/WebView2.h")
+  message(FATAL_ERROR "WEBVIEW2_ROOT must point to the unpacked Microsoft.Web.WebView2 package")
+endif()
+
+if(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+  set(WEBVIEW2_ARCH arm64)
+else()
+  set(WEBVIEW2_ARCH x64)
+endif()
+
+add_library(TextMarkPreviewSupport STATIC PreviewSupport.cpp)
+target_include_directories(TextMarkPreviewSupport PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(TextMarkPreviewSupport PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(TextMarkPreviewSupport PRIVATE /W4 /WX /permissive- /utf-8)
+target_link_libraries(TextMarkPreviewSupport PUBLIC Crypt32 Shell32)
+
+add_library(TextMarkPreviewHandler SHARED TextMarkPreviewHandler.cpp TextMarkPreviewHandler.def)
+target_include_directories(TextMarkPreviewHandler PRIVATE "${WEBVIEW2_ROOT}/build/native/include")
+target_compile_definitions(TextMarkPreviewHandler PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(TextMarkPreviewHandler PRIVATE /W4 /WX /permissive- /utf-8 /guard:cf)
+target_link_options(TextMarkPreviewHandler PRIVATE /guard:cf)
+target_link_libraries(TextMarkPreviewHandler PRIVATE TextMarkPreviewSupport Shlwapi Ole32 Version "${WEBVIEW2_ROOT}/build/native/${WEBVIEW2_ARCH}/WebView2LoaderStatic.lib")
+
+add_executable(TextMarkPreviewSupportTests PreviewSupportTests.cpp)
+target_link_libraries(TextMarkPreviewSupportTests PRIVATE TextMarkPreviewSupport)
+target_compile_options(TextMarkPreviewSupportTests PRIVATE /W4 /WX /permissive- /utf-8)
+
+add_executable(TextMarkPreviewHostSmoke PreviewHostSmoke.cpp)
+target_compile_definitions(TextMarkPreviewHostSmoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(TextMarkPreviewHostSmoke PRIVATE /W4 /WX /permissive- /utf-8)
+target_link_libraries(TextMarkPreviewHostSmoke PRIVATE Ole32)
+
+enable_testing()
+add_test(NAME PreviewSupport COMMAND TextMarkPreviewSupportTests)

@@ -1,16 +1,18 @@
-# TextMark v0.2.0
+# TextMark v0.3.0
 
-TextMark 0.2 is the first stable cross-platform release built from the frozen Markdown Preview parity baseline. It defaults to Simplified Chinese and can switch to English at runtime.
+TextMark 0.3 completes the full cross-platform implementation of the frozen Markdown Preview `v0.0.47` parity baseline. It defaults to Simplified Chinese and can switch to English immediately and persistently.
 
-TextMark 0.2 是基于冻结 Markdown Preview 对标基线完成的首个跨平台正式版。首次启动默认简体中文，可在设置中即时切换 English。
+TextMark 0.3 完成了对冻结 Markdown Preview `v0.0.47` 基线的跨平台全量实现。首次启动默认简体中文，可即时切换 English 并持久保存。
 
 ## Highlights / 主要更新
 
-- Multi-document tabs, folder navigation, dirty-state protection, atomic saves and external-change conflict handling.
-- Worker-based offline Markdown rendering with GFM, TOC, alerts, footnotes, KaTeX, Mermaid, frontmatter and source-aware table editing.
-- Customizable persistent toolbar, inspector, advanced find, 50–300% zoom, dark/light/system appearance and bilingual native menus.
-- Print/PDF, self-contained HTML and 2× PNG export.
-- Windows x64/ARM64 MSI, NSIS and portable ZIP; Linux x64/ARM64 AppImage, DEB and RPM; macOS Universal 2 DMG and updater archive.
+- Native file watching with correct atomic replacement, rename, deletion and dirty-conflict recovery.
+- Incremental Worker rendering that preserves disclosure and Mermaid state; stable task, footnote and table source coordinates.
+- Editable table headers/cells, rectangular selection and complete row/column operations in the shared undo history.
+- Self-contained HTML with inlined local resources, light print/PDF output and continuous 2× PNG export.
+- macOS Universal 2 Quick Look extension, Windows x64/ARM64 Explorer Preview Handler, Freedesktop thumbnails/actions and KDE 6 thumbnail support.
+- Windows x64/ARM64 MSI, NSIS and portable ZIP (including `textmark`, `tm` and `text-mark` launchers); Linux x64/ARM64 AppImage, DEB and RPM; macOS Universal 2 DMG and updater archive.
+- Formal non-prerelease publishing is blocked until every native host, installer, registration, uninstall, architecture and signed-updater gate passes.
 - Signed Tauri updater metadata, SHA-256 checksums and CycloneDX SBOM.
 - Separate stable and opt-in `textmark-beta` signed update channels.
 

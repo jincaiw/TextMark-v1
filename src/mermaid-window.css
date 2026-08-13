@@ -1,8 +1,12 @@
 :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: light dark; }
 html, body, #diagram-root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 #diagram-root { position: relative; display: grid; place-items: center; background: Canvas; }
-.mermaid-window-canvas { width: 100%; height: 100%; overflow: auto; display: grid; place-items: center; padding: 48px; }
-.mermaid-window-canvas svg { max-width: none; transform-origin: center; }
+.mermaid-window-canvas { width: 100%; height: 100%; overflow: hidden; cursor: grab; touch-action: none; }
+.mermaid-window-canvas.diagram-panning { cursor: grabbing; user-select: none; }
+.mermaid-window-stage { display: grid; width: 100%; min-height: 100%; padding: 48px; place-items: center; transform-origin: 0 0; will-change: transform; }
+.mermaid-window-stage svg { max-width: none; height: auto; }
+.mermaid-window-stage.diagram-fit-width svg { width: 100%; }
 .mermaid-window-hud { position: fixed; z-index: 2; right: 18px; bottom: 18px; display: flex; align-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 10px; background: color-mix(in srgb, Canvas 92%, transparent); box-shadow: 0 7px 24px rgba(0,0,0,.16); }
 .mermaid-window-hud button, .mermaid-window-hud output { min-width: 42px; height: 36px; display: grid; place-items: center; border: 0; border-right: 1px solid color-mix(in srgb, CanvasText 12%, transparent); background: transparent; color: CanvasText; }
 .mermaid-window-hud button { cursor: pointer; }
+.mermaid-window-hud button[aria-pressed="true"] { background: color-mix(in srgb, CanvasText 9%, transparent); }

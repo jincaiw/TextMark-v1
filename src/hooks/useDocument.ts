@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { MARKDOWN_FILTERS, SAMPLE_MARKDOWN } from "../constants";
-import { errorCode, isTauri, parentDirectory, readDocument, readStartupDocuments, resolveSiblingPath, scanFolder, writeDocument } from "../lib/platform";
-import type { DocumentSession, FileNode, Locale, TextDocument } from "../types";
+import { eventAffectsPath, renamedDestinationInDirectory, resolveChangedDocumentPath } from "../lib/diskChange";
+import { errorCode, isTauri, openDocumentWindow, parentDirectory, readDocument, readStartupRequest, resolveSiblingPath, scanFolder, watchPaths, writeDocument } from "../lib/platform";
+import type { DiskChangeEvent, DocumentSession, ExternalChangeResolution, ExternalDocumentChange, FileNode, Locale, OpenPathRequest, TextDocument } from "../types";
 
 const sessionId = () => globalThis.crypto?.randomUUID?.() ?? `document-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -82,8 +83,10 @@ export function useDocument(locale: Locale) {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [externalChange, setExternalChange] = useState<TextDocument | null>(null);
+  const [externalChange, setExternalChange] = useState<ExternalDocumentChange | null>(null);
   const undoRef = useRef(new Map<string, { undo: string[]; redo: string[] }>());
+  const pendingRenameRef = useRef<{ originalPath: string; candidate: string | null } | null>(null);
+  const startupLoadedRef = useRef(false);
   const active = sessions.find((session) => session.id === activeId) ?? sessions[0];
 
   const updateActive = useCallback((update: (session: DocumentSession) => DocumentSession) => {
@@ -111,22 +114,112 @@ export function useDocument(locale: Locale) {
     });
   }, []);
 
-  useEffect(() => {
-    void readStartupDocuments().then((startup) => startup.forEach((document, index) => applyDocument(document, index > 0)));
+  const openFolderPath = useCallback(async (path: string) => {
+    setWorkspacePath(path);
+    const nextFiles = await scanFolder(path);
+    setFiles(nextFiles);
+    const firstFile = (nodes: FileNode[]): FileNode | null => {
+      for (const node of nodes) {
+        if (!node.isDirectory) return node;
+        const nested = firstFile(node.children);
+        if (nested) return nested;
+      }
+      return null;
+    };
+    const first = firstFile(nextFiles);
+    if (first) applyDocument(await readDocument(first.path), false);
   }, [applyDocument]);
 
   useEffect(() => {
-    if (!active?.path || !isTauri()) return;
-    const timer = window.setInterval(async () => {
-      try {
-        const latest = await readDocument(active.path!);
-        if (!latest.revision || latest.revision === active.revision) return;
-        if (active.dirty) setExternalChange(latest);
-        else updateActive((current) => ({ ...current, ...latest, savedContents: latest.contents, diskContents: latest.contents, dirty: false }));
-      } catch { /* Atomic replacement may briefly hide the path; retry on the next tick. */ }
-    }, 1200);
-    return () => window.clearInterval(timer);
-  }, [active?.dirty, active?.path, active?.revision, updateActive]);
+    if (startupLoadedRef.current) return;
+    startupLoadedRef.current = true;
+    const parameters = new URLSearchParams(window.location.search);
+    const requestedFile = parameters.get("open");
+    const requestedFolder = parameters.get("folder");
+    if (requestedFile && isTauri()) {
+      void readDocument(requestedFile).then((document) => applyDocument(document, false)).catch(showError);
+      return;
+    }
+    if (requestedFolder && isTauri()) {
+      void openFolderPath(requestedFolder).catch(showError);
+      return;
+    }
+    void readStartupRequest().then(async (startup) => {
+      for (const [index, entry] of startup.paths.entries()) {
+        if (startup.newWindow && index > 0) { await openDocumentWindow(entry.path); continue; }
+        if (entry.isDirectory) await openFolderPath(entry.path);
+        else applyDocument(await readDocument(entry.path), index > 0);
+      }
+    }).catch(showError);
+  }, [applyDocument, openFolderPath, showError]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    const watched = [active?.path, workspacePath].filter((path): path is string => Boolean(path));
+    void watchPaths(watched).catch(showError);
+    let unlisten: (() => void) | undefined;
+    let documentTimer = 0;
+    let workspaceTimer = 0;
+    void listen<DiskChangeEvent>("disk-change", (event) => {
+      if (active?.path && event.payload.kind === "rename") {
+        const candidate = renamedDestinationInDirectory(event.payload, active.path);
+        if (eventAffectsPath(event.payload, active.path)) pendingRenameRef.current = { originalPath: active.path, candidate };
+        else if (candidate && pendingRenameRef.current?.originalPath === active.path) pendingRenameRef.current.candidate = candidate;
+      }
+      if (active?.path && eventAffectsPath(event.payload, active.path)) {
+        window.clearTimeout(documentTimer);
+        documentTimer = window.setTimeout(async () => {
+          const originalPath = active.path!;
+          try {
+            let latest: TextDocument | null = null;
+            for (let attempt = 0; attempt < 4; attempt += 1) {
+              try {
+                latest = await readDocument(originalPath);
+                break;
+              } catch (error) {
+                if (errorCode(error) !== "not_found") throw error;
+                if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, 65));
+              }
+            }
+            if (!latest) {
+              const pending = pendingRenameRef.current?.originalPath === originalPath ? pendingRenameRef.current.candidate : null;
+              const candidate = resolveChangedDocumentPath(originalPath, false, event.payload, pending);
+              pendingRenameRef.current = null;
+              if (candidate) {
+                try {
+                  const moved = await readDocument(candidate);
+                  if (active.dirty) setExternalChange({ kind: "renamed", document: moved, previousPath: originalPath });
+                  else updateActive((current) => {
+                    const history = [...current.history];
+                    history[current.historyIndex] = { ...history[current.historyIndex], path: moved.path };
+                    return { ...current, ...moved, savedContents: moved.contents, diskContents: moved.contents, dirty: false, history };
+                  });
+                  return;
+                } catch (error) {
+                  if (errorCode(error) !== "not_found") throw error;
+                }
+              }
+              setExternalChange({ kind: "deleted", previousPath: originalPath });
+              return;
+            }
+            pendingRenameRef.current = null;
+            if (!latest.revision || latest.revision === active.revision) return;
+            if (active.dirty) setExternalChange({ kind: "modified", document: latest });
+            else updateActive((current) => ({ ...current, ...latest, savedContents: latest.contents, diskContents: latest.contents, dirty: false }));
+          } catch (error) { showError(error); }
+        }, 160);
+      }
+      if (workspacePath) {
+        window.clearTimeout(workspaceTimer);
+        workspaceTimer = window.setTimeout(() => { void scanFolder(workspacePath).then(setFiles).catch(showError); }, 180);
+      }
+    }).then((dispose) => { unlisten = dispose; });
+    return () => {
+      unlisten?.();
+      window.clearTimeout(documentTimer);
+      window.clearTimeout(workspaceTimer);
+    };
+  }, [active?.dirty, active?.path, active?.revision, showError, updateActive, workspacePath]);
 
   const openPath = useCallback(async (path: string, newTab = false) => {
     if (!isTauri()) return;
@@ -173,11 +266,16 @@ export function useDocument(locale: Locale) {
   useEffect(() => {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
-    void listen<string[]>("open-paths", (event) => {
-      void Promise.all(event.payload.map((path) => readDocument(path))).then((documents) => documents.forEach((document) => applyDocument(document, true))).catch(showError);
+    void listen<OpenPathRequest[]>("open-paths", (event) => {
+      void (async () => {
+        for (const entry of event.payload) {
+          if (entry.isDirectory) await openFolderPath(entry.path);
+          else applyDocument(await readDocument(entry.path), true);
+        }
+      })().catch(showError);
     }).then((dispose) => { unlisten = dispose; });
     return () => unlisten?.();
-  }, [applyDocument, showError]);
+  }, [applyDocument, openFolderPath, showError]);
 
   const openFile = useCallback(async () => {
     setBusy(true);
@@ -200,22 +298,10 @@ export function useDocument(locale: Locale) {
     try {
       const selected = await open({ multiple: false, directory: true });
       if (typeof selected !== "string") return;
-      setWorkspacePath(selected);
-      const nextFiles = await scanFolder(selected);
-      setFiles(nextFiles);
-      const firstFile = (nodes: FileNode[]): FileNode | null => {
-        for (const node of nodes) {
-          if (!node.isDirectory) return node;
-          const nested = firstFile(node.children);
-          if (nested) return nested;
-        }
-        return null;
-      };
-      const first = firstFile(nextFiles);
-      if (first) applyDocument(await readDocument(first.path), false);
+      await openFolderPath(selected);
     } catch (error) { showError(error); }
     finally { setBusy(false); }
-  }, [applyDocument, locale, showError]);
+  }, [locale, openFolderPath, showError]);
 
   const saveAs = useCallback(async () => {
     if (!active) return;
@@ -230,6 +316,7 @@ export function useDocument(locale: Locale) {
       if (typeof selected !== "string") return;
       const saved = await writeDocument(selected, active.contents, undefined, true);
       updateActive((current) => ({ ...current, ...saved, savedContents: saved.contents, diskContents: saved.contents, dirty: false }));
+      setExternalChange(null);
     } catch (error) { showError(error); }
     finally { setBusy(false); }
   }, [active, showError, updateActive]);
@@ -245,7 +332,11 @@ export function useDocument(locale: Locale) {
       window.setTimeout(() => setNotice(null), 1400);
     } catch (error) {
       if (errorCode(error) === "save_conflict") {
-        try { setExternalChange(await readDocument(active.path)); } catch { showError(error); }
+        try { setExternalChange({ kind: "modified", document: await readDocument(active.path) }); }
+        catch (readError) {
+          if (errorCode(readError) === "not_found") setExternalChange({ kind: "deleted", previousPath: active.path });
+          else showError(error);
+        }
       } else showError(error);
     } finally { setBusy(false); }
   }, [active, locale, saveAs, showError, updateActive]);
@@ -288,14 +379,23 @@ export function useDocument(locale: Locale) {
     }
   }, [activeId, locale, sessions]);
 
-  const resolveExternal = useCallback((choice: "reload" | "overwrite" | "cancel") => {
-    if (choice === "reload" && externalChange) {
-      updateActive((current) => ({ ...current, ...externalChange, savedContents: externalChange.contents, diskContents: externalChange.contents, dirty: false }));
+  const resolveExternal = useCallback((choice: ExternalChangeResolution) => {
+    if (choice === "reload" && externalChange && externalChange.kind !== "deleted") {
+      const latest = externalChange.document;
+      updateActive((current) => {
+        const history = [...current.history];
+        if (externalChange.kind === "renamed") history[current.historyIndex] = { ...history[current.historyIndex], path: latest.path };
+        return { ...current, ...latest, savedContents: latest.contents, diskContents: latest.contents, dirty: false, history };
+      });
       setExternalChange(null);
     }
     else if (choice === "overwrite") void saveFile(true);
+    else if (choice === "saveAs") {
+      setExternalChange(null);
+      void saveAs();
+    }
     else setExternalChange(null);
-  }, [externalChange, saveFile, updateActive]);
+  }, [externalChange, saveAs, saveFile, updateActive]);
 
   const baseDirectory = useMemo(() => parentDirectory(active?.path ?? null), [active?.path]);
   const openRelative = useCallback(async (relativePath: string, scrollTop = 0) => {

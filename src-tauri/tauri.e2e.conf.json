@@ -1,4 +1,5 @@
 {
+  "identifier": "app.textmark.desktop.e2e",
   "app": {
     "withGlobalTauri": true
   }

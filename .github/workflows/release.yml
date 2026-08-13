@@ -12,136 +12,316 @@ on:
 
 permissions:
   contents: write
+  checks: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: textmark-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   verify:
+    name: Release quality gates
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { components: clippy }
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - run: npm ci --include=dev
+      - name: Assert tag and package versions agree
+        shell: bash
+        run: |
+          package_version=$(node -p "require('./package.json').version")
+          rust_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)
+          config_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          test "$RELEASE_TAG" = "v$package_version"
+          test "$rust_version" = "$package_version"
+          test "$config_version" = "$package_version"
       - run: npm test -- --run
       - run: npm run build
-      - run: npm audit --audit-level=high
+      - run: npm run check:bundle
+      - run: npm audit --omit=dev --audit-level=high
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 
-  bundle:
+  bundle-macos:
+    name: macOS Universal 2 + Quick Look
     needs: verify
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            target: universal-apple-darwin
-            args: --target universal-apple-darwin
-            architecture: universal
-          - os: windows-2025
-            target: x86_64-pc-windows-msvc
-            args: --target x86_64-pc-windows-msvc
-            architecture: x64
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            args: --target aarch64-pc-windows-msvc
-            architecture: arm64
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            args: --target x86_64-unknown-linux-gnu
-            architecture: x64
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            args: --target aarch64-unknown-linux-gnu
-            architecture: arm64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+        with: { targets: "aarch64-apple-darwin,x86_64-apple-darwin" }
+      - run: brew install xcodegen
       - run: npm ci --include=dev
-      - name: Build and upload signed updater artifacts
-        uses: tauri-apps/tauri-action@v1
+      - run: npm run build
+      - name: Build and test the native Quick Look host
+        run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
+      - name: Build and upload macOS release assets
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: "-"
         with:
-          tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: TextMark ${{ inputs.tag || github.ref_name }}
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: TextMark ${{ env.RELEASE_TAG }}
           releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
-      - name: Package Windows portable ZIP
-        if: runner.os == 'Windows'
+          args: --target universal-apple-darwin
+      - name: Install/mount/Quick Look registration smoke
+        shell: bash
+        run: |
+          dmg=$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          platform/macos/test-package.sh "$dmg"
+
+  bundle-windows:
+    name: Windows ${{ matrix.architecture }} installers + Explorer preview
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            architecture: x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { targets: "${{ matrix.target }}" }
+      - uses: NuGet/setup-nuget@v2
+      - run: npm ci --include=dev
+      - name: Build and host-test the Explorer preview handler
+        shell: pwsh
+        run: ./platform/windows/build-preview-handler.ps1 -Architecture ${{ matrix.architecture }}
+      - name: Build and upload Windows release assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: TextMark ${{ env.RELEASE_TAG }}
+          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+      - name: Install, preview and uninstall MSI + NSIS
         shell: pwsh
         run: |
-          $tag = "${{ inputs.tag || github.ref_name }}"
-          $version = $tag.TrimStart('v')
+          $root = "src-tauri/target/${{ matrix.target }}/release/bundle"
+          $msi = Get-ChildItem "$root/msi" -Filter "*.msi" | Select-Object -First 1
+          $nsis = Get-ChildItem "$root/nsis" -Filter "*.exe" | Select-Object -First 1
+          $smoke = "platform/windows/build/${{ matrix.architecture }}/Release/TextMarkPreviewHostSmoke.exe"
+          if ($null -eq $msi -or $null -eq $nsis) { throw "Both MSI and NSIS installers are required." }
+          ./platform/windows/test-installer.ps1 -Kind msi -Installer $msi.FullName -Architecture ${{ matrix.architecture }} -PreviewSmokeHost $smoke
+          ./platform/windows/test-installer.ps1 -Kind nsis -Installer $nsis.FullName -Architecture ${{ matrix.architecture }} -PreviewSmokeHost $smoke
+      - name: Package and upload portable ZIP
+        shell: pwsh
+        run: |
+          $version = "${{ env.RELEASE_TAG }}".TrimStart('v')
           $binary = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "textmark.exe" | Select-Object -First 1
           if ($null -eq $binary) { throw "textmark.exe was not produced by the Windows build." }
           $folder = "TextMark_${version}_windows_${{ matrix.architecture }}_portable"
           New-Item -ItemType Directory -Path $folder | Out-Null
           Copy-Item $binary.FullName "$folder/TextMark.exe"
+          Copy-Item platform/windows/tm.cmd "$folder/tm.cmd"
+          Copy-Item platform/windows/text-mark.cmd "$folder/text-mark.cmd"
           Copy-Item LICENSE "$folder/LICENSE.txt"
+          Copy-Item THIRD_PARTY_NOTICES.md "$folder/THIRD_PARTY_NOTICES.md"
           Copy-Item platform/windows/PORTABLE_README.txt "$folder/README.txt"
+          $sample = Join-Path $env:TEMP "textmark-portable-${{ matrix.architecture }}.md"
+          $thumbnail = Join-Path $env:TEMP "textmark-portable-${{ matrix.architecture }}.png"
+          Set-Content -Path $sample -Encoding UTF8 -Value "# TextMark portable CLI alias"
+          $smoke = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", (Resolve-Path "$folder/tm.cmd").Path, "--thumbnail", $sample, $thumbnail, "128") -Wait -PassThru
+          if ($smoke.ExitCode -ne 0 -or -not (Test-Path $thumbnail)) { throw "Portable CLI alias smoke failed." }
+          Remove-Item $sample, $thumbnail -Force
           Compress-Archive -Path "$folder/*" -DestinationPath "$folder.zip" -Force
-          gh release upload $tag "$folder.zip" --clobber
+          gh release upload "${{ env.RELEASE_TAG }}" "$folder.zip" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
+  bundle-linux-deb:
+    name: Linux ${{ matrix.architecture }} AppImage + DEB
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            architecture: x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    container: ubuntu:22.04
+    steps:
+      - name: Install Ubuntu 22.04 build dependencies
+        env: { DEBIAN_FRONTEND: noninteractive }
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates curl git build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils file desktop-file-utils shared-mime-info fuse libfuse2
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { targets: "${{ matrix.target }}" }
+      - run: npm ci --include=dev
+      - name: Build and upload AppImage + DEB assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: TextMark ${{ env.RELEASE_TAG }}
+          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }} --bundles appimage,deb
+      - name: Package installation and portable-mode smoke
+        shell: bash
+        run: |
+          root="src-tauri/target/${{ matrix.target }}/release/bundle"
+          deb=$(find "$root/deb" -name '*.deb' -print -quit)
+          appimage=$(find "$root/appimage" -name '*.AppImage' -print -quit)
+          test -n "$deb" && test -n "$appimage"
+          platform/linux/test-package.sh deb "$deb"
+          platform/linux/test-appimage.sh "$appimage"
+
+  bundle-linux-rpm:
+    name: Fedora 40 ${{ matrix.architecture }} RPM + KDE 6 preview
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            architecture: x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    container: fedora:40
+    steps:
+      - name: Pin Fedora 40 archive repositories
+        run: |
+          mkdir -p /etc/yum.repos.d/textmark-disabled
+          for repo in /etc/yum.repos.d/*.repo; do test -e "$repo" && mv "$repo" /etc/yum.repos.d/textmark-disabled/; done
+          cat > /etc/yum.repos.d/textmark-fedora-archive.repo <<'EOF'
+          [textmark-fedora]
+          name=Fedora 40 archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/40/Everything/$basearch/os/
+          enabled=1
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-40-$basearch
+          metadata_expire=never
+
+          [textmark-fedora-updates]
+          name=Fedora 40 updates archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/40/Everything/$basearch/
+          enabled=1
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-40-$basearch
+          metadata_expire=never
+          EOF
+      - name: Install Fedora build dependencies
+        run: dnf install -y ca-certificates curl git gcc gcc-c++ make cmake pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf rpm-build file desktop-file-utils shared-mime-info extra-cmake-modules qt6-qtbase-devel kf6-kio-devel kf6-kcoreaddons-devel
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: npm }
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with: { targets: "${{ matrix.target }}" }
+      - run: npm ci --include=dev
+      - name: Build and test the KDE 6 plugin
+        run: platform/linux/build-kde-plugin.sh
+      - name: Build and upload RPM asset
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: TextMark ${{ env.RELEASE_TAG }}
+          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }} --bundles rpm --config src-tauri/tauri.linux-kde.conf.json
+      - name: RPM install/KDE thumbnail/uninstall smoke
+        shell: bash
+        run: |
+          rpm=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/rpm" -name '*.rpm' -print -quit)
+          test -n "$rpm"
+          platform/linux/test-package.sh rpm "$rpm" with-kde
+
   publish:
-    needs: bundle
+    name: Publish final GitHub release
+    needs: [bundle-macos, bundle-windows, bundle-linux-deb, bundle-linux-rpm]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - name: Download release artifacts
-        run: gh release download "$TAG" --dir release-assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-      - name: Verify updater metadata and signatures
-        run: |
-          test -s release-assets/latest.json
-          find release-assets -type f -name '*.sig' -size +0 | grep -q .
-      - name: Create SHA-256 checksums
-        working-directory: release-assets
-        run: find . -maxdepth 1 -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      - name: Download all draft release assets
+        run: gh release download "$RELEASE_TAG" --dir release-assets
+        env: { GH_TOKEN: "${{ github.token }}" }
+      - name: Verify complete architecture/package/updater inventory
+        run: node scripts/verify-release-assets.mjs release-assets "$RELEASE_TAG"
       - name: Generate source SBOM
         uses: anchore/sbom-action@v0
         with:
           path: .
           format: cyclonedx-json
-          output-file: release-assets/TextMark-${{ inputs.tag || github.ref_name }}-sbom.cdx.json
+          output-file: release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json
+      - name: Add bilingual notes and third-party notices
+        run: cp RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
+      - name: Create SHA-256 checksums
+        working-directory: release-assets
+        run: find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
       - name: Upload release metadata
-        run: gh release upload "$TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json RELEASE_NOTES.md --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-      - name: Publish as a final release
-        run: gh release edit "$TAG" --draft=false --prerelease=false --latest --notes-file RELEASE_NOTES.md --title "TextMark $TAG"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-      - name: Assert public release state
-        run: test "$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$TAG" --jq '.draft or .prerelease')" = "false"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json release-assets/RELEASE_NOTES.md release-assets/THIRD_PARTY_NOTICES.md --clobber
+        env: { GH_TOKEN: "${{ github.token }}" }
+      - name: Publish as a formal, non-prerelease release
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --notes-file RELEASE_NOTES.md --title "TextMark $RELEASE_TAG"
+        env: { GH_TOKEN: "${{ github.token }}" }
+      - name: Assert public final release state
+        run: |
+          state=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG" --jq '[.draft,.prerelease] | any')
+          test "$state" = false
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)" = "$RELEASE_TAG"
+        env: { GH_TOKEN: "${{ github.token }}" }
       - name: Refresh opt-in beta update channel
         run: |
           gh release view textmark-beta >/dev/null 2>&1 || gh release create textmark-beta --target "$GITHUB_SHA" --title "TextMark Beta Update Channel" --prerelease --notes "Machine-readable assets for the opt-in TextMark beta updater channel."
           gh release upload textmark-beta release-assets/latest.json --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: { GH_TOKEN: "${{ github.token }}" }
