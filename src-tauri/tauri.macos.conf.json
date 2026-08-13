@@ -30,7 +30,7 @@
       "signingIdentity": "-",
       "entitlements": "../platform/macos/TextMark.entitlements",
       "files": {
-        "../platform/macos/build/TextMarkQuickLook.appex": "PlugIns/TextMarkQuickLook.appex"
+        "PlugIns/TextMarkQuickLook.appex": "../platform/macos/build/TextMarkQuickLook.appex"
       }
     }
   }

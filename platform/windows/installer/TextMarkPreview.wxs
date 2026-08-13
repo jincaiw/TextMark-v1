@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
+    <DirectoryRef Id="INSTALLDIR">
       <Component Id="TextMarkExplorerPreviewRegistration" Guid="4E9164D3-26D0-42E5-A10C-2BB5B11362A9" Win64="yes">
         <RegistryKey Root="HKLM" Key="Software\Classes\CLSID\{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}">
           <RegistryValue Type="string" Value="TextMark Markdown Preview Handler" KeyPath="yes" />
           <RegistryValue Name="AppID" Type="string" Value="{6D2B5079-2F0B-48DD-AB7F-97CEC514D30B}" />
           <RegistryKey Key="InprocServer32">
-            <RegistryValue Type="string" Value="[INSTALLFOLDER]TextMarkPreview\TextMarkPreviewHandler.dll" />
+            <RegistryValue Type="string" Value="[INSTALLDIR]TextMarkPreview\TextMarkPreviewHandler.dll" />
             <RegistryValue Name="ThreadingModel" Type="string" Value="Apartment" />
             <RegistryValue Name="ProgID" Type="string" Value="TextMark.Markdown" />
             <RegistryValue Name="VersionIndependentProgID" Type="string" Value="TextMark.Markdown" />
