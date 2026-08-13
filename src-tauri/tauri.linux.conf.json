@@ -5,8 +5,8 @@
       "deb": {
         "desktopTemplate": "../platform/linux/app.textmark.desktop",
         "files": {
-          "../platform/linux/app.textmark.xml": "/usr/share/mime/packages/app.textmark.xml",
-          "../platform/linux/textmark.thumbnailer": "/usr/share/thumbnailers/textmark.thumbnailer"
+          "/usr/share/mime/packages/app.textmark.xml": "../platform/linux/app.textmark.xml",
+          "/usr/share/thumbnailers/textmark.thumbnailer": "../platform/linux/textmark.thumbnailer"
         },
         "postInstallScript": "../platform/linux/package/postinstall.sh",
         "postRemoveScript": "../platform/linux/package/postremove.sh"
@@ -14,8 +14,8 @@
       "rpm": {
         "desktopTemplate": "../platform/linux/app.textmark.desktop",
         "files": {
-          "../platform/linux/app.textmark.xml": "/usr/share/mime/packages/app.textmark.xml",
-          "../platform/linux/textmark.thumbnailer": "/usr/share/thumbnailers/textmark.thumbnailer"
+          "/usr/share/mime/packages/app.textmark.xml": "../platform/linux/app.textmark.xml",
+          "/usr/share/thumbnailers/textmark.thumbnailer": "../platform/linux/textmark.thumbnailer"
         },
         "postInstallScript": "../platform/linux/package/postinstall.sh",
         "postRemoveScript": "../platform/linux/package/postremove.sh"

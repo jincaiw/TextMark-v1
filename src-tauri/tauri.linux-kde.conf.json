@@ -4,7 +4,7 @@
     "linux": {
       "rpm": {
         "files": {
-          "../platform/linux/build/package/textmarkthumbnail.so": "/usr/lib/textmark/platform/kde/textmarkthumbnail.so"
+          "/usr/lib/textmark/platform/kde/textmarkthumbnail.so": "../platform/linux/build/package/textmarkthumbnail.so"
         }
       }
     }
