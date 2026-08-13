@@ -13,8 +13,20 @@ $installerPath = (Resolve-Path $Installer).Path
 $smokeHostPath = (Resolve-Path $PreviewSmokeHost).Path
 
 function Invoke-CheckedProcess([string]$FilePath, [string[]]$Arguments) {
-  $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -Wait -PassThru
-  if ($process.ExitCode -ne 0) { throw "$FilePath failed with exit code $($process.ExitCode)" }
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $FilePath
+  $startInfo.UseShellExecute = $false
+  foreach ($argument in $Arguments) {
+    [void]$startInfo.ArgumentList.Add($argument)
+  }
+  $process = [System.Diagnostics.Process]::Start($startInfo)
+  if ($null -eq $process) { throw "$FilePath could not be started" }
+  try {
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { throw "$FilePath failed with exit code $($process.ExitCode)" }
+  } finally {
+    $process.Dispose()
+  }
 }
 
 function Get-InstalledPreviewDll {
