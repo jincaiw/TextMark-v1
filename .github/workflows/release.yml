@@ -17,6 +17,10 @@ permissions:
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
+concurrency:
+  group: textmark-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   verify:
     name: Release quality gates

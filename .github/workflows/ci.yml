@@ -9,6 +9,10 @@ permissions:
   contents: read
   checks: write
 
+concurrency:
+  group: textmark-ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   rust-security-audit:
     name: RustSec dependency audit
