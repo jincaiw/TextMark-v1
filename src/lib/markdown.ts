@@ -9,6 +9,15 @@ import { parseCodeFenceInfo } from "./codeFence";
 const slugPattern = /[^\p{L}\p{N}\s-]/gu;
 const remotePattern = /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i;
 
+interface RenderEnvironment {
+  [key: string]: unknown;
+  [key: symbol]: unknown;
+  slugs?: Map<string, number>;
+  outline?: OutlineItem[];
+  hasMermaid?: boolean;
+  hasHighlight?: boolean;
+}
+
 function slugify(value: string): string {
   return value.toLowerCase().trim().replace(slugPattern, "").replace(/\s+/g, "-") || "section";
 }
@@ -38,9 +47,12 @@ function makeRenderer() {
   const fenceRule: RendererRule = (tokens, index, options, env, self) => {
     const token = tokens[index];
     const language = parseCodeFenceInfo(token.info).language;
+    const state = env as RenderEnvironment;
     if (language === "mermaid") {
+      state.hasMermaid = true;
       return `<figure class="diagram"><div class="mermaid" data-mermaid-source="${encodeURIComponent(token.content)}"></div></figure>`;
     }
+    if (language && language !== "math") state.hasHighlight = true;
     return defaultFence ? defaultFence(tokens, index, options, env, self) : self.renderToken(tokens, index, options);
   };
   md.renderer.rules.fence = fenceRule;
@@ -77,7 +89,7 @@ function makeRenderer() {
     const token = tokens[index];
     const inline = tokens[index + 1];
     const text = inline?.content ?? "Section";
-    const state = env as { slugs?: Map<string, number>; outline?: OutlineItem[] };
+    const state = env as RenderEnvironment;
     state.slugs ??= new Map();
     state.outline ??= [];
     const base = slugify(text);
@@ -113,6 +125,19 @@ function makeRenderer() {
 }
 
 const renderer = makeRenderer();
+
+function containsMath(source: string) {
+  return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(source);
+}
+
+function readingDirection(source: string): "rtl" | "auto" {
+  let rtlCount = 0;
+  for (const _match of source.matchAll(/[\u0590-\u08ff]/g)) rtlCount += 1;
+  if (rtlCount <= 4) return "auto";
+  let letters = 0;
+  for (const _match of source.matchAll(/[\p{L}\p{N}]/gu)) letters += 1;
+  return rtlCount > letters * 0.3 ? "rtl" : "auto";
+}
 
 function normalizeMath(source: string) {
   const protectedBlocks: string[] = [];
@@ -225,10 +250,11 @@ function convertAlerts(html: string, locale: "zh-CN" | "en") {
 
 export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "en"): RenderedMarkdown {
   const frontmatter = splitFrontmatter(source);
-  const environment: { outline?: OutlineItem[]; slugs?: Map<string, number> } = {};
+  const environment: RenderEnvironment = {};
   // markdown-it-texmath handles dollar delimiters. Normalize the two canonical
   // LaTex delimiters before parsing so all renderers (including exports) agree.
-  const mathNormalized = normalizeMath(frontmatter.body);
+  const hasMath = containsMath(frontmatter.body);
+  const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body;
   let raw = renderer.render(mathNormalized, environment);
   const outline = environment.outline ?? [];
   const toc = `<nav class="table-of-contents" aria-label="${locale === "zh-CN" ? "目录" : "Table of contents"}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join("")}</ol></nav>`;
@@ -236,12 +262,8 @@ export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "e
   raw = convertAlerts(convertRawRelativeImages(raw), locale);
   raw = `${frontmatterHtml(frontmatter.entries)}${raw}`;
   const maps = buildSourceMaps(source);
-  const hasMermaid = /^(?:`{3,}|~{3,})\s*mermaid(?:\s|$)/im.test(source);
-  const hasMath = /\$[^$]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|```math/i.test(frontmatter.body);
-  const hasHighlight = [...source.matchAll(/^\s*(?:`{3,}|~{3,})\s*([^\s`]*)/gm)]
-    .some((match) => Boolean(match[1]) && !/^(?:mermaid|math)$/i.test(match[1]));
-  const rtlCount = (frontmatter.body.match(/[\u0590-\u08ff]/g) ?? []).length;
-  const letters = (frontmatter.body.match(/[\p{L}\p{N}]/gu) ?? []).length;
+  const hasMermaid = environment.hasMermaid ?? false;
+  const hasHighlight = environment.hasHighlight ?? false;
   return {
     html: raw,
     outline,
@@ -249,7 +271,7 @@ export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "e
     hasMath,
     frontmatter: frontmatter.entries,
     optionalRenderers: [hasHighlight ? "highlight" : null, hasMath ? "katex" : null, hasMermaid ? "mermaid" : null].filter((value): value is "highlight" | "katex" | "mermaid" => Boolean(value)),
-    direction: rtlCount > Math.max(4, letters * 0.3) ? "rtl" : "auto",
+    direction: readingDirection(frontmatter.body),
     ...maps,
   };
 }
