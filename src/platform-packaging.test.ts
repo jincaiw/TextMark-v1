@@ -4,6 +4,7 @@ import windowsWixFragment from "../platform/windows/installer/TextMarkPreview.wx
 import windowsInstallerTest from "../platform/windows/test-installer.ps1?raw";
 import macosPackageTest from "../platform/macos/test-package.sh?raw";
 import releaseInventory from "../scripts/verify-release-assets.mjs?raw";
+import releaseWorkflow from "../.github/workflows/release.yml?raw";
 import linuxConfig from "../src-tauri/tauri.linux.conf.json";
 import kdeConfig from "../src-tauri/tauri.linux-kde.conf.json";
 import macosConfig from "../src-tauri/tauri.macos.conf.json";
@@ -100,6 +101,16 @@ describe("native desktop package integration", () => {
     );
     expect(releaseInventory).toContain(
       "latest.json references an unsigned asset for ${platform}",
+    );
+  });
+
+  it("uploads the checksummed SBOM only once", () => {
+    expect(releaseWorkflow).toContain("upload-release-assets: false");
+    expect(releaseWorkflow).toContain(
+      "release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json",
+    );
+    expect(releaseWorkflow).toContain(
+      "release-assets/*-sbom.cdx.json",
     );
   });
 });
