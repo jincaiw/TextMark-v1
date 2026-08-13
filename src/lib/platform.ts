@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppError, ExternalApplication, FileNode, TextDocument } from "../types";
+import type { AppError, AppSettings, ExternalApplication, FileNode, StartupRequest, TextDocument } from "../types";
 
 declare global {
   interface Window {
@@ -41,9 +41,9 @@ export async function readDocument(path: string): Promise<TextDocument> {
   return invoke<TextDocument>("read_text_file", { path });
 }
 
-export async function readStartupDocuments(): Promise<TextDocument[]> {
-  if (!isTauri()) return [];
-  return invoke<TextDocument[]>("startup_documents");
+export async function readStartupRequest(): Promise<StartupRequest> {
+  if (!isTauri()) return { paths: [], newWindow: false };
+  return invoke<StartupRequest>("startup_request");
 }
 
 export async function writeDocument(path: string, contents: string, expectedRevision?: string, force = false): Promise<TextDocument> {
@@ -69,4 +69,34 @@ export async function discoverApplications(): Promise<ExternalApplication[]> {
     { id: "chatgpt", name: "ChatGPT", kind: "llm", available: true },
   ];
   return invoke<ExternalApplication[]>("discover_applications");
+}
+
+export async function loadNativeSettings(): Promise<unknown | null> {
+  if (!isTauri()) return null;
+  return invoke<unknown | null>("load_settings");
+}
+
+export async function saveNativeSettings(settings: AppSettings): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("save_settings", { settings });
+}
+
+export async function watchPaths(paths: string[]): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("watch_paths", { paths });
+}
+
+export async function openInApplication(path: string, applicationId: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("open_external_application", { path, applicationId });
+}
+
+export async function revealInFileManager(path: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("show_in_file_manager", { path });
+}
+
+export async function openDocumentWindow(path: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("open_document_window", { path });
 }

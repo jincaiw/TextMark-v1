@@ -6,22 +6,30 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  base: "./",
   plugins: [react()],
   build: {
     // Mermaid and CodeMirror are offline, user-triggered chunks. The preview
     // bootstrap remains below the 300 kB gzip budget and never preloads them.
     chunkSizeWarningLimit: 3200,
+    modulePreload: {
+      resolveDependencies(_filename, dependencies) {
+        return dependencies.filter((dependency) => !dependency.includes("optional-sentry"));
+      },
+    },
     // Keep preview bootstrap small; Mermaid and editor vendors are only fetched
     // after their feature is activated.
     rolldownOptions: {
-      input: { main: "index.html", mermaid: "mermaid.html" },
+      input: { main: "index.html", mermaid: "mermaid.html", preview: "preview.html" },
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("/react/") || id.includes("/react-dom/")) return "vendor-react";
-          if (id.includes("codemirror")) return "vendor-editor";
-          if (id.includes("markdown-it") || id.includes("highlight.js") || id.includes("dompurify") || id.includes("katex")) return "vendor-markdown";
-          if (id.includes("mermaid")) return "vendor-mermaid";
+          if (/node_modules\/(?:react|react-dom)\//.test(id)) return "vendor-react";
+          if (id.includes("node_modules/@sentry/")) return "optional-sentry";
+          if (id.includes("node_modules/dompurify/")) return "vendor-sanitize";
+          if (id.includes("node_modules/highlight.js/")) return "optional-highlight";
+          if (id.includes("node_modules/katex/")) return "optional-katex";
+          if (id.includes("node_modules/markdown-it")) return "vendor-markdown-core";
         },
       },
     },

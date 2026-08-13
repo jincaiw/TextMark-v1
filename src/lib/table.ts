@@ -1,10 +1,45 @@
-import type { TableEditRequest } from "../types";
+import type { TableEditRequest, TableSourceMap } from "../types";
 
 const splitRow = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, "|"));
 const serializeRow = (cells: string[]) => `| ${cells.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`;
 const isDelimiter = (line: string) => splitRow(line).every((cell) => /^:?-{3,}:?$/.test(cell));
 
 interface TableRange { start: number; end: number; }
+
+export function editableMarkdownTables(root: ParentNode): HTMLTableElement[] {
+  return Array.from(root.querySelectorAll("table")).filter((table) => !table.closest(".md-frontmatter"));
+}
+
+export function synchronizeTableHeaderAccessibility(root: ParentNode, label: (column: number) => string): void {
+  for (const table of editableMarkdownTables(root)) {
+    Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th")).forEach((header, index) => {
+      header.dataset.tableColumn = String(index);
+      if (header.textContent?.trim()) {
+        header.removeAttribute("data-placeholder");
+        header.removeAttribute("aria-label");
+      } else {
+        const placeholder = label(index + 1);
+        header.dataset.placeholder = placeholder;
+        header.setAttribute("aria-label", placeholder);
+      }
+    });
+  }
+}
+
+export function synchronizeTableSourceCoordinates(root: ParentNode, maps: TableSourceMap[]): void {
+  editableMarkdownTables(root).forEach((table, tableIndex) => {
+    const map = maps[tableIndex];
+    if (!map) return;
+    const rows = Array.from(table.querySelectorAll("tr"));
+    for (const source of map.cells) {
+      const cell = rows[source.row]?.querySelectorAll<HTMLTableCellElement>("th, td")[source.column];
+      if (!cell) continue;
+      cell.dataset.tableRow = String(source.row);
+      cell.dataset.tableColumn = String(source.column);
+      cell.dataset.tableMarkdown = source.markdown;
+    }
+  });
+}
 
 function tableRanges(lines: string[]): TableRange[] {
   const ranges: TableRange[] = [];

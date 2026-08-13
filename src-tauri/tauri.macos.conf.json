@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "TextMark",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 760,
+        "minHeight": 520,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 18, "y": 20 },
+        "shadow": true,
+        "tabbingIdentifier": "app.textmark.desktop.documents"
+      }
+    ]
+  },
+  "bundle": {
+    "resources": {
+      "../platform/macos/cli/tm": "bin/tm",
+      "../platform/macos/cli/text-mark": "bin/text-mark"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-",
+      "entitlements": "../platform/macos/TextMark.entitlements",
+      "files": {
+        "../platform/macos/build/TextMarkQuickLook.appex": "PlugIns/TextMarkQuickLook.appex"
+      }
+    }
+  }
+}

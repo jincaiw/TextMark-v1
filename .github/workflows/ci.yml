@@ -5,16 +5,31 @@ on:
     branches: [main, "agent/**"]
   pull_request:
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
+  rust-security-audit:
+    name: RustSec dependency audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
+
   verify:
+    name: Shared quality gates (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [macos-15, windows-2025, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { components: clippy }
@@ -24,11 +39,125 @@ jobs:
       - run: npm ci --include=dev
       - run: npm test -- --run
       - run: npm run build
-      - run: npm audit --audit-level=high
+      - run: npm run check:bundle
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Browser visual/runtime smoke
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/textmark-vite.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do curl -fsS http://127.0.0.1:1420/ >/dev/null && break; sleep 0.2; done
+          export TEXTMARK_CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-preview.png 1440 900 preview
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-edit.png 1440 900 edit
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-customizer.png 1440 900 customizer
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-dark.png 1440 900 dark
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-narrow.png 760 760 preview
+      - uses: actions/upload-artifact@v6
+        if: runner.os == 'Linux'
+        with:
+          name: visual-qa-screenshots
+          path: artifacts/*.png
+          if-no-files-found: error
+
+  native-macos-quicklook:
+    name: macOS Quick Look native host
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: npm }
+      - run: brew install xcodegen
+      - run: npm ci --include=dev
+      - run: npm run build
+      - name: Build and test the Quick Look extension
+        run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: quicklook-universal-source-build
+          path: platform/macos/build/TextMarkQuickLook.appex
+          if-no-files-found: error
+
+  native-windows-preview:
+    name: Windows Explorer preview (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            architecture: x64
+          - os: windows-11-arm
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: 24, cache: npm }
+      - uses: NuGet/setup-nuget@v2
+      - run: npm ci --include=dev
+      - name: Build, unit-test and host-test the COM preview handler
+        shell: pwsh
+        run: ./platform/windows/build-preview-handler.ps1 -Architecture ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: explorer-preview-${{ matrix.architecture }}
+          path: |
+            platform/windows/build/package/**
+            platform/windows/build/${{ matrix.architecture }}/Release/TextMarkPreviewHostSmoke.exe
+          if-no-files-found: error
+
+  native-linux-kde:
+    name: KDE 6 thumbnail creator (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            architecture: x64
+          - os: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    container: fedora:40
+    steps:
+      - name: Pin Fedora 40 archive repositories
+        run: |
+          mkdir -p /etc/yum.repos.d/textmark-disabled
+          for repo in /etc/yum.repos.d/*.repo; do test -e "$repo" && mv "$repo" /etc/yum.repos.d/textmark-disabled/; done
+          cat > /etc/yum.repos.d/textmark-fedora-archive.repo <<'EOF'
+          [textmark-fedora]
+          name=Fedora 40 archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/40/Everything/$basearch/os/
+          enabled=1
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-40-$basearch
+          metadata_expire=never
+
+          [textmark-fedora-updates]
+          name=Fedora 40 updates archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/40/Everything/$basearch/
+          enabled=1
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-40-$basearch
+          metadata_expire=never
+          EOF
+      - name: Install KDE 6 build dependencies
+        run: dnf install -y git cmake gcc-c++ extra-cmake-modules qt6-qtbase-devel kf6-kio-devel kf6-kcoreaddons-devel file
+      - uses: actions/checkout@v6
+      - name: Build and exercise the KIO thumbnail plugin
+        run: platform/linux/build-kde-plugin.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kde-thumbnail-${{ matrix.architecture }}
+          path: platform/linux/build/package/textmarkthumbnail.so
+          if-no-files-found: error
 
   architecture-build:
+    name: Native app architecture (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -39,8 +168,8 @@ jobs:
             target: aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { targets: "${{ matrix.target }}" }
@@ -48,17 +177,18 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - run: npm ci --include=dev
-      - run: npm run tauri build -- --target ${{ matrix.target }} --config src-tauri/tauri.ci.conf.json
+      - run: npm run tauri build -- --no-bundle --target ${{ matrix.target }} --config src-tauri/tauri.ci.conf.json
 
   native-e2e:
+    name: Tauri embedded WebDriver (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [macos-15, windows-2025, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Linux system dependencies

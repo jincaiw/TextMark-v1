@@ -1,0 +1,59 @@
+name: TextMarkQuickLook
+options:
+  minimumXcodeGenVersion: 2.41.0
+  deploymentTarget:
+    macOS: "12.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  TextMarkQuickLook:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: quicklook
+        excludes: [Info.plist, TextMarkQuickLook.entitlements]
+    resources:
+      - path: ../../dist
+        type: folder
+    dependencies:
+      - sdk: Quartz.framework
+      - sdk: WebKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.textmark.desktop.quicklook
+        PRODUCT_NAME: TextMarkQuickLook
+        INFOPLIST_FILE: quicklook/Info.plist
+        CODE_SIGN_ENTITLEMENTS: quicklook/TextMarkQuickLook.entitlements
+        SKIP_INSTALL: NO
+  TextMarkQuickLookTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: quicklook
+        excludes: [Info.plist, TextMarkQuickLook.entitlements]
+      - path: quicklook-tests
+    resources:
+      - path: ../../dist
+        type: folder
+    dependencies:
+      - sdk: Quartz.framework
+      - sdk: WebKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.textmark.desktop.quicklook-tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  TextMarkQuickLook:
+    build:
+      targets:
+        TextMarkQuickLook: all
+    test:
+      targets:
+        - TextMarkQuickLookTests

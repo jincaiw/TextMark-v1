@@ -1,4 +1,4 @@
-const documentCss = `
+export const documentCss = `
 :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#1d1d1f;font:16px/1.58 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.markdown-body{width:min(820px,100%);margin:0 auto;padding:48px 40px 80px;overflow-wrap:anywhere}h1,h2,h3,h4,h5,h6{line-height:1.2;letter-spacing:-.02em}h1{font-size:2.15em}h2{margin-top:1.55em;font-size:1.65em}a{color:#0678de}blockquote,.markdown-alert{margin:1.2em 0;padding:1em 1.15em;border-radius:10px;background:#f4f4f6}pre{overflow:auto;padding:18px 20px;border-radius:10px;background:#f2f2f5}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}img,svg{max-width:100%;height:auto}table{width:100%;border-spacing:0;border-collapse:separate;border:1px solid #ddd;border-radius:9px;overflow:hidden}td,th{padding:.62em .75em;border-right:1px solid #ddd;border-bottom:1px solid #ddd;text-align:left}th{background:#f5f5f6}.diagram{margin:1.4em 0;padding:18px;border:1px solid #ddd;border-radius:10px}.copy-code-button,.diagram-hud,mark.search-match{display:none!important}@media print{body{font-size:12pt}.markdown-body{width:100%;padding:0}pre,table,blockquote,.markdown-alert,.diagram{break-inside:avoid}}
 `;
 
@@ -20,11 +20,72 @@ function exportClone(root: HTMLElement) {
   return clone;
 }
 
-export function downloadHtml(name: string, root: HTMLElement) {
+const blobAsDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.addEventListener("load", () => resolve(String(reader.result)), { once: true });
+  reader.addEventListener("error", () => reject(reader.error), { once: true });
+  reader.readAsDataURL(blob);
+});
+
+async function inlineCssAssetUrls(css: string, stylesheetUrl: string) {
+  const matches = [...css.matchAll(/url\((['"]?)([^'"\)]+)\1\)/g)];
+  const replacements = new Map<string, string>();
+  await Promise.all(matches.map(async ([raw, , path]) => {
+    if (/^(?:data:|#)/i.test(path) || replacements.has(raw)) return;
+    try {
+      const response = await fetch(new URL(path, stylesheetUrl));
+      if (!response.ok) return;
+      replacements.set(raw, `url("${await blobAsDataUrl(await response.blob())}")`);
+    } catch { /* The base document CSS remains usable with system fonts. */ }
+  }));
+  for (const [from, to] of replacements) css = css.split(from).join(to);
+  return css;
+}
+
+async function selfContainedStyles() {
+  const styles = [documentCss];
+  for (const sheet of Array.from(document.styleSheets)) {
+    if (!sheet.href) continue;
+    const stylesheetLocation = new URL(sheet.href, location.href);
+    if (["http:", "https:"].includes(stylesheetLocation.protocol) && stylesheetLocation.origin !== location.origin) continue;
+    try {
+      const response = await fetch(sheet.href);
+      if (response.ok) styles.push(await inlineCssAssetUrls(await response.text(), sheet.href));
+    } catch { /* documentCss is a complete readable fallback. */ }
+  }
+  return styles.join("\n");
+}
+
+async function inlineImages(source: HTMLElement, clone: HTMLElement) {
+  const originals = Array.from(source.querySelectorAll<HTMLImageElement>("img"));
+  const copies = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+  await Promise.all(copies.map(async (image, index) => {
+    const current = originals[index]?.currentSrc || originals[index]?.src || image.src;
+    if (!current) return;
+    if (current.startsWith("data:")) { image.src = current; return; }
+    try {
+      const response = await fetch(current);
+      if (!response.ok) throw new Error("image_fetch_failed");
+      image.src = await blobAsDataUrl(await response.blob());
+      image.removeAttribute("srcset");
+    } catch {
+      image.removeAttribute("src");
+      image.removeAttribute("srcset");
+      image.classList.add("asset-error");
+    }
+  }));
+}
+
+export async function buildSelfContainedHtml(name: string, root: HTMLElement) {
   const clone = exportClone(root);
+  await inlineImages(root, clone);
   const title = name.replace(/[<&>]/g, "");
-  const html = `<!doctype html><html lang="${document.documentElement.lang || "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${documentCss}</style></head><body>${clone.outerHTML}</body></html>`;
-  download(`${cleanName(name)}.html`, new Blob([html], { type: "text/html;charset=utf-8" }));
+  const css = await selfContainedStyles();
+  return `<!doctype html><html lang="${document.documentElement.lang || "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"><title>${title}</title><style>${css}</style></head><body>${clone.outerHTML}</body></html>`;
+}
+
+export async function downloadHtml(name: string, root: HTMLElement) {
+  download(`${cleanName(name)}.html`, new Blob([await buildSelfContainedHtml(name, root)], { type: "text/html;charset=utf-8" }));
 }
 
 export async function downloadPng(name: string, root: HTMLElement) {

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown } from "./markdown";
+import { renderMarkdown, renderMarkdownEnhanced } from "./markdown";
+import { SAMPLE_MARKDOWN } from "../constants";
 
 describe("renderMarkdown", () => {
+  it("enhances the full welcome document without dropping the render", async () => {
+    const rendered = await renderMarkdownEnhanced(SAMPLE_MARKDOWN, "zh-CN");
+    expect(rendered.html).toContain("Welcome to TextMark");
+    expect(rendered.html).toContain("katex");
+    expect(rendered.html).toContain("hljs-keyword");
+    expect(rendered.hasMermaid).toBe(true);
+  });
   it("builds stable heading anchors and an outline", () => {
     const rendered = renderMarkdown("# Hello world\n\n## Hello world");
     expect(rendered.outline).toEqual([
@@ -51,14 +59,14 @@ describe("renderMarkdown", () => {
     expect(rendered.sourceMap.map((entry) => entry.kind)).toEqual(["heading", "task", "table"]);
   });
 
-  it("renders canonical LaTeX delimiters but keeps code literal", () => {
-    const rendered = renderMarkdown("\\(x + y\\) and `\\(literal\\)`\n\n\\[z^2\\]");
+  it("renders canonical LaTeX delimiters but keeps code literal", async () => {
+    const rendered = await renderMarkdownEnhanced("\\(x + y\\) and `\\(literal\\)`\n\n\\[z^2\\]");
     expect(rendered.html).toContain("katex");
     expect(rendered.html).toContain("\\(literal\\)");
   });
 
-  it("uses a real HCL grammar for Terraform fences", () => {
-    const rendered = renderMarkdown("```terraform\nresource \"aws_s3_bucket\" \"example\" { enabled = true }\n```");
+  it("uses a real HCL grammar for Terraform fences", async () => {
+    const rendered = await renderMarkdownEnhanced("```terraform\nresource \"aws_s3_bucket\" \"example\" { enabled = true }\n```");
     expect(rendered.html).toContain("hljs-keyword");
     expect(rendered.html).toContain("hljs-attr");
   });

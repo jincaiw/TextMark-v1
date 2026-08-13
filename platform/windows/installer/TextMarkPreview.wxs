@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="TextMarkExplorerPreviewRegistration" Guid="4E9164D3-26D0-42E5-A10C-2BB5B11362A9" Win64="yes">
+        <RegistryKey Root="HKLM" Key="Software\Classes\CLSID\{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}">
+          <RegistryValue Type="string" Value="TextMark Markdown Preview Handler" KeyPath="yes" />
+          <RegistryValue Name="AppID" Type="string" Value="{6D2B5079-2F0B-48DD-AB7F-97CEC514D30B}" />
+          <RegistryKey Key="InprocServer32">
+            <RegistryValue Type="string" Value="[INSTALLFOLDER]TextMarkPreview\TextMarkPreviewHandler.dll" />
+            <RegistryValue Name="ThreadingModel" Type="string" Value="Apartment" />
+            <RegistryValue Name="ProgID" Type="string" Value="TextMark.Markdown" />
+            <RegistryValue Name="VersionIndependentProgID" Type="string" Value="TextMark.Markdown" />
+          </RegistryKey>
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers">
+          <RegistryValue Name="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" Type="string" Value="TextMark Markdown Preview Handler" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\TextMark.Markdown\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}">
+          <RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.md\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.markdown\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mdown\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mkd\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mkdn\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mdwn\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mdtxt\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.mdtext\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.rmd\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\.txt\shellex\{8895B1C6-B41F-4C1C-A562-0D564250836F}"><RegistryValue Type="string" Value="{7D5DF7F4-1BD8-4A2D-9CE8-BE7F554D1A07}" /></RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="TextMarkExplorerPreviewComponents">
+      <ComponentRef Id="TextMarkExplorerPreviewRegistration" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

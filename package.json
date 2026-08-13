@@ -1,11 +1,14 @@
 {
   "name": "textmark",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "build:preview-host": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "wdio run wdio.conf.mjs",
@@ -15,9 +18,12 @@
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
+    "@codemirror/language": "^6.11.3",
     "@codemirror/lang-markdown": "^6.3.4",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.43.7",
+    "@lezer/highlight": "^1.2.3",
+    "@sentry/react": "^10.70.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.4.1",
     "@tauri-apps/plugin-opener": "^2.5.0",
@@ -34,11 +40,13 @@
     "markdown-it-task-lists": "^2.1.1",
     "markdown-it-texmath": "^1.0.0",
     "mermaid": "^11.16.1",
+    "morphdom": "^2.7.8",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "overrides": {
-    "nanoid": "3.3.17",
+    "@puppeteer/browsers": "3.2.0",
+    "nanoid": "3.3.18",
     "serialize-javascript": "7.1.0"
   },
   "devDependencies": {
