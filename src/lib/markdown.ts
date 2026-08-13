@@ -125,6 +125,9 @@ function makeRenderer() {
 }
 
 const renderer = makeRenderer();
+let lastRenderSource: string | undefined;
+let lastRenderLocale: "zh-CN" | "en" | undefined;
+let lastRenderResult: RenderedMarkdown | undefined;
 
 function containsMath(source: string) {
   return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(source);
@@ -249,6 +252,10 @@ function convertAlerts(html: string, locale: "zh-CN" | "en") {
 }
 
 export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "en"): RenderedMarkdown {
+  // React development replays, export fallbacks and native preview hosts can
+  // request the same immutable document more than once. Retaining only the
+  // most recent parse avoids duplicate work without allowing cache growth.
+  if (source === lastRenderSource && locale === lastRenderLocale && lastRenderResult) return lastRenderResult;
   const frontmatter = splitFrontmatter(source);
   const environment: RenderEnvironment = {};
   // markdown-it-texmath handles dollar delimiters. Normalize the two canonical
@@ -264,7 +271,7 @@ export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "e
   const maps = buildSourceMaps(source);
   const hasMermaid = environment.hasMermaid ?? false;
   const hasHighlight = environment.hasHighlight ?? false;
-  return {
+  const result: RenderedMarkdown = {
     html: raw,
     outline,
     hasMermaid,
@@ -274,6 +281,10 @@ export function renderMarkdownUnsafe(source: string, locale: "zh-CN" | "en" = "e
     direction: readingDirection(frontmatter.body),
     ...maps,
   };
+  lastRenderSource = source;
+  lastRenderLocale = locale;
+  lastRenderResult = result;
+  return result;
 }
 
 export function renderMarkdown(source: string, locale: "zh-CN" | "en" = "en"): RenderedMarkdown {

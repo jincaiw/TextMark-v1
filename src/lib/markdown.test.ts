@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown, renderMarkdownEnhanced } from "./markdown";
+import { renderMarkdown, renderMarkdownEnhanced, renderMarkdownUnsafe } from "./markdown";
 import { SAMPLE_MARKDOWN } from "../constants";
 
 describe("renderMarkdown", () => {
@@ -17,6 +17,13 @@ describe("renderMarkdown", () => {
       { id: "hello-world-2", text: "Hello world", level: 2 },
     ]);
     expect(rendered.html).toContain('id="hello-world"');
+  });
+
+  it("reuses only the latest identical immutable render", () => {
+    const first = renderMarkdownUnsafe("# Cached", "zh-CN");
+    expect(renderMarkdownUnsafe("# Cached", "zh-CN")).toBe(first);
+    expect(renderMarkdownUnsafe("# Changed", "zh-CN")).not.toBe(first);
+    expect(renderMarkdownUnsafe("# Changed", "en")).not.toBe(first);
   });
 
   it("removes executable HTML and inline styles", () => {
