@@ -17,7 +17,7 @@ int wmain() {
   if (textmark::SafeRelativeAsset(document, "../secret.png")) return 3;
   if (textmark::SafeRelativeAsset(document, "%2FWindows%2Fsecret.png")) return 4;
   const auto request = textmark::BuildRenderRequest(document, "# 中文\n\n![x](images/local.png)");
-  if (request.find("window.TextMarkPreview.render") == std::string::npos || request.find("data:image/png;base64") == std::string::npos || request.find("textmark-preview-ready") == std::string::npos) return 5;
+  if (request.find("waitForTextMarkPreview") == std::string::npos || request.find("window.TextMarkPreview.render") == std::string::npos || request.find("data:image/png;base64") == std::string::npos || request.find("textmark-preview-ready") == std::string::npos) return 5;
   if (textmark::JsonEscape("\"\\\n") != "\\\"\\\\\\n") return 6;
   std::error_code error;
   fs::remove_all(root, error);

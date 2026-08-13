@@ -189,10 +189,14 @@ std::string BuildRenderRequest(const fs::path& document, const std::string& mark
   }
   assets << '}';
   std::ostringstream request;
-  request << "window.TextMarkPreview.render({\"source\":\"" << JsonEscape(markdown)
+  request << "(function waitForTextMarkPreview(remaining){"
+          << "if(window.TextMarkPreview&&typeof window.TextMarkPreview.render==='function'){"
+          << "window.TextMarkPreview.render({\"source\":\"" << JsonEscape(markdown)
           << "\",\"locale\":\"" << locale << "\",\"appearance\":\"" << appearance
           << "\",\"assets\":" << assets.str()
-          << "}).then(function(){window.chrome.webview.postMessage('textmark-preview-ready');},function(){window.chrome.webview.postMessage('textmark-preview-failed');});";
+          << "}).then(function(){window.chrome.webview.postMessage('textmark-preview-ready');},function(){window.chrome.webview.postMessage('textmark-preview-failed');});return;}"
+          << "if(remaining<=0){window.chrome.webview.postMessage('textmark-preview-failed');return;}"
+          << "setTimeout(function(){waitForTextMarkPreview(remaining-1);},25);})(400);";
   return request.str();
 }
 

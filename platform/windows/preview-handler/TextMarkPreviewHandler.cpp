@@ -33,13 +33,7 @@ std::filesystem::path ModuleDirectory() {
 }
 
 std::wstring PreviewURL() {
-  const auto path = (ModuleDirectory() / L"web" / L"preview.html").wstring();
-  DWORD length = 32768;
-  std::wstring url(length, L'\0');
-  if (FAILED(UrlCreateFromPathW(path.c_str(), url.data(), &length, 0))) return {};
-  url.resize(length);
-  if (!url.empty() && url.back() == L'\0') url.pop_back();
-  return url;
+  return L"https://textmark.invalid/preview.html";
 }
 
 RECT ClientBounds(HWND window) {
@@ -169,6 +163,18 @@ class PreviewHandler final : public IPreviewHandler, public IInitializeWithFile,
     const RECT client = ClientBounds(window_);
     controller_->put_Bounds(client);
     if (FAILED(controller_->get_CoreWebView2(&webView_)) || !webView_) {
+      SetWindowTextW(window_, L"TextMarkPreviewFailed");
+      return;
+    }
+    const auto webRoot = ModuleDirectory() / L"web";
+    std::error_code resourceError;
+    if (!std::filesystem::is_regular_file(webRoot / L"preview.html", resourceError)) {
+      SetWindowTextW(window_, L"TextMarkPreviewFailed");
+      return;
+    }
+    ComPtr<ICoreWebView2_3> webView3;
+    if (FAILED(webView_.As(&webView3)) || FAILED(webView3->SetVirtualHostNameToFolderMapping(
+          L"textmark.invalid", webRoot.c_str(), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS))) {
       SetWindowTextW(window_, L"TextMarkPreviewFailed");
       return;
     }
