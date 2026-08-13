@@ -19,10 +19,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: src-tauri
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit Rust dependencies
+        working-directory: src-tauri
+        run: cargo audit
 
   verify:
     name: Shared quality gates (${{ matrix.os }})
