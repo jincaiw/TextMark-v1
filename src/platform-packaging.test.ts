@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import windowsWixFragment from "../platform/windows/installer/TextMarkPreview.wxs?raw";
 import windowsInstallerTest from "../platform/windows/test-installer.ps1?raw";
 import macosPackageTest from "../platform/macos/test-package.sh?raw";
+import releaseInventory from "../scripts/verify-release-assets.mjs?raw";
 import linuxConfig from "../src-tauri/tauri.linux.conf.json";
 import kdeConfig from "../src-tauri/tauri.linux-kde.conf.json";
 import macosConfig from "../src-tauri/tauri.macos.conf.json";
@@ -87,6 +88,18 @@ describe("native desktop package integration", () => {
     expect(macosPackageTest).toContain("Signature=adhoc");
     expect(macosPackageTest).toContain(
       "Developer ID Quick Look extension was not accepted by PlugInKit.",
+    );
+  });
+
+  it("accepts Tauri's Universal updater name and verifies metadata targets", () => {
+    expect(releaseInventory).toContain(
+      "^TextMark(?:[_-]${version})?[_-]universal\\\\.app\\\\.tar\\\\.gz$",
+    );
+    expect(releaseInventory).toContain(
+      "latest.json references a missing asset for ${platform}",
+    );
+    expect(releaseInventory).toContain(
+      "latest.json references an unsigned asset for ${platform}",
     );
   });
 });
