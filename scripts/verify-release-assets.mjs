@@ -32,7 +32,7 @@ for (const architecture of [
 }
 
 findMatch("macOS Universal DMG", [new RegExp(`^TextMark[_-]${version}[_-]universal\\.dmg$`, "i")]);
-requireSigned("macOS Universal updater archive", [new RegExp(`^TextMark[_-]${version}[_-]universal\\.app\\.tar\\.gz$`, "i")]);
+requireSigned("macOS Universal updater archive", [new RegExp(`^TextMark(?:[_-]${version})?[_-]universal\\.app\\.tar\\.gz$`, "i")]);
 findMatch("signed updater metadata", [/^latest\.json$/]);
 
 const metadata = JSON.parse(readFileSync(resolve(root, "latest.json"), "utf8"));
@@ -43,6 +43,9 @@ for (const expected of ["darwin-aarch64", "darwin-x86_64", "linux-x86_64", "linu
 }
 for (const [platform, item] of Object.entries(metadata.platforms)) {
   if (!item?.url || !item?.signature) fail(`latest.json has an unsigned or empty entry for ${platform}`);
+  const updaterAsset = basename(decodeURIComponent(new URL(item.url).pathname));
+  if (!files.includes(updaterAsset)) fail(`latest.json references a missing asset for ${platform}: ${updaterAsset}`);
+  if (!files.includes(`${updaterAsset}.sig`)) fail(`latest.json references an unsigned asset for ${platform}: ${updaterAsset}`);
 }
 
 console.log(`Verified ${files.length} release assets for ${basename(rawTag)} across six updater platforms.`);
