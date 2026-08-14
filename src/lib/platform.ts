@@ -100,3 +100,13 @@ export async function openDocumentWindow(path: string): Promise<void> {
   if (!isTauri()) return;
   await invoke("open_document_window", { path });
 }
+
+export async function installCli(): Promise<{ ok: boolean; detail: string | null }> {
+  if (!isTauri()) return { ok: false, detail: null };
+  return invoke<{ ok: boolean; detail: string | null }>("install_cli");
+}
+
+export async function setDefaultHandler(): Promise<{ ok: boolean; detail: string | null }> {
+  if (!isTauri()) return { ok: false, detail: null };
+  return invoke<{ ok: boolean; detail: string | null }>("set_default_handler");
+}

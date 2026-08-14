@@ -40,7 +40,7 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = "reload" | "overwrite" | "saveAs" | "cancel";
 
 export interface AppSettings {
-  schemaVersion: 3;
+  schemaVersion: 4;
   locale: Locale;
   theme: ThemeMode;
   contentWidth: ContentWidth;
@@ -145,7 +145,7 @@ export interface DocumentStats {
   images: number;
 }
 
-export type ToolbarItem = "navigation" | "sidebar" | "openWith" | "zoom" | "inspector" | "share" | "edit" | "search" | "print" | "copy" | "export" | "flexibleSpace" | "space";
+export type ToolbarItem = "navigation" | "sidebar" | "openActions" | "openWith" | "openInLlm" | "zoom" | "inspector" | "share" | "edit" | "search" | "print" | "copy" | "export" | "exportPdf" | "flexibleSpace" | "space";
 export type TableEdit = "setCell" | "addRowBefore" | "addRowAfter" | "duplicateRow" | "deleteRow" | "addColumnBefore" | "addColumnAfter" | "duplicateColumn" | "deleteColumn";
 
 export interface TableEditRequest {

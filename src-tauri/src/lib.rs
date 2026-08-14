@@ -147,6 +147,13 @@ struct ExternalApplication {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IntegrationResult {
+    ok: bool,
+    detail: Option<String>,
+}
+
+#[derive(Serialize)]
 struct UpdateCheck {
     version: String,
 }
@@ -405,6 +412,22 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
         }
         builder.build(app)
     };
+    // ⌃⌘ chords exist only on macOS (on Windows/Linux there is a single Ctrl key).
+    let sidebar_pane_accel = |key: &str| -> Option<&str> {
+        if cfg!(target_os = "macos") {
+            match key {
+                "1" => Some("CmdOrCtrl+Control+1"),
+                "2" => Some("CmdOrCtrl+Control+2"),
+                _ => Some("CmdOrCtrl+Control+3"),
+            }
+        } else {
+            None
+        }
+    };
+
+    // File menu
+    let new_tab = item("new-tab", "新建标签页", "New Tab", Some("CmdOrCtrl+T"))?;
+    let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
     let open_folder = item(
         "open-folder",
@@ -412,22 +435,22 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
         "Open Folder…",
         Some("CmdOrCtrl+Shift+O"),
     )?;
-    let save = item("save", "保存", "Save", Some("CmdOrCtrl+S"))?;
-    let save_as = item("save-as", "另存为…", "Save As…", Some("CmdOrCtrl+Shift+S"))?;
+    let save = item("save", "存储", "Save", Some("CmdOrCtrl+S"))?;
+    let save_as = item("save-as", "存储为…", "Save As…", Some("CmdOrCtrl+Shift+S"))?;
+    let revert = item("revert", "复原到已存储的版本", "Revert to Saved", None)?;
+    let export = item("export", "导出…", "Export…", None)?;
+    let export_pdf = item("export-pdf", "导出为 PDF…", "Export as PDF…", None)?;
     let print = item("print", "打印…", "Print…", Some("CmdOrCtrl+P"))?;
-    let export = item("export", "导出 HTML…", "Export HTML…", None)?;
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
+        .items(&[&new_tab, &close_tab])
+        .separator()
         .items(&[&open, &open_folder])
         .separator()
-        .items(&[&save, &save_as])
+        .items(&[&save, &save_as, &revert])
         .separator()
-        .items(&[&print, &export]);
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    let file_builder = file_builder.separator().close_window_with_text(if zh {
-        "关闭窗口"
-    } else {
-        "Close Window"
-    });
+        .items(&[&export, &export_pdf])
+        .separator()
+        .item(&print);
     #[cfg(target_os = "windows")]
     let file_builder = file_builder.separator().quit_with_text(if zh {
         "退出 TextMark"
@@ -435,52 +458,105 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
         "Exit TextMark"
     });
     let file = file_builder.build()?;
+
+    // Edit menu
     let undo = item("undo", "撤销", "Undo", Some("CmdOrCtrl+Z"))?;
     let redo = item("redo", "重做", "Redo", Some("CmdOrCtrl+Shift+Z"))?;
     let find = item("find", "查找…", "Find…", Some("CmdOrCtrl+F"))?;
-    let preferences = item("preferences", "设置…", "Settings…", Some("CmdOrCtrl+Comma"))?;
+    let find_next = item("find-next", "查找下一个", "Find Next", Some("CmdOrCtrl+G"))?;
+    let find_prev = item(
+        "find-prev",
+        "查找上一个",
+        "Find Previous",
+        Some("CmdOrCtrl+Shift+G"),
+    )?;
     let edit_mode = item(
         "edit-mode",
         "切换编辑模式",
         "Toggle Edit Mode",
         Some("CmdOrCtrl+E"),
     )?;
+    let preferences = item("preferences", "设置…", "Settings…", Some("CmdOrCtrl+Comma"))?;
     let edit_builder = SubmenuBuilder::new(app, if zh { "编辑" } else { "Edit" })
         .items(&[&undo, &redo])
         .separator()
         .cut_with_text(if zh { "剪切" } else { "Cut" })
-        .copy_with_text(if zh { "复制" } else { "Copy" })
+        .copy_with_text(if zh { "拷贝" } else { "Copy" })
         .paste_with_text(if zh { "粘贴" } else { "Paste" })
         .select_all_with_text(if zh { "全选" } else { "Select All" })
         .separator()
-        .items(&[&find, &edit_mode]);
+        .items(&[&find, &find_next, &find_prev])
+        .separator()
+        .item(&edit_mode);
     #[cfg(not(target_os = "macos"))]
     let edit_builder = edit_builder.separator().item(&preferences);
     let edit = edit_builder.build()?;
+
+    // View menu
     let sidebar = item(
         "sidebar",
-        "显示或隐藏侧栏",
+        "切换边栏",
         "Toggle Sidebar",
         Some("CmdOrCtrl+L"),
+    )?;
+    let sidebar_hide = item(
+        "sidebar-hide",
+        "隐藏边栏",
+        "Hide Sidebar",
+        sidebar_pane_accel("1"),
+    )?;
+    let sidebar_outline = item(
+        "sidebar-outline",
+        "目录",
+        "Table of Contents",
+        sidebar_pane_accel("2"),
+    )?;
+    let sidebar_files = item(
+        "sidebar-files",
+        "项目导航器",
+        "Project Navigator",
+        sidebar_pane_accel("3"),
     )?;
     // Keep Cmd/Ctrl+I available for italic while editing. The inspector remains
     // available from the View menu and the preview toolbar.
     let inspector = item("inspector", "显示简介", "Get Info", None)?;
+    let show_toolbar = item("show-toolbar", "显示工具栏", "Show Toolbar", None)?;
     let zoom_in = item("zoom-in", "放大", "Zoom In", Some("CmdOrCtrl+Plus"))?;
     let zoom_out = item("zoom-out", "缩小", "Zoom Out", Some("CmdOrCtrl+-"))?;
     let zoom_reset = item("zoom-reset", "实际大小", "Actual Size", Some("CmdOrCtrl+0"))?;
     let customize = item(
         "customize-toolbar",
-        "自定工具栏…",
+        "自定义工具栏…",
         "Customize Toolbar…",
         None,
     )?;
+
+    let appearance_auto = item("appearance-auto", "自动", "Automatic", None)?;
+    let appearance_light = item("appearance-light", "浅色", "Light", None)?;
+    let appearance_dark = item("appearance-dark", "深色", "Dark", None)?;
+    let appearance = SubmenuBuilder::new(app, if zh { "外观" } else { "Appearance" })
+        .items(&[&appearance_auto, &appearance_light, &appearance_dark])
+        .build()?;
+
+    let width_normal = item("width-normal", "标准", "Normal", None)?;
+    let width_full = item("width-full", "全宽", "Full Width", None)?;
+    let content_width = SubmenuBuilder::new(app, if zh { "内容宽度" } else { "Content Width" })
+        .items(&[&width_normal, &width_full])
+        .build()?;
+
     let view_builder = SubmenuBuilder::new(app, if zh { "显示" } else { "View" })
-        .items(&[&sidebar, &inspector])
+        .item(&appearance)
+        .item(&content_width)
+        .separator()
+        .items(&[&show_toolbar, &customize])
+        .separator()
+        .items(&[&sidebar, &sidebar_hide, &sidebar_outline, &sidebar_files])
+        .separator()
+        .item(&inspector)
         .separator()
         .items(&[&zoom_in, &zoom_out, &zoom_reset])
         .separator()
-        .item(&customize);
+        .item(&edit_mode);
     #[cfg(target_os = "macos")]
     let view_builder = view_builder.separator().fullscreen_with_text(if zh {
         "进入全屏幕"
@@ -489,25 +565,107 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
     });
     let view = view_builder.build()?;
 
+    // Format menu
+    let format = SubmenuBuilder::new(app, if zh { "格式" } else { "Format" })
+        .items(&[
+            &item("format-h0", "正文", "Body", Some("CmdOrCtrl+Alt+0"))?,
+            &item("format-h1", "标题 1", "Heading 1", Some("CmdOrCtrl+Alt+1"))?,
+            &item("format-h2", "标题 2", "Heading 2", Some("CmdOrCtrl+Alt+2"))?,
+            &item("format-h3", "标题 3", "Heading 3", Some("CmdOrCtrl+Alt+3"))?,
+        ])
+        .separator()
+        .items(&[
+            &item("format-bold", "粗体", "Bold", Some("CmdOrCtrl+B"))?,
+            &item("format-italic", "斜体", "Italic", Some("CmdOrCtrl+I"))?,
+            &item(
+                "format-strikethrough",
+                "删除线",
+                "Strikethrough",
+                Some("CmdOrCtrl+Shift+X"),
+            )?,
+            &item("format-code", "行内代码", "Inline Code", Some("CmdOrCtrl+Shift+M"))?,
+            &item("format-link", "链接", "Link", Some("CmdOrCtrl+K"))?,
+        ])
+        .separator()
+        .items(&[
+            &item(
+                "format-bulletList",
+                "项目符号列表",
+                "Bulleted List",
+                Some("CmdOrCtrl+Shift+7"),
+            )?,
+            &item(
+                "format-orderedList",
+                "编号列表",
+                "Numbered List",
+                Some("CmdOrCtrl+Shift+9"),
+            )?,
+            &item(
+                "format-taskList",
+                "任务列表",
+                "Checklist",
+                Some("CmdOrCtrl+Shift+L"),
+            )?,
+            &item("format-quote", "引用", "Block Quote", Some("CmdOrCtrl+Quote"))?,
+        ])
+        .build()?;
+
+    // Go menu
+    let go = SubmenuBuilder::new(app, if zh { "前往" } else { "Go" })
+        .items(&[
+            &item("go-up", "向上", "Up", None)?,
+            &item("go-down", "向下", "Down", None)?,
+            &item("go-page-up", "上一页", "Page Up", None)?,
+            &item("go-page-down", "下一页", "Page Down", None)?,
+        ])
+        .separator()
+        .items(&[
+            &item("go-prev-item", "上一项", "Previous Item", Some("Alt+Up"))?,
+            &item("go-next-item", "下一项", "Next Item", Some("Alt+Down"))?,
+        ])
+        .separator()
+        .items(&[
+            &item("go-top", "文稿开头", "Top of Document", Some("CmdOrCtrl+Up"))?,
+            &item("go-bottom", "文稿结尾", "Bottom of Document", Some("CmdOrCtrl+Down"))?,
+        ])
+        .build()?;
+
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     let window = SubmenuBuilder::new(app, if zh { "窗口" } else { "Window" })
         .minimize_with_text(if zh { "最小化" } else { "Minimize" })
         .maximize_with_text(if zh { "缩放" } else { "Zoom" })
-        .separator()
-        .close_window_with_text(if zh { "关闭窗口" } else { "Close Window" })
         .build()?;
 
     let help_item = item("help", "TextMark 帮助", "TextMark Help", None)?;
+    let check_updates = item(
+        "check-updates",
+        "检查更新…",
+        "Check for Updates…",
+        None,
+    )?;
+    let install_cli = item("install-cli", "安装命令行工具…", "Install CLI…", None)?;
+    let crash_reports = item(
+        "crash-reports",
+        "发送匿名崩溃报告",
+        "Send Anonymous Crash Reports",
+        None,
+    )?;
+    #[cfg(target_os = "macos")]
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" }).item(&help_item);
     #[cfg(not(target_os = "macos"))]
-    let help_builder = help_builder.separator().about_with_text(
-        if zh {
-            "关于 TextMark"
-        } else {
-            "About TextMark"
-        },
-        None,
-    );
+    let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
+        .item(&help_item)
+        .separator()
+        .items(&[&check_updates, &install_cli, &crash_reports])
+        .separator()
+        .about_with_text(
+            if zh {
+                "关于 TextMark"
+            } else {
+                "About TextMark"
+            },
+            None,
+        );
     let help = help_builder.build()?;
 
     #[cfg(target_os = "macos")]
@@ -520,6 +678,8 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
             },
             None,
         )
+        .separator()
+        .items(&[&check_updates, &install_cli, &crash_reports])
         .separator()
         .item(&preferences)
         .separator()
@@ -541,15 +701,15 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
 
     #[cfg(target_os = "macos")]
     return MenuBuilder::new(app)
-        .items(&[&application, &file, &edit, &view, &window, &help])
+        .items(&[&application, &file, &edit, &view, &format, &go, &window, &help])
         .build();
     #[cfg(target_os = "windows")]
     return MenuBuilder::new(app)
-        .items(&[&file, &edit, &view, &window, &help])
+        .items(&[&file, &edit, &view, &format, &go, &window, &help])
         .build();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     MenuBuilder::new(app)
-        .items(&[&file, &edit, &view, &help])
+        .items(&[&file, &edit, &view, &format, &go, &help])
         .build()
 }
 
@@ -1006,6 +1166,82 @@ fn open_mermaid_window(app: tauri::AppHandle, id: String, locale: String) -> App
     Ok(())
 }
 
+#[tauri::command]
+fn install_cli() -> IntegrationResult {
+    let Ok(exe) = std::env::current_exe() else {
+        return IntegrationResult { ok: false, detail: None };
+    };
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default();
+    install_cli_on_platform(&exe, &home)
+}
+
+#[cfg(unix)]
+fn install_cli_on_platform(exe: &Path, home: &str) -> IntegrationResult {
+    let bin = Path::new(home).join(".local").join("bin");
+    if fs::create_dir_all(&bin).is_err() {
+        return IntegrationResult { ok: false, detail: Some(bin.display().to_string()) };
+    }
+    let mut ok = true;
+    for name in ["textmark", "tm", "text-mark"] {
+        let link = bin.join(name);
+        let _ = fs::remove_file(&link);
+        if std::os::unix::fs::symlink(exe, &link).is_err() {
+            ok = false;
+        }
+    }
+    IntegrationResult { ok, detail: Some(bin.display().to_string()) }
+}
+
+#[cfg(windows)]
+fn install_cli_on_platform(exe: &Path, home: &str) -> IntegrationResult {
+    let dir = Path::new(home).join("AppData").join("Local").join("TextMark").join("bin");
+    if fs::create_dir_all(&dir).is_err() {
+        return IntegrationResult { ok: false, detail: Some(dir.display().to_string()) };
+    }
+    let mut ok = true;
+    for name in ["textmark", "tm", "text-mark"] {
+        let target = dir.join(format!("{name}.cmd"));
+        let script = format!("@echo off\r\n\"{}\" %*\r\n", exe.display());
+        if fs::write(&target, script).is_err() {
+            ok = false;
+        }
+    }
+    IntegrationResult { ok, detail: Some(dir.display().to_string()) }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn install_cli_on_platform(_exe: &Path, _home: &str) -> IntegrationResult {
+    IntegrationResult { ok: false, detail: None }
+}
+
+#[tauri::command]
+fn set_default_handler() -> IntegrationResult {
+    set_default_handler_on_platform()
+}
+
+#[cfg(target_os = "linux")]
+fn set_default_handler_on_platform() -> IntegrationResult {
+    match Command::new("xdg-mime")
+        .arg("default")
+        .arg("app.textmark.desktop")
+        .args(["text/markdown", "text/x-markdown", "text/plain"])
+        .status()
+    {
+        Ok(s) if s.success() => IntegrationResult { ok: true, detail: None },
+        _ => IntegrationResult { ok: false, detail: None },
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_default_handler_on_platform() -> IntegrationResult {
+    // Installers register file associations on macOS (DMG/Quick Look) and
+    // Windows (MSI/NSIS); the portable archives intentionally leave the
+    // system defaults untouched.
+    IntegrationResult { ok: false, detail: None }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1046,6 +1282,8 @@ pub fn run() {
             check_update_channel,
             install_update_channel,
             open_mermaid_window,
+            install_cli,
+            set_default_handler,
             set_menu_locale,
             discover_applications,
             load_settings,

@@ -2,13 +2,15 @@ import type { AppSettings, ToolbarItem } from "../types";
 
 export const SETTINGS_KEYS = ["textmark.settings.v3", "textmark.settings.v2", "textmark.settings.v1"] as const;
 export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
-  "navigation", "sidebar", "openWith", "zoom", "inspector", "share", "edit", "search", "print", "copy", "export", "flexibleSpace", "space",
+  "navigation", "sidebar", "openActions", "openWith", "openInLlm", "zoom", "inspector", "share", "edit", "search", "print", "copy", "export", "exportPdf", "flexibleSpace", "space",
 ]);
 
-export const DEFAULT_TOOLBAR: ToolbarItem[] = ["flexibleSpace", "sidebar", "navigation", "flexibleSpace", "openWith", "space", "zoom", "inspector", "share", "edit", "search"];
+// Upstream (markdown-preview) default toolbar order. The AppKit-only sidebar
+// tracking separator is intentionally omitted (native macOS affordance).
+export const DEFAULT_TOOLBAR: ToolbarItem[] = ["flexibleSpace", "sidebar", "navigation", "flexibleSpace", "openActions", "space", "zoom", "inspector", "share", "edit", "search"];
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   locale: "zh-CN",
   theme: "system",
   contentWidth: "normal",
@@ -26,11 +28,14 @@ const valid = <T extends string>(value: unknown, values: readonly T[], fallback:
 
 export function normalizeSettings(value: unknown): AppSettings {
   const stored = typeof value === "object" && value ? value as Partial<AppSettings> : {};
-  const toolbar = Array.isArray(stored.toolbar)
+  const rawToolbar = Array.isArray(stored.toolbar)
     ? stored.toolbar.filter((item): item is ToolbarItem => typeof item === "string" && TOOLBAR_ITEMS.has(item as ToolbarItem))
     : DEFAULT_TOOLBAR;
+  // Prior to v4, "openWith" meant the combined Open With + Open in LLM menu; it
+  // is now the dedicated "openActions" item. Preserve existing user layouts.
+  const toolbar = (stored.schemaVersion === 4 ? rawToolbar : rawToolbar.map((item) => item === "openWith" ? "openActions" as ToolbarItem : item));
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     locale: valid(stored.locale, ["zh-CN", "en"], "zh-CN"),
     theme: valid(stored.theme, ["system", "light", "dark"], "system"),
     contentWidth: valid(stored.contentWidth, ["normal", "full"], "normal"),

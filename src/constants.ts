@@ -51,3 +51,9 @@ export const MARKDOWN_FILTERS = [{
   name: "Markdown",
   extensions: MARKDOWN_EXTENSIONS,
 }];
+
+export const ZOOM_STOPS = [50, 67, 75, 80, 90, 100, 110, 125, 133, 150, 175, 200, 250, 300] as const;
+export const nextZoomStep = (current: number, direction: 1 | -1) =>
+  direction > 0
+    ? ZOOM_STOPS.find((value) => value > current) ?? 300
+    : [...ZOOM_STOPS].reverse().find((value) => value < current) ?? 50;

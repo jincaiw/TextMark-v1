@@ -3,8 +3,11 @@ import { t } from "../lib/i18n";
 import { DEFAULT_TOOLBAR } from "../lib/settings";
 import type { Locale, ToolbarDisplayMode, ToolbarItem } from "../types";
 
-const AVAILABLE: ToolbarItem[] = ["navigation", "sidebar", "openWith", "zoom", "inspector", "share", "edit", "search", "print", "copy", "export", "flexibleSpace", "space"];
-const label: Record<ToolbarItem, Parameters<typeof t>[1]> = { navigation: "navigation", sidebar: "sidebar", openWith: "openWith", zoom: "zoom", inspector: "inspector", share: "share", edit: "edit", search: "searchItem", print: "printItem", copy: "copyItem", export: "exportItem", flexibleSpace: "flexibleSpace", space: "space" };
+const AVAILABLE: ToolbarItem[] = ["navigation", "sidebar", "openActions", "openWith", "openInLlm", "zoom", "inspector", "share", "edit", "search", "print", "copy", "export", "exportPdf", "flexibleSpace", "space"];
+const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
+  navigation: "navigation", sidebar: "sidebar", openActions: "open", openWith: "openWith", openInLlm: "openInLlm", zoom: "zoom", inspector: "inspector", share: "share", edit: "edit",
+  search: "searchItem", print: "printItem", copy: "copyItem", export: "exportItem", exportPdf: "exportPdf", flexibleSpace: "flexibleSpace", space: "space",
+};
 
 interface ToolbarCustomizerProps {
   open: boolean;

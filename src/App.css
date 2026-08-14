@@ -76,6 +76,7 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .sidebar-control summary svg { width: 12px; }
 .native-title { position: absolute; left: 50%; z-index: -1; max-width: 260px; transform: translateX(-50%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: -.01em; pointer-events: none; }
 .native-actions { flex: 1 1 auto; justify-content: flex-start; gap: 10px; min-width: 0; }
+.toolbar-hidden .native-actions { display: none; }
 .toolbar-flexible-space { flex: 1 1 48px; min-width: 10px; }
 .toolbar-space { flex: 0 0 18px; }
 .toolbar-item-button { min-width: 38px; height: 34px; display: flex; place-items: center; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; padding: 0 9px; border: 0; border-radius: 9px; background: var(--surface); color: var(--text); box-shadow: 0 1px 5px rgba(0,0,0,.06); cursor: pointer; }
@@ -176,6 +177,11 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .inspector-panel header strong { font-size: 13px; }
 .inspector-panel header button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
 .inspector-panel header svg { width: 16px; }
+.inspector-panel header .inspector-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.inspector-panel header .inspector-segmented button { width: auto; height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; font-size: 12px; color: var(--text); }
+.inspector-panel header .inspector-segmented button svg { width: 14px; height: 14px; }
+.inspector-panel header .inspector-segmented button.active { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.08); color: var(--accent); }
+.inspector-tab { padding-top: 14px; }
 .inspector-file { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
 .inspector-file > svg { width: 34px; height: 34px; color: var(--accent); }
 .inspector-file div { min-width: 0; display: grid; gap: 3px; }
@@ -324,6 +330,16 @@ mark.search-match.active { outline: 2px solid #ef8b00; background: #ffc94d; anim
 .conflict-dialog > div { display: flex; justify-content: flex-end; gap: 8px; }
 .conflict-dialog button { padding: 7px 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }
 .conflict-dialog button.destructive { border-color: #d73737; background: #d73737; color: white; }
+.export-dialog { width: min(420px, calc(100vw - 36px)); padding: 0 18px 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--window); box-shadow: 0 25px 80px rgba(0,0,0,.35); }
+.export-dialog header { height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.export-dialog h2 { margin: 0; font-size: 16px; }
+.export-dialog header button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--hover); color: var(--muted); cursor: pointer; }
+.export-dialog header svg { width: 16px; }
+.export-option { width: 100%; display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text); cursor: pointer; }
+.export-option > svg { width: 22px; height: 22px; color: var(--accent); }
+.export-option > span { display: grid; gap: 2px; text-align: start; }
+.export-option strong { font-size: 13px; }
+.export-option small { color: var(--muted); font-size: 11px; }
 .toolbar-customizer { width: min(760px, calc(100vw - 40px)); max-height: calc(100vh - 60px); padding: 0 28px 24px; overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--window); box-shadow: 0 25px 80px rgba(0,0,0,.35); }
 .toolbar-customizer header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 0 18px; border-bottom: 1px solid var(--border); }
 .toolbar-customizer h2, .toolbar-customizer h3 { margin: 0; }

@@ -363,6 +363,17 @@ export function useDocument(locale: Locale) {
     updateContents(next);
   }, [active, updateContents]);
 
+  const newDocument = useCallback(() => {
+    const blank = makeSession({ path: null, name: locale === "zh-CN" ? "未命名.md" : "Untitled.md", contents: "" });
+    setSessions((current) => [...current, blank]);
+    setActiveId(blank.id);
+  }, [locale]);
+
+  const revertDocument = useCallback(() => {
+    updateActive((current) => ({ ...current, contents: current.savedContents, dirty: false }));
+    setExternalChange(null);
+  }, [updateActive]);
+
   const closeSession = useCallback((id: string) => {
     const target = sessions.find((session) => session.id === id);
     if (target?.dirty && !window.confirm(messages[locale].closeDirty)) return;
@@ -421,6 +432,8 @@ export function useDocument(locale: Locale) {
     externalChange,
     activate,
     closeSession,
+    newDocument,
+    revertDocument,
     resolveExternal,
     updateContents,
     applyEdit,

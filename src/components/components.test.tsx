@@ -15,7 +15,7 @@ describe("localized desktop components", () => {
   it("renders the upstream Contains/Begins With find modes in Chinese", () => {
     const html = renderToStaticMarkup(<FindBar locale="zh-CN" query="Text" current={0} count={2} matchCase={false} mode="contains" onQueryChange={vi.fn()} onPrevious={vi.fn()} onNext={vi.fn()} onMatchCaseChange={vi.fn()} onModeChange={vi.fn()} onClose={vi.fn()} />);
     expect(html).toContain("包含");
-    expect(html).toContain("开头匹配");
+    expect(html).toContain("开头为");
     expect(html).toContain("第 1 项，共 2 项");
   });
   it("exposes dirty document tabs and localized close labels", () => {
@@ -25,8 +25,8 @@ describe("localized desktop components", () => {
   });
   it("renders the three explicit conflict choices", () => {
     const html = renderToStaticMarkup(<ConflictDialog change={{ kind: "modified", document: { path: "/a.md", name: "a.md", contents: "disk" } }} locale="en" onResolve={vi.fn()} />);
-    expect(html).toContain("Reload");
-    expect(html).toContain("Overwrite");
+    expect(html).toContain("Reload from Disk");
+    expect(html).toContain("Keep My Changes");
     expect(html).toContain("Cancel");
   });
   it("offers safe recovery when a document is deleted or renamed", () => {
@@ -39,7 +39,7 @@ describe("localized desktop components", () => {
   });
   it("renders configurable toolbar inventory", () => {
     const html = renderToStaticMarkup(<ToolbarCustomizer open locale="zh-CN" items={["sidebar", "search"]} displayMode="iconOnly" onChange={vi.fn()} onDisplayModeChange={vi.fn()} onClose={vi.fn()} />);
-    expect(html).toContain("自定工具栏");
+    expect(html).toContain("自定义工具栏");
     expect(html).toContain("可用项目");
     expect(html).toContain("当前工具栏");
   });
