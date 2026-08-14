@@ -116,6 +116,11 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .menu-popover button:hover { background: var(--accent); color: white; }
 .menu-popover button:disabled { opacity: .5; }
 .menu-popover button svg { width: 16px; height: 16px; }
+.menu-popover button .check { margin-left: auto; color: var(--accent); }
+.menu-popover button:hover .check { color: white; }
+.menu-popover button .app-badge { width: 18px; height: 18px; display: inline-grid; place-items: center; flex: 0 0 auto; border-radius: 5px; background: var(--muted); color: white; font-size: 11px; font-weight: 600; }
+.menu-popover button:hover .app-badge { background: rgba(255,255,255,.28); }
+.menu-popover button.menu-empty { color: var(--muted); cursor: default; }
 .menu-popover hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border); }
 .sidebar-menu { width: 190px; }
 
@@ -128,9 +133,14 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 
 .find-bar { z-index: 9; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 4px 18px; border-bottom: 1px solid var(--border); background: var(--chrome); }
 .find-bar input { width: 240px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); outline: none; }
-.find-bar select { height: 30px; padding: 0 24px 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 12px; }
-.find-bar > span { width: 70px; color: var(--muted); font-size: 12px; text-align: center; }
-.find-bar button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.find-bar .find-match-label { width: auto; margin-left: 8px; color: var(--muted); font-size: 12px; }
+.find-bar .find-mode { width: auto; height: 26px; padding: 0 11px; border-radius: 6px; font-size: 12px; }
+.find-bar .find-mode.selected { background: var(--selected); color: var(--accent); }
+.find-bar .find-count { width: auto; min-width: 70px; color: var(--muted); font-size: 12px; text-align: center; }
+.find-bar .find-icon { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.find-bar .find-icon:hover, .find-bar .find-icon.selected { background: var(--selected); color: var(--accent); }
+.find-bar .find-icon:disabled { opacity: .35; }
+.find-bar .find-done { width: auto; height: 26px; padding: 0 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; }
 .find-bar button:hover, .find-bar button.selected { background: var(--selected); color: var(--accent); }
 .find-bar button:disabled { opacity: .35; }
 .find-bar svg { width: 17px; height: 17px; }
@@ -305,6 +315,14 @@ mark.search-match.active { outline: 2px solid #ef8b00; background: #ffc94d; anim
 .project-context-menu { position: fixed; z-index: 105; width: 205px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 14px 36px rgba(0,0,0,.24); }
 .project-context-menu button { height: 30px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: start; font-size: 12px; cursor: pointer; }
 .project-context-menu button:hover { background: var(--accent); color: white; }
+.project-context-menu button:disabled { opacity: .5; cursor: default; }
+.project-context-menu button:disabled:hover { background: transparent; color: var(--text); }
+.project-context-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border); }
+.context-submenu { position: relative; }
+.context-submenu > button { display: flex; align-items: center; justify-content: space-between; }
+.context-submenu > button svg { width: 13px; height: 13px; }
+.context-submenu-panel { position: absolute; left: calc(100% - 4px); top: -6px; width: 185px; display: none; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 14px 36px rgba(0,0,0,.24); }
+.context-submenu:hover .context-submenu-panel { display: grid; }
 
 .toast { position: fixed; z-index: 120; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 8px 14px; border-radius: 18px; background: rgba(25,25,28,.88); color: white; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; backdrop-filter: blur(12px); }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; background: rgba(0,0,0,.28); backdrop-filter: blur(5px); }
@@ -391,7 +409,9 @@ mark.search-match.active { outline: 2px solid #ef8b00; background: #ffc94d; anim
 }
 @media (max-width: 920px) {
   .native-title { justify-self: start; }
-  .document-search, .zoom-buttons { display: none; }
+  .document-search { width: 38px; justify-content: center; cursor: pointer; }
+  .document-search input { display: none; }
+  .zoom-buttons { display: none; }
   .document-shell.with-sidebar.with-inspector { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
   .inspector-panel { position: absolute; z-index: 20; right: 0; top: var(--toolbar-height); bottom: 0; width: var(--inspector-width); box-shadow: -10px 0 30px rgba(0,0,0,.15); }
 }
@@ -408,4 +428,6 @@ mark.search-match.active { outline: 2px solid #ef8b00; background: #ffc94d; anim
   html, body, #root, .app-shell, .document-shell, .document-workspace, .preview-pane { height: auto; overflow: visible; background: white; }
   .app-shell, .document-shell { display: block; }
   .markdown-body { width: 100%; max-width: none; padding: 0; color: black; }
+  html[data-export-pdf="1"] body, html[data-export-pdf="1"] #root, html[data-export-pdf="1"] .app-shell, html[data-export-pdf="1"] .document-shell, html[data-export-pdf="1"] .document-workspace, html[data-export-pdf="1"] .preview-pane { background: var(--surface); }
+  html[data-export-pdf="1"] .markdown-body { width: 820px; max-width: none; margin: 0 auto; padding: 40px 40px 48px; color: var(--document-text); }
 }

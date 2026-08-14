@@ -20,7 +20,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
 import { useUpdater } from "./hooks/useUpdater";
 import { t } from "./lib/i18n";
-import { discoverApplications, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, revealInFileManager, setDefaultHandler, setNativeMenuLocale } from "./lib/platform";
+import { clearRecentFiles, discoverApplications, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, recordRecentFile, revealInFileManager, refreshMenu, setDefaultHandler } from "./lib/platform";
 import { editMarkdownTable } from "./lib/table";
 import { setTaskChecked } from "./lib/task";
 import { configureCrashReporting, crashReportingAvailable } from "./lib/telemetry";
@@ -74,7 +74,14 @@ function App() {
 
   useEffect(() => { setDocumentTheme(settings.theme); }, [settings.theme, setDocumentTheme]);
   useEffect(() => { void configureCrashReporting(settings.crashReports); }, [settings.crashReports]);
-  useEffect(() => { void setNativeMenuLocale(settings.locale); }, [settings.locale]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    void refreshMenu({ locale: settings.locale, appearance: settings.theme, contentWidth: settings.contentWidth, sidebarMode, sidebarVisible });
+  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible]);
+  useEffect(() => {
+    if (!isTauri() || !documents.document.path) return;
+    void recordRecentFile(documents.document.path).then(() => refreshMenu({ locale: settings.locale, appearance: settings.theme, contentWidth: settings.contentWidth, sidebarMode, sidebarVisible }));
+  }, [documents.document.path]);
   useEffect(() => { void discoverApplications().then(setApplications); }, []);
   useEffect(() => {
     const id = ++renderSequence.current;
@@ -131,8 +138,9 @@ function App() {
   }, []);
   useEffect(() => {
     document.documentElement.lang = settings.locale;
-    document.title = "TextMark";
-    if (isTauri()) void getCurrentWindow().setTitle("TextMark");
+    const title = documents.document.name + (documents.isDirty ? ` — ${t(settings.locale, "edited")}` : "");
+    document.title = title;
+    if (isTauri()) void getCurrentWindow().setTitle(title);
   }, [documents.document.name, documents.isDirty, settings.locale]);
   useEffect(() => { if (viewMode === "edit") window.setTimeout(() => editorRef.current?.focus(), 0); }, [viewMode]);
 
@@ -177,11 +185,22 @@ function App() {
     }
     catch { flash(settings.locale === "zh-CN" ? "无法打开所选应用。" : "The selected application could not be opened."); }
   };
+  const openFileWith = (path: string, application: string) => {
+    if (!isTauri()) return;
+    if (application === "system") void openExternalPath(path).catch(() => flash(settings.locale === "zh-CN" ? "无法打开所选应用。" : "The selected application could not be opened."));
+    else void openInApplication(path, application).catch(() => flash(settings.locale === "zh-CN" ? "无法打开所选应用。" : "The selected application could not be opened."));
+  };
   const openInLlm = async (application: "codex" | "claude" | "chatgpt") => {
-    await navigator.clipboard.writeText(`${settings.locale === "zh-CN" ? "请审阅此 Markdown 文档" : "Please review this Markdown document"}:\n\n${documents.document.contents}`);
+    const isLong = documents.document.contents.length > 12_000;
+    const clipboardText = isLong
+      ? documents.document.contents
+      : `${settings.locale === "zh-CN" ? "请审阅此 Markdown 文档" : "Please review this Markdown document"}:\n\n${documents.document.contents}`;
+    await navigator.clipboard.writeText(clipboardText);
     const scheme = application === "chatgpt" ? "chatgpt://" : `${application}://`;
     try { if (isTauri()) await openUrl(scheme); else window.open(application === "chatgpt" ? "https://chatgpt.com" : application === "claude" ? "https://claude.ai" : "https://chatgpt.com/codex"); }
-    catch { flash(t(settings.locale, "copied")); }
+    catch { /* app not installed; clipboard already holds the content */ }
+    if (isLong) flash(settings.locale === "zh-CN" ? "文档较长，全文已拷贝，请粘贴到对话中。" : "The document is long; its full text was copied for you to paste.");
+    else flash(t(settings.locale, "copied"));
   };
   const exportDocument = async (format: "html" | "png") => {
     const root = document.querySelector<HTMLElement>(".markdown-body");
@@ -190,12 +209,19 @@ function App() {
     if (format === "html") await exporter.downloadHtml(documents.document.name, root);
     else await exporter.downloadPng(documents.document.name, root);
   };
+  const exportPdf = () => {
+    document.documentElement.dataset.exportPdf = "1";
+    try { window.print(); }
+    finally { window.setTimeout(() => { delete document.documentElement.dataset.exportPdf; }, 1000); }
+  };
   useEffect(() => {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     void listen<string>("menu-command", (event) => {
       const command = event.payload;
       if (command === "open") void documents.openFile();
+      else if (command.startsWith("open-recent:")) void documents.openPath(command.slice("open-recent:".length));
+      else if (command === "clear-recent") void clearRecentFiles().then(() => refreshMenu({ locale: settings.locale, appearance: settings.theme, contentWidth: settings.contentWidth, sidebarMode, sidebarVisible }));
       else if (command === "open-folder") { void documents.openFolder(); setSidebarMode("files"); setSidebarVisible(true); }
       else if (command === "new-tab") documents.newDocument();
       else if (command === "close-tab") documents.closeSession(documents.activeId);
@@ -204,7 +230,7 @@ function App() {
       else if (command === "revert") documents.revertDocument();
       else if (command === "print") window.print();
       else if (command === "export") setExportOpen(true);
-      else if (command === "export-pdf") window.print();
+      else if (command === "export-pdf") exportPdf();
       else if (command === "undo") documents.undo();
       else if (command === "redo") documents.redo();
       else if (command === "find") setFindOpen(true);
@@ -341,7 +367,7 @@ function App() {
 
   const chooseSidebarMode = (mode: SidebarMode) => { setSidebarMode(mode); setSidebarVisible(true); };
   return <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? "" : "toolbar-hidden"}`}>
-    <Toolbar fileName={documents.document.name} dirty={documents.isDirty} busy={documents.busy} viewMode={viewMode} locale={settings.locale} items={settings.toolbar} displayMode={settings.toolbarDisplay} applications={applications}
+    <Toolbar fileName={documents.document.name} dirty={documents.isDirty} busy={documents.busy} viewMode={viewMode} locale={settings.locale} items={settings.toolbar} displayMode={settings.toolbarDisplay} applications={applications} defaultOpenTarget={settings.defaultOpenTarget}
       canGoBack={documents.canGoBack} canGoForward={documents.canGoForward} onBack={() => void documents.goBack(previewScrollTop())} onForward={() => void documents.goForward(previewScrollTop())}
       sidebarVisible={sidebarVisible} sidebarMode={sidebarMode} inspectorVisible={inspectorVisible} zoom={settings.zoom} searchQuery={searchQuery}
       onToggleSidebar={() => setSidebarVisible((value) => !value)} onSidebarModeChange={chooseSidebarMode} onViewModeChange={setViewMode}
@@ -350,7 +376,7 @@ function App() {
       onOpenWith={(application) => void openWith(application)} onOpenInLlm={(application) => void openInLlm(application)}
       onOpen={() => void documents.openFile()} onOpenFolder={() => { void documents.openFolder(); setSidebarMode("files"); setSidebarVisible(true); }}
       onSave={() => void documents.saveFile()} onSaveAs={() => void documents.saveAs()} onShare={() => void shareSource()} onCopy={() => void copySource()} onPrint={() => window.print()}
-      onExportHtml={() => void exportDocument("html")} onExportPng={() => void exportDocument("png")} onExportPdf={() => window.print()} onExport={() => setExportOpen(true)} onSettings={() => setSettingsOpen(true)} onCustomizeToolbar={() => setToolbarOpen(true)} />
+      onExportHtml={() => void exportDocument("html")} onExportPng={() => void exportDocument("png")} onExportPdf={() => exportPdf()} onExport={() => setExportOpen(true)} onSettings={() => setSettingsOpen(true)} onCustomizeToolbar={() => setToolbarOpen(true)} />
     {viewMode === "edit" ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
     {findOpen ? <FindBar locale={settings.locale} query={searchQuery} current={searchIndex} count={searchCount} matchCase={matchCase} mode={searchMode}
       onQueryChange={(value) => { setSearchQuery(value); setSearchIndex(0); }} onPrevious={() => nextMatch(-1)} onNext={() => nextMatch(1)}
@@ -358,10 +384,10 @@ function App() {
     <div className="workspace-stack">
       <DocumentTabs sessions={documents.sessions} activeId={documents.activeId} locale={settings.locale} onActivate={(id) => documents.activate(id, previewScrollTop())} onClose={documents.closeSession} />
       <div className={`document-shell ${sidebarVisible ? "with-sidebar" : ""} ${inspectorVisible ? "with-inspector" : ""}`}>
-        {sidebarVisible ? <Sidebar locale={settings.locale} mode={sidebarMode} fileName={documents.document.name} files={documents.files} workspacePath={documents.workspacePath} activePath={documents.document.path} outline={rendered.outline} activeHeading={activeHeading} onModeChange={chooseSidebarMode} onOpenFolder={() => void documents.openFolder()} onOpenFile={(path) => void documents.openPath(path)} onOpenFileInTab={(path) => void documents.openPath(path, true)} onOpenFileInWindow={(path) => void openDocumentWindow(path)} onRevealFile={(path) => void revealInFileManager(path)} onCopyFilePath={(path) => void navigator.clipboard.writeText(path)} onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))} onOutlineSelect={(id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} /> : null}
+        {sidebarVisible ? <Sidebar locale={settings.locale} mode={sidebarMode} fileName={documents.document.name} files={documents.files} workspacePath={documents.workspacePath} activePath={documents.document.path} outline={rendered.outline} activeHeading={activeHeading} applications={applications} defaultOpenTarget={settings.defaultOpenTarget} onModeChange={chooseSidebarMode} onOpenFolder={() => void documents.openFolder()} onOpenFile={(path) => void documents.openPath(path)} onOpenFileInTab={(path) => void documents.openPath(path, true)} onOpenFileInWindow={(path) => void openDocumentWindow(path)} onOpenFileWith={openFileWith} onRevealFile={(path) => void revealInFileManager(path)} onCopyFilePath={(path) => void navigator.clipboard.writeText(path)} onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))} onOutlineSelect={(id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} /> : null}
         <div className="document-workspace">
           {viewMode === "edit" ? <Suspense fallback={<div className="editor-loading" />}><EditorPane ref={editorRef} value={documents.document.contents} theme={resolvedTheme} fontSize={settings.editorFontSize} zoom={settings.zoom} contentWidth={settings.contentWidth} initialFormat={pendingFormat} onInitialFormatApplied={() => setPendingFormat(null)} onChange={documents.updateContents} onCursorChange={(line, column) => setCursor({ line, column })} /></Suspense>
-            : <PreviewPane locale={settings.locale} rendered={rendered} documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`} initialScrollTop={documents.document.scrollTop} baseDirectory={documents.baseDirectory} workspacePath={documents.workspacePath} zoom={settings.zoom} contentWidth={settings.contentWidth} searchQuery={searchQuery} searchIndex={searchIndex} matchCase={matchCase} searchMode={searchMode} onSearchCount={setSearchCount} onActiveHeading={setActiveHeading} onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())} onToggleTask={toggleTask} onEditTable={(table, row, column, request) => documents.applyEdit(editMarkdownTable(documents.document.contents, table, row, column, request))} />}
+            : <PreviewPane locale={settings.locale} rendered={rendered} documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`} initialScrollTop={documents.document.scrollTop} baseDirectory={documents.baseDirectory} workspacePath={documents.workspacePath} zoom={settings.zoom} contentWidth={settings.contentWidth} searchQuery={searchQuery} searchIndex={searchIndex} matchCase={matchCase} searchMode={searchMode} onSearchCount={setSearchCount} onActiveHeading={setActiveHeading} onZoomChange={setZoom} onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())} onToggleTask={toggleTask} onEditTable={(table, row, column, request) => documents.applyEdit(editMarkdownTable(documents.document.contents, table, row, column, request))} />}
           {viewMode === "edit" ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
         </div>
         {inspectorVisible ? <Inspector locale={settings.locale} document={documents.document} stats={stats} frontmatter={rendered.frontmatter} onClose={() => setInspectorVisible(false)} /> : null}
@@ -369,7 +395,7 @@ function App() {
     </div>
     {notice || documents.notice ? <div className="toast" role="status">{notice ?? documents.notice}</div> : null}
     <ConflictDialog change={documents.externalChange} locale={settings.locale} onResolve={documents.resolveExternal} />
-    <ExportDialog open={exportOpen} locale={settings.locale} onExportHtml={() => void exportDocument("html")} onExportPng={() => void exportDocument("png")} onExportPdf={() => window.print()} onClose={() => setExportOpen(false)} />
+    <ExportDialog open={exportOpen} locale={settings.locale} onExportHtml={() => void exportDocument("html")} onExportPng={() => void exportDocument("png")} onExportPdf={() => exportPdf()} onClose={() => setExportOpen(false)} />
     {defaultHandlerPrompt ? <div className="dialog-backdrop"><section className="conflict-dialog" role="dialog" aria-modal="true">
       <h2>{settings.locale === "zh-CN" ? "设为默认 Markdown 打开方式？" : "Set as the default Markdown handler?"}</h2>
       <p>{settings.locale === "zh-CN" ? "将 TextMark 设为 .md 文件的默认打开方式，双击即可直接预览。" : "Make TextMark the default opener for .md files so double-clicking opens a preview."}</p>

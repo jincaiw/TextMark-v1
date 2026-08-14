@@ -49,7 +49,7 @@ describe("localized desktop components", () => {
     Element.prototype.scrollIntoView = vi.fn();
     const root = createRoot(host);
     const rendered: RenderedMarkdown = { html: "<details><summary>Persistent details</summary><p>TextMark body</p></details>", outline: [], hasMermaid: false, hasMath: false, frontmatter: [], sourceMap: [], tables: [], tasks: [], optionalRenderers: [], direction: "auto" };
-    const props = { rendered, documentKey: "doc", initialScrollTop: 0, baseDirectory: null, workspacePath: null, zoom: 100, contentWidth: "normal" as const, searchIndex: 0, matchCase: false, searchMode: "contains" as const, locale: "zh-CN" as const, onSearchCount: vi.fn(), onActiveHeading: vi.fn(), onOpenRelative: vi.fn(), onToggleTask: vi.fn(), onEditTable: vi.fn() };
+    const props = { rendered, documentKey: "doc", initialScrollTop: 0, baseDirectory: null, workspacePath: null, zoom: 100, contentWidth: "normal" as const, searchIndex: 0, matchCase: false, searchMode: "contains" as const, locale: "zh-CN" as const, onSearchCount: vi.fn(), onActiveHeading: vi.fn(), onZoomChange: vi.fn(), onOpenRelative: vi.fn(), onToggleTask: vi.fn(), onEditTable: vi.fn() };
     await act(async () => root.render(<PreviewPane {...props} searchQuery="" />));
     const details = host.querySelector("details")!;
     details.open = true;

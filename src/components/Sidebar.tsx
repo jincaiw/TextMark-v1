@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, ListTree } from "lucide-react";
-import type { FileNode, OutlineItem, SidebarMode } from "../types";
+import type { ExternalApplication, FileNode, OutlineItem, SidebarMode } from "../types";
 import { t } from "../lib/i18n";
 import type { Locale } from "../types";
 
@@ -29,11 +29,14 @@ interface SidebarProps {
   activePath: string | null;
   outline: OutlineItem[];
   activeHeading: string | null;
+  applications: ExternalApplication[];
+  defaultOpenTarget: string;
   onModeChange: (mode: SidebarMode) => void;
   onOpenFolder: () => void;
   onOpenFile: (path: string) => void;
   onOpenFileInTab: (path: string) => void;
   onOpenFileInWindow: (path: string) => void;
+  onOpenFileWith: (path: string, application: string) => void;
   onRevealFile: (path: string) => void;
   onCopyFilePath: (path: string) => void;
   onCopyFileContents: (path: string) => void;
@@ -45,6 +48,9 @@ export function Sidebar(props: SidebarProps) {
   const workspaceName = props.workspacePath?.split(/[\\/]/).pop();
   const [context, setContext] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const contextMenu = (event: React.MouseEvent, node: FileNode) => { event.preventDefault(); setContext({ x: event.clientX, y: event.clientY, node }); };
+  const editors = props.applications.filter((application) => application.kind !== "llm" && application.available);
+  const closeContext = () => setContext(null);
+  const run = (action: () => void) => { action(); closeContext(); };
   return (
     <aside className="native-sidebar">
       <div className="sidebar-section-title">
@@ -66,9 +72,25 @@ export function Sidebar(props: SidebarProps) {
           )}
         </div>
       )}
-      {context ? <div className="project-context-menu" role="menu" style={{ left: context.x, top: context.y }} onMouseLeave={() => setContext(null)}>{[
-        ["openFile", () => props.onOpenFile(context.node.path)], ["openInNewTab", () => props.onOpenFileInTab(context.node.path)], ["openInNewWindow", () => props.onOpenFileInWindow(context.node.path)], ["showInFileManager", () => props.onRevealFile(context.node.path)], ["copyPath", () => props.onCopyFilePath(context.node.path)], ["copyContents", () => props.onCopyFileContents(context.node.path)],
-      ].map(([key, action]) => <button key={String(key)} role="menuitem" onClick={() => { (action as () => void)(); setContext(null); }}>{t(props.locale, key as Parameters<typeof t>[1])}</button>)}</div> : null}
+      {context ? <div className="project-context-menu" role="menu" style={{ left: context.x, top: context.y }} onMouseLeave={closeContext}>
+        <button role="menuitem" onClick={() => run(() => props.onOpenFile(context.node.path))}>{t(props.locale, "openFile")}</button>
+        <button role="menuitem" onClick={() => run(() => props.onOpenFileInTab(context.node.path))}>{t(props.locale, "openInNewTab")}</button>
+        <button role="menuitem" onClick={() => run(() => props.onOpenFileInWindow(context.node.path))}>{t(props.locale, "openInNewWindow")}</button>
+        <hr />
+        <button role="menuitem" disabled={!editors.length} onClick={() => run(() => props.onOpenFileWith(context.node.path, props.defaultOpenTarget === "system" ? "system" : (editors.some((e) => e.id === props.defaultOpenTarget) ? props.defaultOpenTarget : "system")))}>{t(props.locale, "openWithExternalEditor")}</button>
+        <div className="context-submenu">
+          <button role="menuitem">{t(props.locale, "openAs")}<ChevronRight /></button>
+          <div className="context-submenu-panel">
+            {editors.length ? editors.map((application) => (
+              <button key={application.id} role="menuitem" onClick={() => run(() => props.onOpenFileWith(context.node.path, application.id))}>{application.kind === "system" ? t(props.locale, "systemDefault") : application.name}</button>
+            )) : <button role="menuitem" disabled>{t(props.locale, "noEditorsAvailable")}</button>}
+          </div>
+        </div>
+        <hr />
+        <button role="menuitem" onClick={() => run(() => props.onRevealFile(context.node.path))}>{t(props.locale, "showInFileManager")}</button>
+        <button role="menuitem" onClick={() => run(() => props.onCopyFilePath(context.node.path))}>{t(props.locale, "copyPath")}</button>
+        <button role="menuitem" onClick={() => run(() => props.onCopyFileContents(context.node.path))}>{t(props.locale, "copyContents")}</button>
+      </div> : null}
     </aside>
   );
 }

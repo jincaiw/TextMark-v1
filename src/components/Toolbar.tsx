@@ -1,4 +1,5 @@
-import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Download, FileDown, FilePenLine, FolderOpen, Info, Minus, MoreHorizontal, PanelLeft, Plus, Printer, Save, Search, Settings, Share, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { AppWindow, Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Download, FileDown, FilePenLine, FolderOpen, Info, Minus, MoreHorizontal, PanelLeft, Plus, Printer, Save, Search, Settings, Share, Sparkles } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "../lib/platform";
 import { t } from "../lib/i18n";
@@ -8,7 +9,7 @@ import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, Tool
 interface ToolbarProps {
   fileName: string; dirty: boolean; busy: boolean; viewMode: ViewMode; sidebarVisible: boolean; sidebarMode: SidebarMode;
   inspectorVisible: boolean; zoom: number; searchQuery: string; locale: Locale; items: ToolbarItem[]; displayMode: ToolbarDisplayMode;
-  applications: ExternalApplication[];
+  applications: ExternalApplication[]; defaultOpenTarget: string;
   canGoBack: boolean; canGoForward: boolean; onBack: () => void; onForward: () => void;
   onToggleSidebar: () => void; onSidebarModeChange: (mode: SidebarMode) => void; onViewModeChange: (mode: ViewMode) => void;
   onToggleInspector: () => void; onZoomChange: (zoom: number) => void; onSearchQueryChange: (value: string) => void; onSearchOpen: () => void;
@@ -19,6 +20,7 @@ interface ToolbarProps {
 
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key);
+  const [copiedFlash, setCopiedFlash] = useState(false);
   const windowAction = (action: "close" | "minimize" | "toggleMaximize") => {
     if (!isTauri()) return;
     const window = getCurrentWindow();
@@ -31,8 +33,17 @@ export function Toolbar(props: ToolbarProps) {
   const llmApps = props.applications.filter((application) => application.kind === "llm");
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => <>{icon}{props.displayMode === "iconAndLabel" ? <span className="toolbar-label">{tx(title)}</span> : null}</>;
-  const editorButtons = editorApps.map((application) => <button key={application.id} onClick={() => props.onOpenWith(application.id)}>{application.kind === "system" ? tx("systemDefault") : application.name}</button>);
-  const llmButtons = llmApps.map((application) => <button key={application.id} disabled={!application.available} onClick={() => props.onOpenInLlm(application.id as "codex" | "claude" | "chatgpt")}><Sparkles />{application.name}</button>);
+  const editorButtons = editorApps.map((application) => (
+    <button key={application.id} onClick={() => props.onOpenWith(application.id)}>
+      <span className="app-badge">{application.name.slice(0, 1).toUpperCase()}</span>
+      <span>{application.kind === "system" ? tx("systemDefault") : application.name}</span>
+      {application.id === props.defaultOpenTarget ? <Check className="check" /> : null}
+    </button>
+  ));
+  const llmButtons = llmApps.map((application) => (
+    <button key={application.id} disabled={!application.available} onClick={() => props.onOpenInLlm(application.id as "codex" | "claude" | "chatgpt")}><Sparkles />{application.name}</button>
+  ));
+  const emptyAppItem = () => <button disabled className="menu-empty">{tx("noAppsAvailable")}</button>;
 
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`;
@@ -49,29 +60,34 @@ export function Toolbar(props: ToolbarProps) {
     if (item === "openActions") return <details key={key} className="toolbar-group open-with">
       <summary title={tx("open")}>{withLabel(<AppWindow />, "open")}<ChevronDown /></summary>
       <div className="menu-popover">
-        <b>{tx("aiApps")}</b>{llmButtons}
-        <hr /><b>{tx("editors")}</b>{editorButtons}
+        {llmApps.length === 0 && editorApps.length === 0 ? emptyAppItem() : <>
+          {llmApps.length > 0 && <b>{tx("aiApps")}</b>}
+          {llmButtons}
+          {llmApps.length > 0 && editorApps.length > 0 && <hr />}
+          {editorApps.length > 0 && <b>{tx("editors")}</b>}
+          {editorButtons}
+        </>}
       </div>
     </details>;
     if (item === "openWith") return <details key={key} className="toolbar-group open-with">
       <summary title={tx("openWith")}>{withLabel(<AppWindow />, "openWith")}<ChevronDown /></summary>
-      <div className="menu-popover"><b>{tx("editors")}</b>{editorButtons}</div>
+      <div className="menu-popover">{editorApps.length ? editorButtons : emptyAppItem()}</div>
     </details>;
     if (item === "openInLlm") return <details key={key} className="toolbar-group open-with">
       <summary title={tx("openInLlm")}>{withLabel(<Sparkles />, "openInLlm")}<ChevronDown /></summary>
-      <div className="menu-popover"><b>{tx("aiApps")}</b>{llmButtons}</div>
+      <div className="menu-popover">{llmApps.length ? llmButtons : emptyAppItem()}</div>
     </details>;
     if (item === "zoom") return <div key={key} className="toolbar-group zoom-buttons" aria-label={`${tx("zoom")} ${props.zoom}%`}>
       <button title={tx("zoomOut")} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, -1))}><span>A</span><Minus /></button>
       <button title={tx("zoomIn")} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, 1))}><span>A</span><Plus /></button>
     </div>;
-    if (item === "search") return <label key={key} className="document-search"><Search /><input value={props.searchQuery} onFocus={props.onSearchOpen} onChange={(event) => props.onSearchQueryChange(event.target.value)} placeholder={tx("search")} /></label>;
+    if (item === "search") return <label key={key} className="document-search" onClick={props.onSearchOpen}><Search /><input value={props.searchQuery} onFocus={props.onSearchOpen} onChange={(event) => props.onSearchQueryChange(event.target.value)} placeholder={tx("search")} /></label>;
     const actions: Partial<Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; active?: boolean; action: () => void }>> = {
       inspector: { title: "getInfo", icon: <Info />, active: props.inspectorVisible, action: props.onToggleInspector },
       share: { title: "shareSource", icon: <Share />, action: props.onShare },
-      edit: { title: "toggleEdit", icon: <FilePenLine />, active: props.viewMode === "edit", action: () => props.onViewModeChange(props.viewMode === "edit" ? "preview" : "edit") },
+      edit: { title: props.viewMode === "edit" ? "stopEditing" : "toggleEdit", icon: <FilePenLine />, active: props.viewMode === "edit", action: () => props.onViewModeChange(props.viewMode === "edit" ? "preview" : "edit") },
       print: { title: "printItem", icon: <Printer />, action: props.onPrint },
-      copy: { title: "copyItem", icon: <Clipboard />, action: props.onCopy },
+      copy: { title: "copyItem", icon: copiedFlash ? <Check /> : <Clipboard />, action: () => { props.onCopy(); setCopiedFlash(true); window.setTimeout(() => setCopiedFlash(false), 1200); } },
       export: { title: "exportItem", icon: <FileDown />, action: props.onExport },
       exportPdf: { title: "exportPdf", icon: <FileDown />, action: props.onExportPdf },
     };

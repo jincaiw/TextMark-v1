@@ -153,6 +153,14 @@ struct IntegrationResult {
     detail: Option<String>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct MenuUiState {
+    appearance: &'static str,   // "system" | "light" | "dark"
+    content_width: &'static str, // "normal" | "full"
+    sidebar_mode: &'static str,  // "outline" | "files"
+    sidebar_visible: bool,
+}
+
 #[derive(Serialize)]
 struct UpdateCheck {
     version: String,
@@ -208,6 +216,40 @@ fn settings_path() -> AppResult<PathBuf> {
     })?;
     fs::create_dir_all(&directory).map_err(io_error)?;
     Ok(directory.join("settings-v3.json"))
+}
+
+fn recent_files_path() -> AppResult<PathBuf> {
+    let directory = settings_path()?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or(AppError { code: "invalid_path" })?;
+    Ok(directory.join("recent.json"))
+}
+
+fn load_recent_files() -> Vec<String> {
+    let Ok(path) = recent_files_path() else { return Vec::new() };
+    let Ok(contents) = fs::read_to_string(path) else { return Vec::new() };
+    serde_json::from_str::<Vec<String>>(&contents).unwrap_or_default()
+}
+
+fn save_recent_files(files: &[String]) -> AppResult<()> {
+    let path = recent_files_path()?;
+    let contents = serde_json::to_vec_pretty(files).map_err(io_error)?;
+    fs::write(path, contents).map_err(io_error)
+}
+
+#[tauri::command]
+fn record_recent_file(path: String) -> AppResult<()> {
+    let mut files = load_recent_files();
+    files.retain(|existing| existing != &path);
+    files.insert(0, path);
+    files.truncate(15);
+    save_recent_files(&files)
+}
+
+#[tauri::command]
+fn clear_recent_files() -> AppResult<()> {
+    save_recent_files(&[])
 }
 
 #[tauri::command]
@@ -403,10 +445,21 @@ fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
     .map_err(io_error)
 }
 
-fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(app: &tauri::AppHandle, locale: &str, state: &MenuUiState) -> tauri::Result<Menu<tauri::Wry>> {
     let zh = locale == "zh-CN";
     let item = |id: &str, zh_text: &str, en_text: &str, accelerator: Option<&str>| {
         let mut builder = MenuItemBuilder::with_id(id, if zh { zh_text } else { en_text });
+        if let Some(value) = accelerator {
+            builder = builder.accelerator(value);
+        }
+        builder.build(app)
+    };
+    let state_item = |id: &str, checked: bool, zh_text: &str, en_text: &str, accelerator: Option<&str>| {
+        let prefix = if checked { "✓ " } else { "" };
+        let mut builder = MenuItemBuilder::with_id(
+            id,
+            if zh { format!("{prefix}{zh_text}") } else { format!("{prefix}{en_text}") },
+        );
         if let Some(value) = accelerator {
             builder = builder.accelerator(value);
         }
@@ -441,10 +494,25 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
     let export = item("export", "导出…", "Export…", None)?;
     let export_pdf = item("export-pdf", "导出为 PDF…", "Export as PDF…", None)?;
     let print = item("print", "打印…", "Print…", Some("CmdOrCtrl+P"))?;
+
+    // Open Recent submenu (dynamic; rebuilt by refresh_menu)
+    let recent_files = load_recent_files();
+    let mut recent_builder = SubmenuBuilder::new(app, if zh { "打开最近使用" } else { "Open Recent" });
+    for (index, path) in recent_files.iter().enumerate() {
+        let recent_item = MenuItemBuilder::with_id(format!("recent-{index}"), path.clone()).build(app)?;
+        recent_builder = recent_builder.item(&recent_item);
+    }
+    if !recent_files.is_empty() {
+        recent_builder = recent_builder.separator();
+    }
+    let clear_recent = MenuItemBuilder::with_id("clear-recent", if zh { "清除菜单" } else { "Clear Menu" }).build(app)?;
+    let open_recent = recent_builder.item(&clear_recent).build()?;
+
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
         .items(&[&new_tab, &close_tab])
         .separator()
         .items(&[&open, &open_folder])
+        .item(&open_recent)
         .separator()
         .items(&[&save, &save_as, &revert])
         .separator()
@@ -499,20 +567,23 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
         "Toggle Sidebar",
         Some("CmdOrCtrl+L"),
     )?;
-    let sidebar_hide = item(
+    let sidebar_hide = state_item(
         "sidebar-hide",
+        !state.sidebar_visible,
         "隐藏边栏",
         "Hide Sidebar",
         sidebar_pane_accel("1"),
     )?;
-    let sidebar_outline = item(
+    let sidebar_outline = state_item(
         "sidebar-outline",
+        state.sidebar_visible && state.sidebar_mode == "outline",
         "目录",
         "Table of Contents",
         sidebar_pane_accel("2"),
     )?;
-    let sidebar_files = item(
+    let sidebar_files = state_item(
         "sidebar-files",
+        state.sidebar_visible && state.sidebar_mode == "files",
         "项目导航器",
         "Project Navigator",
         sidebar_pane_accel("3"),
@@ -531,15 +602,15 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
         None,
     )?;
 
-    let appearance_auto = item("appearance-auto", "自动", "Automatic", None)?;
-    let appearance_light = item("appearance-light", "浅色", "Light", None)?;
-    let appearance_dark = item("appearance-dark", "深色", "Dark", None)?;
+    let appearance_auto = state_item("appearance-auto", state.appearance == "system", "自动", "Automatic", None)?;
+    let appearance_light = state_item("appearance-light", state.appearance == "light", "浅色", "Light", None)?;
+    let appearance_dark = state_item("appearance-dark", state.appearance == "dark", "深色", "Dark", None)?;
     let appearance = SubmenuBuilder::new(app, if zh { "外观" } else { "Appearance" })
         .items(&[&appearance_auto, &appearance_light, &appearance_dark])
         .build()?;
 
-    let width_normal = item("width-normal", "标准", "Normal", None)?;
-    let width_full = item("width-full", "全宽", "Full Width", None)?;
+    let width_normal = state_item("width-normal", state.content_width == "normal", "标准", "Normal", None)?;
+    let width_full = state_item("width-full", state.content_width == "full", "全宽", "Full Width", None)?;
     let content_width = SubmenuBuilder::new(app, if zh { "内容宽度" } else { "Content Width" })
         .items(&[&width_normal, &width_full])
         .build()?;
@@ -714,8 +785,31 @@ fn build_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<Menu<tauri:
 }
 
 #[tauri::command]
-fn set_menu_locale(app: tauri::AppHandle, locale: String) -> AppResult<()> {
-    let menu = build_menu(&app, &locale).map_err(io_error)?;
+fn refresh_menu(
+    app: tauri::AppHandle,
+    locale: String,
+    appearance: String,
+    content_width: String,
+    sidebar_mode: String,
+    sidebar_visible: bool,
+) -> AppResult<()> {
+    let state = MenuUiState {
+        appearance: match appearance.as_str() {
+            "light" => "light",
+            "dark" => "dark",
+            _ => "system",
+        },
+        content_width: match content_width.as_str() {
+            "full" => "full",
+            _ => "normal",
+        },
+        sidebar_mode: match sidebar_mode.as_str() {
+            "files" => "files",
+            _ => "outline",
+        },
+        sidebar_visible,
+    };
+    let menu = build_menu(&app, &locale, &state).map_err(io_error)?;
     app.set_menu(menu).map_err(io_error)?;
     Ok(())
 }
@@ -1266,12 +1360,21 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            let menu = build_menu(app.handle(), "zh-CN")?;
+            let menu = build_menu(app.handle(), "zh-CN", &MenuUiState::default())?;
             app.set_menu(menu)?;
             Ok(())
         })
         .on_menu_event(|app, event| {
-            let _ = app.emit("menu-command", event.id().as_ref());
+            let id = event.id().as_ref();
+            if let Some(path) = id
+                .strip_prefix("recent-")
+                .and_then(|index| index.parse::<usize>().ok())
+                .and_then(|index| load_recent_files().get(index).cloned())
+            {
+                let _ = app.emit("menu-command", format!("open-recent:{path}"));
+                return;
+            }
+            let _ = app.emit("menu-command", id);
         })
         .invoke_handler(tauri::generate_handler![
             read_text_file,
@@ -1284,7 +1387,9 @@ pub fn run() {
             open_mermaid_window,
             install_cli,
             set_default_handler,
-            set_menu_locale,
+            refresh_menu,
+            record_recent_file,
+            clear_recent_files,
             discover_applications,
             load_settings,
             save_settings,

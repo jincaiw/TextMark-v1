@@ -1,3 +1,27 @@
+# TextMark v0.5.0
+
+TextMark 0.5 completes the second-round desktop UI/UX deep-check against the latest Markdown Preview `main` (v0.0.47 + #278 double-tilde strikethrough + #273 Quick Look cursor feedback). Default Chinese and cross-platform (Windows/Linux/macOS) are unchanged.
+
+TextMark 0.5 完成第二轮桌面 UI/UX 深检对齐（对标最新 Markdown Preview `main`：v0.0.47 + #278 删除线双波浪线 + #273 Quick Look 光标反馈）。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- 查找栏对齐上游：`Match:` 标签 + **包含 / 开头为** 两个 toggle 按钮、**完成** 按钮、"未找到"状态（保留 X of N 计数、脉冲高亮、Enter 循环）。
+- 工具栏：窄窗搜索框**折叠为放大镜图标**；Open Actions 菜单带应用字母徽标 + 默认勾选 + 空态文案；Copy 项点击后图标 **✓ 反馈 1.2s**；Edit 项 tooltip 随状态切换。
+- 项目导航器右键新增 **使用外部编辑器打开** + **打开方式** 子菜单。
+- 菜单：外观/内容宽度/边栏三态显示当前值勾选（`refresh_menu`）；新增 **打开最近使用**（`record_recent_file` + 清除菜单）；OS 窗口标题改为文件名（— 已编辑）。
+- 预览支持轨道板捏合 / ⌘ 滚轮离散缩放。
+- Open in LLM 超 12,000 字符时改走"拷贝全文 + 打开应用"回退并提示。
+- 导出为 PDF 保持阅读预览的浅/深色与 820px 版心（区别于纸张式"打印…"）。
+- macOS Quick Look 新增原生文本选择与光标区域反馈（iBeam/链接手型，ViewBridge 光标桥接）。
+- 新增删除线 parity 测试（`~~` 渲染删除线、`~` 保留字面）。
+
+## Trust notice / 安全提示
+
+Same as v0.4.0 — no Apple Developer ID notarization or Windows Authenticode; verify `SHA256SUMS.txt`. 同 v0.4.0 —— 未使用 Apple 公证/Authenticode；请核对 `SHA256SUMS.txt`。
+
+---
+
 # TextMark v0.4.0
 
 TextMark 0.4 closes the desktop UI/UX parity gap with Markdown Preview `v0.0.47`: the native menu now matches upstream (File/Edit/View/**Format**/**Go**/Window/Help), the toolbar splits Open With / Open in LLM and adds Export PDF with Safari-style discrete zoom, the inspector gains Document/Properties tabs, and Simplified Chinese wording is aligned to the upstream `zh-Hans` strings. It still defaults to Simplified Chinese and stays cross-platform (Windows/Linux/macOS).

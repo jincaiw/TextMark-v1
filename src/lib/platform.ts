@@ -58,9 +58,25 @@ export async function loadLocalAsset(baseDir: string, relativePath: string, work
   return invoke<string>("read_local_asset", { baseDir, relativePath, workspaceRoot: workspaceRoot ?? null });
 }
 
-export async function setNativeMenuLocale(locale: string): Promise<void> {
+export async function refreshMenu(state: { locale: string; appearance: string; contentWidth: string; sidebarMode: string; sidebarVisible: boolean }): Promise<void> {
   if (!isTauri()) return;
-  await invoke("set_menu_locale", { locale });
+  await invoke("refresh_menu", {
+    locale: state.locale,
+    appearance: state.appearance,
+    contentWidth: state.contentWidth,
+    sidebarMode: state.sidebarMode,
+    sidebarVisible: state.sidebarVisible,
+  });
+}
+
+export async function recordRecentFile(path: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("record_recent_file", { path });
+}
+
+export async function clearRecentFiles(): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("clear_recent_files");
 }
 
 export async function discoverApplications(): Promise<ExternalApplication[]> {

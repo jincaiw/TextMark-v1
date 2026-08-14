@@ -49,4 +49,6 @@ describe("upstream MarkdownHTML rendering parity", () => {
   it("builds Setext heading anchors", () => expect(renderMarkdown("Heading\n=======").outline).toEqual([{ id: "heading", text: "Heading", level: 1 }]));
   it("deduplicates heading anchors deterministically", () => expect(renderMarkdown("# A\n# A\n# A").outline.map((item) => item.id)).toEqual(["a", "a-2", "a-3"]));
   it("sanitizes script, event, form, and style surfaces", () => { const html = renderMarkdown('<form><input></form><style>x{}</style><img src="x" onload="x">').html; expect(html).not.toMatch(/<form|<style|onload/i); });
+  it("renders double-tilde strikethrough", () => expect(renderMarkdown("~~deleted~~").html).toContain("<s>deleted</s>"));
+  it("keeps single tildes literal (upstream #278)", () => { const html = renderMarkdown("~literal~").html; expect(html).toContain("~literal~"); expect(html).not.toContain("<s>"); });
 });

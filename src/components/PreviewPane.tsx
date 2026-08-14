@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri, loadLocalAsset } from "../lib/platform";
 import { t } from "../lib/i18n";
+import { nextZoomStep } from "../constants";
 import { attachDiagramInteractions, getDiagramController } from "../lib/diagramInteractions";
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from "../lib/table";
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from "../types";
@@ -24,6 +25,7 @@ interface PreviewPaneProps {
   locale: Locale;
   onSearchCount: (count: number) => void;
   onActiveHeading: (id: string | null) => void;
+  onZoomChange: (zoom: number) => void;
   onOpenRelative: (path: string) => void;
   onToggleTask: (index: number, checked: boolean) => void;
   onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void;
@@ -69,11 +71,33 @@ function DiagramLightbox({ html, locale, onClose }: { html: string; locale: Loca
 export function PreviewPane(props: PreviewPaneProps) {
   const paneRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLElement>(null);
+  const gestureZoomRef = useRef<number | null>(null);
   const [diagram, setDiagram] = useState<string | null>(null);
   const [tableMenu, setTableMenu] = useState<{ x: number; y: number; table: number; row: number; column: number } | null>(null);
   const [tableSelection, setTableSelection] = useState<{ table: number; startRow: number; startColumn: number; endRow: number; endColumn: number } | null>(null);
 
   useEffect(() => { if (paneRef.current) paneRef.current.scrollTop = props.initialScrollTop; }, [props.documentKey, props.initialScrollTop]);
+
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    const onGestureStart = () => { gestureZoomRef.current = props.zoom; };
+    const onGestureChange = (event: Event) => {
+      const scale = (event as { scale?: number }).scale;
+      if (gestureZoomRef.current == null || typeof scale !== "number") return;
+      event.preventDefault();
+      props.onZoomChange(Math.min(300, Math.max(50, Math.round(gestureZoomRef.current * scale))));
+    };
+    const onGestureEnd = () => { gestureZoomRef.current = null; };
+    pane.addEventListener("gesturestart", onGestureStart);
+    pane.addEventListener("gesturechange", onGestureChange);
+    pane.addEventListener("gestureend", onGestureEnd);
+    return () => {
+      pane.removeEventListener("gesturestart", onGestureStart);
+      pane.removeEventListener("gesturechange", onGestureChange);
+      pane.removeEventListener("gestureend", onGestureEnd);
+    };
+  }, [props.zoom, props.onZoomChange]);
 
   useEffect(() => {
     const pane = paneRef.current;
@@ -258,6 +282,11 @@ export function PreviewPane(props: PreviewPaneProps) {
 
   return (
     <section ref={paneRef} className="preview-pane" aria-label="Rendered Markdown preview" tabIndex={0}
+      onWheel={(event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        props.onZoomChange(nextZoomStep(props.zoom, event.deltaY < 0 ? 1 : -1));
+      }}
       onCopy={(event) => {
         if (!tableSelection || !containerRef.current) return;
         const table = editableMarkdownTables(containerRef.current)[tableSelection.table];
