@@ -67,17 +67,22 @@ export function Toolbar(props: ToolbarProps) {
     const compute = () => {
       const slots = Array.from(container.querySelectorAll<HTMLElement>(":scope > [data-toolbar-item]"));
       const more = container.querySelector<HTMLElement>(":scope > .more-menu");
-      const gap = 10;
+      // Measure with everything visible: a display:none slot reports width 0
+      // and would be mistaken for "fits", un-hiding everything again.
+      slots.forEach((slot) => { slot.style.display = ""; });
+      const gap = 8;
       const available = container.clientWidth - (more?.offsetWidth ?? 0) - gap;
       let used = 0;
       let cut = slots.length;
       for (let index = 0; index < slots.length; index += 1) {
         const flexible = props.items[index] === "flexibleSpace";
-        const width = flexible ? 10 : slots[index].offsetWidth;
+        const width = flexible ? 6 : slots[index].offsetWidth;
         const extra = used > 0 ? gap : 0;
         if (used + extra + width <= available) used += extra + width;
         else { cut = index; break; }
       }
+      // Apply hiding synchronously to avoid a crowded flash before React re-renders.
+      slots.forEach((slot, index) => { if (index >= cut) slot.style.display = "none"; });
       setHiddenCount(slots.length - cut);
     };
     compute();
@@ -97,6 +102,7 @@ export function Toolbar(props: ToolbarProps) {
     if (item === "sidebar") return slot(<div className="sidebar-control">
       <button className={props.sidebarVisible ? "selected" : ""} title={tx("toggleSidebar")} aria-label={tx("toggleSidebar")} onClick={props.onToggleSidebar}>{withLabel(<PanelLeft />, "sidebar")}</button>
       <details><summary aria-label={tx("chooseSidebar")}><ChevronDown /></summary><div className="menu-popover sidebar-menu">
+        <button onClick={props.onToggleSidebar}>{tx("hideSidebar")}</button>
         <button onClick={() => props.onSidebarModeChange("outline")}>{tx("tableOfContents")}</button>
         <button onClick={() => props.onSidebarModeChange("files")}>{tx("projectNavigator")}</button>
       </div></details>

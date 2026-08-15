@@ -1,3 +1,24 @@
+# TextMark v0.5.2
+
+TextMark 0.5.2 fixes the toolbar and export regressions reported after 0.5.1: dropdown menus were clipped and invisible, the sidebar control could slide under the macOS traffic lights, narrow windows crowded the top bar, PNG/PDF exports rendered blank, and the toolbar customizer is now rebuilt pixel-aligned with the upstream AppKit customization sheet. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.5.2 修复 0.5.1 后的顶栏与导出问题：下拉菜单被裁剪不可见、边栏控件可能与 macOS 交通灯重叠、窄窗顶栏拥挤、PNG/PDF 导出空白；自定义工具栏面板已按上游 AppKit 定制页像素级重做。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- 修复工具栏下拉（边栏/打开方式/更多）被 `overflow:hidden` 裁剪导致"点击没反应"的问题。
+- macOS 工具栏左侧预留 92px 交通灯安全区，边栏图标不再与关闭/最小化按钮重叠。
+- 边栏下拉补齐三项：隐藏边栏 / 大纲 / 文件夹（对应上游 Hide Sidebar / Outline / Folders）。
+- 溢出测量修正（先全显再测 + 同步隐藏），窄窗下自动把放不下的项收进"更多"菜单；搜索框 ≤1180px 折叠为图标。
+- 导出 PNG/PDF 修复空白：回归活体节点渲染，暗色模式临时切浅色渲染后自动还原；PDF 多页切片保持。
+- 自定义工具栏面板像素级对标上游：可用项目卡片区（图标+名称、点击/拖入添加）、当前工具栏行（拖拽排序、拖出/×移除）、显示模式（仅图标/图标与文字）、恢复默认、完成；工具栏命中区 36×32、图标 17px/1.7 描边、组内 2px/组间 8px 间距、hover 浅灰 bezel。
+
+## Trust notice / 安全提示
+
+Same as v0.5.1. 同 v0.5.1。
+
+---
+
 # TextMark v0.5.1
 
 TextMark 0.5.1 fixes the desktop issues reported after 0.5.0: menu clicks firing multiple times (and toggle actions appearing dead), broken export/print, squeezed toolbar layout, missing zoom shortcut, English save dialogs, toolbar icon styling, and the outline/folder naming. It defaults to Simplified Chinese and stays cross-platform.

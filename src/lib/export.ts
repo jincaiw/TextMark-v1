@@ -20,39 +20,26 @@ function exportClone(root: HTMLElement) {
   return clone;
 }
 
-const LIGHT_EXPORT_VARS = {
-  "--document-text": "#1d1d1f",
-  "--document-secondary": "#6e6e73",
-  "--document-link": "#0066cc",
-  "--document-fill": "#f5f5f7",
-  "--document-grid": "#d2d2d7",
-  "--surface": "#ffffff",
-  "--accent": "#0a84ff",
-  "--muted": "#73757b",
-  "--border": "rgba(60,60,67,.17)",
-  "--hover": "rgba(60,60,67,.08)",
-  "--selected": "rgba(10,132,255,.11)",
-} as const;
-
-function applyLightExportStyles(clone: HTMLElement) {
-  for (const [name, value] of Object.entries(LIGHT_EXPORT_VARS)) clone.style.setProperty(name, value);
-  clone.style.background = "#ffffff";
-  clone.style.color = "#1d1d1f";
-}
-
-async function captureClonePng(root: HTMLElement, pixelRatio = 2) {
-  const clone = exportClone(root);
-  applyLightExportStyles(clone);
-  clone.style.position = "fixed";
-  clone.style.left = "-10000px";
-  clone.style.top = "0";
-  clone.style.width = "820px";
-  document.body.append(clone);
+async function captureLivePng(root: HTMLElement, pixelRatio = 2) {
+  // Rasterize the live, laid-out node (offscreen fixed clones render blank in
+  // desktop webviews). Force the light palette during capture so dark-mode
+  // documents export as readable light documents.
+  const { toPng } = await import("html-to-image");
+  const html = document.documentElement;
+  const wasDark = html.dataset.theme === "dark";
+  if (wasDark) html.dataset.theme = "light";
   try {
-    const { toPng } = await import("html-to-image");
-    return await toPng(clone, { pixelRatio, backgroundColor: "#ffffff", cacheBust: true });
+    return await toPng(root, {
+      pixelRatio,
+      backgroundColor: "#ffffff",
+      cacheBust: true,
+      filter: (node) => !(node instanceof HTMLElement)
+        || (!node.classList.contains("copy-code-button")
+          && !node.classList.contains("diagram-hud")
+          && !node.classList.contains("search-match")),
+    });
   } finally {
-    clone.remove();
+    if (wasDark) html.dataset.theme = "dark";
   }
 }
 
@@ -135,7 +122,7 @@ export async function buildHtmlExport(name: string, root: HTMLElement) {
 }
 
 export async function buildPngExport(name: string, root: HTMLElement) {
-  const dataUrl = await captureClonePng(root, 2);
+  const dataUrl = await captureLivePng(root, 2);
   return { name: `${cleanName(name)}@2x.png`, bytes: dataUrlToBytes(dataUrl) };
 }
 
@@ -148,7 +135,7 @@ const dataUrlToBytes = (dataUrl: string) => {
 };
 
 export async function buildPdfExport(name: string, root: HTMLElement) {
-  const dataUrl = await captureClonePng(root, 2);
+  const dataUrl = await captureLivePng(root, 2);
   const { jsPDF } = await import("jspdf");
   const image = new Image();
   image.src = dataUrl;
