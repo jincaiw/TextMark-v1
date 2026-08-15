@@ -20,7 +20,7 @@
   --document-link: #0066cc;
   --document-fill: #f5f5f7;
   --document-grid: #d2d2d7;
-  --toolbar-height: 68px;
+  --toolbar-height: 52px;
   --sidebar-width: 300px;
   --inspector-width: 292px;
 }
@@ -52,8 +52,8 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 
 .app-shell { width: 100%; height: 100%; display: grid; grid-template-rows: var(--toolbar-height) minmax(0, 1fr); background: var(--window); color: var(--text); }
 .app-shell.mode-edit { grid-template-rows: var(--toolbar-height) 44px minmax(0, 1fr); }
-.app-shell:has(.find-bar) { grid-template-rows: var(--toolbar-height) 40px minmax(0, 1fr); }
-.app-shell.mode-edit:has(.find-bar) { grid-template-rows: var(--toolbar-height) 44px 40px minmax(0, 1fr); }
+.app-shell:has(.find-bar) { grid-template-rows: var(--toolbar-height) 36px minmax(0, 1fr); }
+.app-shell.mode-edit:has(.find-bar) { grid-template-rows: var(--toolbar-height) 44px 36px minmax(0, 1fr); }
 
 .native-toolbar { position: relative; z-index: 10; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--chrome); backdrop-filter: blur(28px) saturate(150%); user-select: none; }
 .window-leading, .native-actions, .toolbar-group, .document-actions, .sidebar-control { display: flex; align-items: center; }
@@ -76,7 +76,6 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .sidebar-control summary { width: 20px; list-style: none; border-left: 1px solid var(--border); border-radius: 0; }
 .sidebar-control svg { width: 17px; height: 17px; stroke-width: 1.7; }
 .sidebar-control summary svg { width: 12px; }
-.native-title { position: absolute; left: 50%; z-index: -1; max-width: 240px; transform: translateX(-50%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: -.01em; pointer-events: none; }
 .native-actions { flex: 1 1 auto; justify-content: flex-start; gap: 8px; min-width: 0; }
 .toolbar-hidden .native-actions { display: none; }
 .toolbar-flexible-space { flex: 1 1 40px; min-width: 6px; }
@@ -429,12 +428,11 @@ mark.search-match.active { outline: 2px solid #ef8b00; background: #ffc94d; anim
   .open-with summary { padding-inline: 10px; }
 }
 @media (max-width: 920px) {
-  .native-title { justify-self: start; }
-  .document-shell.with-sidebar.with-inspector { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
+    .document-shell.with-sidebar.with-inspector { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
   .inspector-panel { position: absolute; z-index: 20; right: 0; top: var(--toolbar-height); bottom: 0; width: var(--inspector-width); box-shadow: -10px 0 30px rgba(0,0,0,.15); }
 }
 @media (max-width: 700px) {
-  .traffic-lights, .native-title { display: none; }
+  .traffic-lights { display: none; }
   .document-shell.with-sidebar { grid-template-columns: minmax(0, 1fr); }
   .native-sidebar { display: none; }
   .markdown-body, .markdown-body.content-full { padding: 32px 22px 80px; }

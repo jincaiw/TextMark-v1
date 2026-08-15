@@ -307,6 +307,10 @@ jobs:
           upload-release-assets: false
       - name: Add bilingual notes and third-party notices
         run: cp RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
+      - name: Prepare current-release notes only
+        run: |
+          awk 'BEGIN { n = 0 } /^# TextMark v[0-9]/ { n++; if (n > 1) exit } { print }' RELEASE_NOTES.md > current-release-notes.md
+          test -s current-release-notes.md
       - name: Create SHA-256 checksums
         working-directory: release-assets
         run: find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
@@ -314,7 +318,7 @@ jobs:
         run: gh release upload "$RELEASE_TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json release-assets/RELEASE_NOTES.md release-assets/THIRD_PARTY_NOTICES.md --clobber
         env: { GH_TOKEN: "${{ github.token }}" }
       - name: Publish as a formal, non-prerelease release
-        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --notes-file RELEASE_NOTES.md --title "TextMark $RELEASE_TAG"
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --notes-file current-release-notes.md --title "TextMark $RELEASE_TAG"
         env: { GH_TOKEN: "${{ github.token }}" }
       - name: Assert public final release state
         run: |

@@ -1,3 +1,22 @@
+# TextMark v0.5.3
+
+TextMark 0.5.3 restores the macOS traffic lights (red/yellow/green window controls) and native window title, fully aligns the top area with upstream Markdown Preview, fixes intermittent toolbar clicks, and makes GitHub release notes show only the current release. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.5.3 恢复 macOS 红黄绿交通灯与原生窗口标题，顶部区域完全对齐上游 Markdown Preview，修复顶栏点击间歇失灵，并让 GitHub 发布说明只含本次版本。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- macOS 交通灯恢复显示：移除 `hiddenTitle`（此前将 `NSWindow.titleVisibility` 设为 `.hidden` 导致无工具栏窗口连交通灯一并隐藏）；窗口标题显示文档名（含"已编辑"后缀），移除网页自绘居中标题避免重复。
+- 顶部区域对齐上游：工具栏高度 68→52px（macOS 统一工具栏高度，与交通灯垂直对齐）；查找栏 40→36px；原生标题 + 交通灯 + 工具栏项同栏。
+- 顶栏点击间歇失灵修复：`data-tauri-drag-region` 仅保留在空白弹性空间/空格项上，不再覆盖按钮/下拉，点击稳定生效。
+- CI 发布说明：publish 作业截取 RELEASE_NOTES.md 本次版本段落作为发布说明，不再累积历史版本。
+
+## Trust notice / 安全提示
+
+Same as v0.5.2. 同 v0.5.2。
+
+---
+
 # TextMark v0.5.2
 
 TextMark 0.5.2 fixes the toolbar and export regressions reported after 0.5.1: dropdown menus were clipped and invisible, the sidebar control could slide under the macOS traffic lights, narrow windows crowded the top bar, PNG/PDF exports rendered blank, and the toolbar customizer is now rebuilt pixel-aligned with the upstream AppKit customization sheet. Default Chinese and cross-platform support are unchanged.

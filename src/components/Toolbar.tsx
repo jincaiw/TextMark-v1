@@ -7,7 +7,7 @@ import { nextZoomStep } from "../constants";
 import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, ToolbarItem, ViewMode } from "../types";
 
 interface ToolbarProps {
-  fileName: string; dirty: boolean; busy: boolean; viewMode: ViewMode; sidebarVisible: boolean; sidebarMode: SidebarMode;
+  fileName: string; busy: boolean; viewMode: ViewMode; sidebarVisible: boolean; sidebarMode: SidebarMode;
   inspectorVisible: boolean; zoom: number; searchQuery: string; locale: Locale; items: ToolbarItem[]; displayMode: ToolbarDisplayMode;
   applications: ExternalApplication[]; defaultOpenTarget: string;
   canGoBack: boolean; canGoForward: boolean; onBack: () => void; onForward: () => void;
@@ -96,8 +96,8 @@ export function Toolbar(props: ToolbarProps) {
     const hidden = index >= props.items.length - hiddenCount;
     const hiddenStyle = hidden ? { display: "none" as const } : undefined;
     const slot = (node: React.ReactNode) => <span key={key} data-toolbar-item style={hiddenStyle}>{node}</span>;
-    if (item === "flexibleSpace") return <span key={key} data-toolbar-item className="toolbar-flexible-space" style={hiddenStyle} />;
-    if (item === "space") return <span key={key} data-toolbar-item className="toolbar-space" style={hiddenStyle} />;
+    if (item === "flexibleSpace") return <span key={key} data-toolbar-item data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />;
+    if (item === "space") return <span key={key} data-toolbar-item data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />;
     if (item === "navigation") return slot(<div className="history-buttons toolbar-navigation"><button disabled={!props.canGoBack} aria-label="Back" onClick={props.onBack}><ChevronLeft /></button><button disabled={!props.canGoForward} aria-label="Forward" onClick={props.onForward}><ChevronRight /></button></div>);
     if (item === "sidebar") return slot(<div className="sidebar-control">
       <button className={props.sidebarVisible ? "selected" : ""} title={tx("toggleSidebar")} aria-label={tx("toggleSidebar")} onClick={props.onToggleSidebar}>{withLabel(<PanelLeft />, "sidebar")}</button>
@@ -145,14 +145,13 @@ export function Toolbar(props: ToolbarProps) {
 
   const overflowItems = props.items.slice(props.items.length - hiddenCount).filter((item) => SIMPLE_ACTIONS[item] && item !== "copy");
 
-  return <header className="native-toolbar" data-tauri-drag-region onClick={(event) => {
+  return <header className="native-toolbar" onClick={(event) => {
     const details = (event.target as HTMLElement).closest(".menu-popover button")?.closest("details");
     if (details) window.setTimeout(() => details.removeAttribute("open"), 0);
   }}>
-    <div className="window-leading" data-tauri-drag-region><div className="traffic-lights">
+    <div className="window-leading"><div className="traffic-lights">
       <button aria-label={tx("close")} onClick={() => windowAction("close")} /><button aria-label={tx("minimize")} onClick={() => windowAction("minimize")} /><button aria-label={tx("maximize")} onClick={() => windowAction("toggleMaximize")} />
     </div></div>
-    <strong className="native-title">{props.fileName}{props.dirty ? ` — ${tx("edited")}` : ""}</strong>
     <div className="native-actions" ref={actionsRef}>{props.items.map(renderItem)}
       <details className="more-menu"><summary title={tx("more")}><MoreHorizontal /></summary><div className="menu-popover align-right">
         {overflowItems.map((item) => { const meta = SIMPLE_ACTIONS[item]!; return <button key={`overflow-${item}`} onClick={() => meta.action(props)}>{meta.icon}{tx(meta.title)}</button>; })}

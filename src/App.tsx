@@ -400,7 +400,7 @@ function App() {
 
   const chooseSidebarMode = (mode: SidebarMode) => { setSidebarMode(mode); setSidebarVisible(true); };
   return <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? "" : "toolbar-hidden"}`}>
-    <Toolbar fileName={documents.document.name} dirty={documents.isDirty} busy={documents.busy} viewMode={viewMode} locale={settings.locale} items={settings.toolbar} displayMode={settings.toolbarDisplay} applications={applications} defaultOpenTarget={settings.defaultOpenTarget}
+    <Toolbar fileName={documents.document.name} busy={documents.busy} viewMode={viewMode} locale={settings.locale} items={settings.toolbar} displayMode={settings.toolbarDisplay} applications={applications} defaultOpenTarget={settings.defaultOpenTarget}
       canGoBack={documents.canGoBack} canGoForward={documents.canGoForward} onBack={() => void documents.goBack(previewScrollTop())} onForward={() => void documents.goForward(previewScrollTop())}
       sidebarVisible={sidebarVisible} sidebarMode={sidebarMode} inspectorVisible={inspectorVisible} zoom={settings.zoom} searchQuery={searchQuery}
       onToggleSidebar={() => setSidebarVisible((value) => !value)} onSidebarModeChange={chooseSidebarMode} onViewModeChange={setViewMode}
