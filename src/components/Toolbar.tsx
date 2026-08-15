@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { AppWindow, Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Download, FileDown, FilePenLine, FolderOpen, Info, Minus, MoreHorizontal, PanelLeft, Plus, Printer, Save, Search, Settings, Share, Sparkles } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "../lib/platform";
@@ -18,9 +18,22 @@ interface ToolbarProps {
   onExportHtml: () => void; onExportPng: () => void; onExportPdf: () => void; onExport: () => void; onSettings: () => void; onCustomizeToolbar: () => void;
 }
 
+const SIMPLE_ACTIONS: Partial<Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; action: (p: ToolbarProps) => void }>> = {
+  inspector: { title: "getInfo", icon: <Info />, action: (p) => p.onToggleInspector() },
+  share: { title: "shareSource", icon: <Share />, action: (p) => p.onShare() },
+  edit: { title: "toggleEdit", icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === "edit" ? "preview" : "edit") },
+  print: { title: "printItem", icon: <Printer />, action: (p) => p.onPrint() },
+  copy: { title: "copyItem", icon: <Clipboard />, action: (p) => p.onCopy() },
+  export: { title: "exportItem", icon: <FileDown />, action: (p) => p.onExport() },
+  exportPdf: { title: "exportPdf", icon: <FileDown />, action: (p) => p.onExportPdf() },
+  search: { title: "searchItem", icon: <Search />, action: (p) => p.onSearchOpen() },
+};
+
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key);
   const [copiedFlash, setCopiedFlash] = useState(false);
+  const [hiddenCount, setHiddenCount] = useState(0);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const windowAction = (action: "close" | "minimize" | "toggleMaximize") => {
     if (!isTauri()) return;
     const window = getCurrentWindow();
@@ -45,19 +58,50 @@ export function Toolbar(props: ToolbarProps) {
   ));
   const emptyAppItem = () => <button disabled className="menu-empty">{tx("noAppsAvailable")}</button>;
 
+  // Measure which trailing items overflow the available toolbar width and hide
+  // them (they remain reachable from the app menu bar and, for simple actions,
+  // from the overflow "more" menu). flexibleSpace collapses first.
+  useLayoutEffect(() => {
+    const container = actionsRef.current;
+    if (!container) return;
+    const compute = () => {
+      const slots = Array.from(container.querySelectorAll<HTMLElement>(":scope > [data-toolbar-item]"));
+      const more = container.querySelector<HTMLElement>(":scope > .more-menu");
+      const gap = 10;
+      const available = container.clientWidth - (more?.offsetWidth ?? 0) - gap;
+      let used = 0;
+      let cut = slots.length;
+      for (let index = 0; index < slots.length; index += 1) {
+        const flexible = props.items[index] === "flexibleSpace";
+        const width = flexible ? 10 : slots[index].offsetWidth;
+        const extra = used > 0 ? gap : 0;
+        if (used + extra + width <= available) used += extra + width;
+        else { cut = index; break; }
+      }
+      setHiddenCount(slots.length - cut);
+    };
+    compute();
+    const observer = new ResizeObserver(compute);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [props.items, props.displayMode, props.searchQuery, props.zoom, props.viewMode]);
+
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`;
-    if (item === "flexibleSpace") return <span key={key} className="toolbar-flexible-space" />;
-    if (item === "space") return <span key={key} className="toolbar-space" />;
-    if (item === "navigation") return <div key={key} className="history-buttons toolbar-navigation"><button disabled={!props.canGoBack} aria-label="Back" onClick={props.onBack}><ChevronLeft /></button><button disabled={!props.canGoForward} aria-label="Forward" onClick={props.onForward}><ChevronRight /></button></div>;
-    if (item === "sidebar") return <div key={key} className="sidebar-control">
+    const hidden = index >= props.items.length - hiddenCount;
+    const hiddenStyle = hidden ? { display: "none" as const } : undefined;
+    const slot = (node: React.ReactNode) => <span key={key} data-toolbar-item style={hiddenStyle}>{node}</span>;
+    if (item === "flexibleSpace") return <span key={key} data-toolbar-item className="toolbar-flexible-space" style={hiddenStyle} />;
+    if (item === "space") return <span key={key} data-toolbar-item className="toolbar-space" style={hiddenStyle} />;
+    if (item === "navigation") return slot(<div className="history-buttons toolbar-navigation"><button disabled={!props.canGoBack} aria-label="Back" onClick={props.onBack}><ChevronLeft /></button><button disabled={!props.canGoForward} aria-label="Forward" onClick={props.onForward}><ChevronRight /></button></div>);
+    if (item === "sidebar") return slot(<div className="sidebar-control">
       <button className={props.sidebarVisible ? "selected" : ""} title={tx("toggleSidebar")} aria-label={tx("toggleSidebar")} onClick={props.onToggleSidebar}>{withLabel(<PanelLeft />, "sidebar")}</button>
       <details><summary aria-label={tx("chooseSidebar")}><ChevronDown /></summary><div className="menu-popover sidebar-menu">
         <button onClick={() => props.onSidebarModeChange("outline")}>{tx("tableOfContents")}</button>
         <button onClick={() => props.onSidebarModeChange("files")}>{tx("projectNavigator")}</button>
       </div></details>
-    </div>;
-    if (item === "openActions") return <details key={key} className="toolbar-group open-with">
+    </div>);
+    if (item === "openActions") return slot(<details className="toolbar-group open-with">
       <summary title={tx("open")}>{withLabel(<AppWindow />, "open")}<ChevronDown /></summary>
       <div className="menu-popover">
         {llmApps.length === 0 && editorApps.length === 0 ? emptyAppItem() : <>
@@ -68,32 +112,32 @@ export function Toolbar(props: ToolbarProps) {
           {editorButtons}
         </>}
       </div>
-    </details>;
-    if (item === "openWith") return <details key={key} className="toolbar-group open-with">
+    </details>);
+    if (item === "openWith") return slot(<details className="toolbar-group open-with">
       <summary title={tx("openWith")}>{withLabel(<AppWindow />, "openWith")}<ChevronDown /></summary>
       <div className="menu-popover">{editorApps.length ? editorButtons : emptyAppItem()}</div>
-    </details>;
-    if (item === "openInLlm") return <details key={key} className="toolbar-group open-with">
+    </details>);
+    if (item === "openInLlm") return slot(<details className="toolbar-group open-with">
       <summary title={tx("openInLlm")}>{withLabel(<Sparkles />, "openInLlm")}<ChevronDown /></summary>
       <div className="menu-popover">{llmApps.length ? llmButtons : emptyAppItem()}</div>
-    </details>;
-    if (item === "zoom") return <div key={key} className="toolbar-group zoom-buttons" aria-label={`${tx("zoom")} ${props.zoom}%`}>
+    </details>);
+    if (item === "zoom") return slot(<div className="toolbar-group zoom-buttons" aria-label={`${tx("zoom")} ${props.zoom}%`}>
       <button title={tx("zoomOut")} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, -1))}><span>A</span><Minus /></button>
       <button title={tx("zoomIn")} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, 1))}><span>A</span><Plus /></button>
-    </div>;
-    if (item === "search") return <label key={key} className="document-search" onClick={props.onSearchOpen}><Search /><input value={props.searchQuery} onFocus={props.onSearchOpen} onChange={(event) => props.onSearchQueryChange(event.target.value)} placeholder={tx("search")} /></label>;
-    const actions: Partial<Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; active?: boolean; action: () => void }>> = {
-      inspector: { title: "getInfo", icon: <Info />, active: props.inspectorVisible, action: props.onToggleInspector },
-      share: { title: "shareSource", icon: <Share />, action: props.onShare },
-      edit: { title: props.viewMode === "edit" ? "stopEditing" : "toggleEdit", icon: <FilePenLine />, active: props.viewMode === "edit", action: () => props.onViewModeChange(props.viewMode === "edit" ? "preview" : "edit") },
-      print: { title: "printItem", icon: <Printer />, action: props.onPrint },
-      copy: { title: "copyItem", icon: copiedFlash ? <Check /> : <Clipboard />, action: () => { props.onCopy(); setCopiedFlash(true); window.setTimeout(() => setCopiedFlash(false), 1200); } },
-      export: { title: "exportItem", icon: <FileDown />, action: props.onExport },
-      exportPdf: { title: "exportPdf", icon: <FileDown />, action: props.onExportPdf },
-    };
-    const action = actions[item];
-    return action ? <button key={key} className={`toolbar-item-button ${props.displayMode === "iconAndLabel" ? "with-label" : ""} ${action.active ? "selected" : ""} ${item === "edit" && action.active ? "edit-active" : ""}`} title={tx(action.title)} aria-label={tx(action.title)} onClick={action.action}>{withLabel(action.icon, action.title)}</button> : null;
+    </div>);
+    if (item === "search") return slot(<label className="document-search" onClick={props.onSearchOpen}><Search /><input value={props.searchQuery} onFocus={props.onSearchOpen} onChange={(event) => props.onSearchQueryChange(event.target.value)} placeholder={tx("search")} /></label>);
+    const simple = SIMPLE_ACTIONS[item];
+    if (simple) {
+      const active = (item === "inspector" && props.inspectorVisible) || (item === "edit" && props.viewMode === "edit");
+      return slot(<button className={`toolbar-item-button ${props.displayMode === "iconAndLabel" ? "with-label" : ""} ${active ? "selected" : ""} ${item === "edit" && active ? "edit-active" : ""}`} title={tx(simple.title)} aria-label={tx(simple.title)} onClick={() => {
+        if (item === "copy") { props.onCopy(); setCopiedFlash(true); window.setTimeout(() => setCopiedFlash(false), 1200); }
+        else simple.action(props);
+      }}>{withLabel(item === "copy" && copiedFlash ? <Check /> : simple.icon, simple.title)}</button>);
+    }
+    return null;
   };
+
+  const overflowItems = props.items.slice(props.items.length - hiddenCount).filter((item) => SIMPLE_ACTIONS[item] && item !== "copy");
 
   return <header className="native-toolbar" data-tauri-drag-region onClick={(event) => {
     const details = (event.target as HTMLElement).closest(".menu-popover button")?.closest("details");
@@ -103,8 +147,10 @@ export function Toolbar(props: ToolbarProps) {
       <button aria-label={tx("close")} onClick={() => windowAction("close")} /><button aria-label={tx("minimize")} onClick={() => windowAction("minimize")} /><button aria-label={tx("maximize")} onClick={() => windowAction("toggleMaximize")} />
     </div></div>
     <strong className="native-title">{props.fileName}{props.dirty ? ` — ${tx("edited")}` : ""}</strong>
-    <div className="native-actions">{props.items.map(renderItem)}
+    <div className="native-actions" ref={actionsRef}>{props.items.map(renderItem)}
       <details className="more-menu"><summary title={tx("more")}><MoreHorizontal /></summary><div className="menu-popover align-right">
+        {overflowItems.map((item) => { const meta = SIMPLE_ACTIONS[item]!; return <button key={`overflow-${item}`} onClick={() => meta.action(props)}>{meta.icon}{tx(meta.title)}</button>; })}
+        {overflowItems.length > 0 && <hr />}
         <button onClick={props.onOpen}><FolderOpen />{tx("openFile")}</button><button onClick={props.onOpenFolder}><FolderOpen />{tx("openFolder")}</button>
         <button onClick={props.onSave} disabled={props.busy}><Save />{tx("save")}</button><button onClick={props.onSaveAs}><Download />{tx("saveAs")}</button><hr />
         <button onClick={props.onCopy}><Clipboard />{tx("copySource")}</button><button onClick={props.onPrint}><Printer />{tx("print")}</button><button onClick={props.onExportHtml}><FileDown />{tx("exportHtml")}</button><button onClick={props.onExportPdf}><FileDown />{tx("exportPdf")}</button><button onClick={props.onExportPng}><FileDown />{tx("exportPng")}</button><hr />

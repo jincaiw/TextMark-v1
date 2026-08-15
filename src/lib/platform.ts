@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { AppError, AppSettings, ExternalApplication, FileNode, StartupRequest, TextDocument } from "../types";
 
 declare global {
@@ -8,6 +9,13 @@ declare global {
 }
 
 export const isTauri = () => Boolean(window.__TAURI_INTERNALS__);
+
+export const isMacos = () => typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent);
+
+export async function tempExportPath(extension: string): Promise<string> {
+  if (!isTauri()) return "";
+  return invoke<string>("temp_export_path", { extension });
+}
 
 export function errorCode(error: unknown): AppError["code"] | null {
   if (typeof error === "object" && error && "code" in error) return (error as AppError).code;
@@ -77,6 +85,18 @@ export async function recordRecentFile(path: string): Promise<void> {
 export async function clearRecentFiles(): Promise<void> {
   if (!isTauri()) return;
   await invoke("clear_recent_files");
+}
+
+export async function writeExportBytes(path: string, bytes: Uint8Array): Promise<void> {
+  await invoke("save_export_bytes", { path, bytes: Array.from(bytes) });
+}
+
+export async function saveExportFile(defaultName: string, bytes: Uint8Array, filterName: string, extensions: string[]): Promise<boolean> {
+  if (!isTauri()) return false;
+  const selected = await save({ defaultPath: defaultName, filters: [{ name: filterName, extensions }] });
+  if (typeof selected !== "string") return false;
+  await writeExportBytes(selected, bytes);
+  return true;
 }
 
 export async function discoverApplications(): Promise<ExternalApplication[]> {

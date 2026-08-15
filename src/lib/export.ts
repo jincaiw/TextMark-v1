@@ -20,6 +20,42 @@ function exportClone(root: HTMLElement) {
   return clone;
 }
 
+const LIGHT_EXPORT_VARS = {
+  "--document-text": "#1d1d1f",
+  "--document-secondary": "#6e6e73",
+  "--document-link": "#0066cc",
+  "--document-fill": "#f5f5f7",
+  "--document-grid": "#d2d2d7",
+  "--surface": "#ffffff",
+  "--accent": "#0a84ff",
+  "--muted": "#73757b",
+  "--border": "rgba(60,60,67,.17)",
+  "--hover": "rgba(60,60,67,.08)",
+  "--selected": "rgba(10,132,255,.11)",
+} as const;
+
+function applyLightExportStyles(clone: HTMLElement) {
+  for (const [name, value] of Object.entries(LIGHT_EXPORT_VARS)) clone.style.setProperty(name, value);
+  clone.style.background = "#ffffff";
+  clone.style.color = "#1d1d1f";
+}
+
+async function captureClonePng(root: HTMLElement, pixelRatio = 2) {
+  const clone = exportClone(root);
+  applyLightExportStyles(clone);
+  clone.style.position = "fixed";
+  clone.style.left = "-10000px";
+  clone.style.top = "0";
+  clone.style.width = "820px";
+  document.body.append(clone);
+  try {
+    const { toPng } = await import("html-to-image");
+    return await toPng(clone, { pixelRatio, backgroundColor: "#ffffff", cacheBust: true });
+  } finally {
+    clone.remove();
+  }
+}
+
 const blobAsDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
   reader.addEventListener("load", () => resolve(String(reader.result)), { once: true });
@@ -89,8 +125,60 @@ export async function downloadHtml(name: string, root: HTMLElement) {
 }
 
 export async function downloadPng(name: string, root: HTMLElement) {
-  const { toBlob } = await import("html-to-image");
-  const blob = await toBlob(root, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true, filter: (node) => !(node instanceof HTMLElement) || (!node.classList.contains("copy-code-button") && !node.classList.contains("diagram-hud")) });
-  if (!blob) throw new Error("png_export_failed");
-  download(`${cleanName(name)}@2x.png`, blob);
+  const { name: fileName, bytes } = await buildPngExport(name, root);
+  download(fileName, new Blob([bytes], { type: "image/png" }));
+}
+
+export async function buildHtmlExport(name: string, root: HTMLElement) {
+  const html = await buildSelfContainedHtml(name, root);
+  return { name: `${cleanName(name)}.html`, bytes: new TextEncoder().encode(html) };
+}
+
+export async function buildPngExport(name: string, root: HTMLElement) {
+  const dataUrl = await captureClonePng(root, 2);
+  return { name: `${cleanName(name)}@2x.png`, bytes: dataUrlToBytes(dataUrl) };
+}
+
+const dataUrlToBytes = (dataUrl: string) => {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+export async function buildPdfExport(name: string, root: HTMLElement) {
+  const dataUrl = await captureClonePng(root, 2);
+  const { jsPDF } = await import("jspdf");
+  const image = new Image();
+  image.src = dataUrl;
+  await image.decode();
+  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4", compress: true });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  // One A4 page-height slice per page, drawn from the continuous tall snapshot.
+  const sliceHeight = Math.floor((image.height / image.width) * pageWidth);
+  let offset = 0;
+  let page = 0;
+  while (offset < image.height) {
+    const height = Math.min(sliceHeight, image.height - offset);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = height;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, offset, image.width, height, 0, 0, image.width, height);
+    const jpeg = canvas.toDataURL("image/jpeg", 0.92);
+    if (page > 0) pdf.addPage();
+    pdf.addImage(jpeg, "JPEG", 0, 0, pageWidth, Math.min(pageHeight, height / (image.width / pageWidth)));
+    offset += height;
+    page += 1;
+  }
+  return { name: `${cleanName(name)}.pdf`, bytes: new Uint8Array(pdf.output("arraybuffer")) };
+}
+
+export async function downloadPdf(name: string, root: HTMLElement) {
+  const { name: fileName, bytes } = await buildPdfExport(name, root);
+  download(fileName, new Blob([bytes], { type: "application/pdf" }));
 }

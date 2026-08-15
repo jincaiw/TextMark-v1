@@ -577,22 +577,22 @@ fn build_menu(app: &tauri::AppHandle, locale: &str, state: &MenuUiState) -> taur
     let sidebar_outline = state_item(
         "sidebar-outline",
         state.sidebar_visible && state.sidebar_mode == "outline",
-        "目录",
-        "Table of Contents",
+        "大纲",
+        "Outline",
         sidebar_pane_accel("2"),
     )?;
     let sidebar_files = state_item(
         "sidebar-files",
         state.sidebar_visible && state.sidebar_mode == "files",
-        "项目导航器",
-        "Project Navigator",
+        "文件夹",
+        "Folders",
         sidebar_pane_accel("3"),
     )?;
     // Keep Cmd/Ctrl+I available for italic while editing. The inspector remains
     // available from the View menu and the preview toolbar.
     let inspector = item("inspector", "显示简介", "Get Info", None)?;
     let show_toolbar = item("show-toolbar", "显示工具栏", "Show Toolbar", None)?;
-    let zoom_in = item("zoom-in", "放大", "Zoom In", Some("CmdOrCtrl+Plus"))?;
+    let zoom_in = item("zoom-in", "放大", "Zoom In", Some("CmdOrCtrl++"))?;
     let zoom_out = item("zoom-out", "缩小", "Zoom Out", Some("CmdOrCtrl+-"))?;
     let zoom_reset = item("zoom-reset", "实际大小", "Actual Size", Some("CmdOrCtrl+0"))?;
     let customize = item(
@@ -1117,6 +1117,24 @@ fn write_text_file(
 }
 
 #[tauri::command]
+fn save_export_bytes(path: String, bytes: Vec<u8>) -> AppResult<()> {
+    let target = PathBuf::from(path);
+    let mut file = AtomicWriteFile::open(&target).map_err(io_error)?;
+    file.write_all(&bytes).map_err(io_error)?;
+    file.commit().map_err(io_error)
+}
+
+#[tauri::command]
+fn temp_export_path(extension: String) -> String {
+    let ext: String = extension.chars().filter(|c| c.is_ascii_alphanumeric()).take(10).collect();
+    let ext = if ext.is_empty() { "pdf".to_string() } else { ext };
+    std::env::temp_dir()
+        .join(format!("textmark-{}.{}", std::process::id(), ext))
+        .to_string_lossy()
+        .to_string()
+}
+
+#[tauri::command]
 fn list_directory(path: String) -> AppResult<Vec<FileNode>> {
     let canonical = PathBuf::from(path)
         .canonicalize()
@@ -1380,6 +1398,8 @@ pub fn run() {
             read_text_file,
             startup_request,
             write_text_file,
+            save_export_bytes,
+            temp_export_path,
             list_directory,
             read_local_asset,
             check_update_channel,

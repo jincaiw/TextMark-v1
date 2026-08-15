@@ -1,3 +1,25 @@
+# TextMark v0.5.1
+
+TextMark 0.5.1 fixes the desktop issues reported after 0.5.0: menu clicks firing multiple times (and toggle actions appearing dead), broken export/print, squeezed toolbar layout, missing zoom shortcut, English save dialogs, toolbar icon styling, and the outline/folder naming. It defaults to Simplified Chinese and stays cross-platform.
+
+TextMark 0.5.1 修复 0.5.0 后的桌面问题：菜单点击多次触发/切换无效、导出打印无反应、顶栏挤占、缩放快捷键缺失、保存对话框英文、工具栏图标样式、大纲/文件夹命名。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- 修复菜单事件监听器泄漏（一次性订阅），"切换编辑模式/边栏/显示工具栏/显示简介/崩溃报告"单击生效，存储/存储为 不再多次弹窗。
+- 导出 HTML/PNG 走原生保存对话框 + Rust 安全写盘；导出 PDF 生成多页 PDF；打印在 macOS 生成 PDF 预览并打开（WKWebView 不支持 window.print()），Windows/Linux 仍走原生打印。
+- 顶栏加入 AppKit 式溢出管理：窗口缩小时自动把放不下的项收进"更多"菜单，标题/窗口控制不再挤占。
+- 菜单"放大"快捷键修复（`CmdOrCtrl++`），macOS 菜单正确显示 ⌘+/⌘−/⌘0。
+- macOS 应用包加入 zh-Hans 本地化（lproj + CFBundleLocalizations），原生打开/保存对话框显示中文。
+- 工具栏/格式栏重做为上游 Preview 风格：裸图标、悬停才显示底色、组内紧凑间距 + 细分隔线。
+- 中文"目录→大纲、项目导航器→文件夹"，英文同步 "Outline / Folders"。
+
+## Trust notice / 安全提示
+
+Same as v0.5.0. 同 v0.5.0。
+
+---
+
 # TextMark v0.5.0
 
 TextMark 0.5 completes the second-round desktop UI/UX deep-check against the latest Markdown Preview `main` (v0.0.47 + #278 double-tilde strikethrough + #273 Quick Look cursor feedback). Default Chinese and cross-platform (Windows/Linux/macOS) are unchanged.

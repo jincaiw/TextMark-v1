@@ -23,12 +23,14 @@
   "bundle": {
     "resources": {
       "../platform/macos/cli/tm": "bin/tm",
-      "../platform/macos/cli/text-mark": "bin/text-mark"
+      "../platform/macos/cli/text-mark": "bin/text-mark",
+      "../platform/macos/zh-Hans.lproj/": "zh-Hans.lproj/"
     },
     "macOS": {
       "minimumSystemVersion": "12.0",
       "signingIdentity": "-",
       "entitlements": "../platform/macos/TextMark.entitlements",
+      "infoPlist": "../platform/macos/Info-extras.plist",
       "files": {
         "PlugIns/TextMarkQuickLook.appex": "../platform/macos/build/TextMarkQuickLook.appex"
       }

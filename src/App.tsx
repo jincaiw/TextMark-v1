@@ -20,7 +20,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
 import { useUpdater } from "./hooks/useUpdater";
 import { t } from "./lib/i18n";
-import { clearRecentFiles, discoverApplications, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, recordRecentFile, revealInFileManager, refreshMenu, setDefaultHandler } from "./lib/platform";
+import { clearRecentFiles, discoverApplications, isMacos, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, recordRecentFile, revealInFileManager, refreshMenu, saveExportFile, setDefaultHandler, tempExportPath, writeExportBytes } from "./lib/platform";
 import { editMarkdownTable } from "./lib/table";
 import { setTaskChecked } from "./lib/task";
 import { configureCrashReporting, crashReportingAvailable } from "./lib/telemetry";
@@ -206,19 +206,49 @@ function App() {
     const root = document.querySelector<HTMLElement>(".markdown-body");
     if (!root) return;
     const exporter = await import("./lib/export");
-    if (format === "html") await exporter.downloadHtml(documents.document.name, root);
-    else await exporter.downloadPng(documents.document.name, root);
+    try {
+      if (format === "html") {
+        if (!isTauri()) { await exporter.downloadHtml(documents.document.name, root); return; }
+        const { name, bytes } = await exporter.buildHtmlExport(documents.document.name, root);
+        if (await saveExportFile(name, bytes, "HTML", ["html"])) flash(t(settings.locale, "exported"));
+      } else {
+        if (!isTauri()) { await exporter.downloadPng(documents.document.name, root); return; }
+        const { name, bytes } = await exporter.buildPngExport(documents.document.name, root);
+        if (await saveExportFile(name, bytes, "PNG", ["png"])) flash(t(settings.locale, "exported"));
+      }
+    } catch { flash(settings.locale === "zh-CN" ? "导出失败。" : "Export failed."); }
   };
-  const exportPdf = () => {
-    document.documentElement.dataset.exportPdf = "1";
-    try { window.print(); }
-    finally { window.setTimeout(() => { delete document.documentElement.dataset.exportPdf; }, 1000); }
+  const exportPdf = async () => {
+    const root = document.querySelector<HTMLElement>(".markdown-body");
+    if (!root) return;
+    try {
+      const exporter = await import("./lib/export");
+      if (!isTauri()) { await exporter.downloadPdf(documents.document.name, root); return; }
+      const { name, bytes } = await exporter.buildPdfExport(documents.document.name, root);
+      if (await saveExportFile(name, bytes, "PDF", ["pdf"])) flash(t(settings.locale, "exported"));
+    } catch { flash(settings.locale === "zh-CN" ? "导出失败。" : "Export failed."); }
   };
-  useEffect(() => {
-    if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
-    void listen<string>("menu-command", (event) => {
-      const command = event.payload;
+  const printDocument = async () => {
+    // macOS WKWebView does not implement window.print(); render a PDF and open
+    // it so the user can print from the system viewer. Other platforms print
+    // natively through the webview.
+    if (isTauri() && isMacos()) {
+      const root = document.querySelector<HTMLElement>(".markdown-body");
+      if (!root) return;
+      try {
+        const exporter = await import("./lib/export");
+        const { bytes } = await exporter.buildPdfExport(documents.document.name, root);
+        const path = await tempExportPath("pdf");
+        await writeExportBytes(path, bytes);
+        await openExternalPath(path);
+        flash(settings.locale === "zh-CN" ? "已生成打印预览。" : "Print preview generated.");
+      } catch { flash(settings.locale === "zh-CN" ? "打印失败。" : "Print failed."); }
+      return;
+    }
+    window.print();
+  };
+  const menuCommandRef = useRef<(command: string) => void>(() => {});
+  menuCommandRef.current = (command: string) => {
       if (command === "open") void documents.openFile();
       else if (command.startsWith("open-recent:")) void documents.openPath(command.slice("open-recent:".length));
       else if (command === "clear-recent") void clearRecentFiles().then(() => refreshMenu({ locale: settings.locale, appearance: settings.theme, contentWidth: settings.contentWidth, sidebarMode, sidebarVisible }));
@@ -228,7 +258,7 @@ function App() {
       else if (command === "save") void documents.saveFile();
       else if (command === "save-as") void documents.saveAs();
       else if (command === "revert") documents.revertDocument();
-      else if (command === "print") window.print();
+      else if (command === "print") printDocument();
       else if (command === "export") setExportOpen(true);
       else if (command === "export-pdf") exportPdf();
       else if (command === "undo") documents.undo();
@@ -266,9 +296,12 @@ function App() {
       else if (command === "go-next-item") jumpToHeading(1);
       else if (command === "go-top") scrollPreviewEdge(false);
       else if (command === "go-bottom") scrollPreviewEdge(true);
-    }).then((dispose) => { unlisten = dispose; });
-    return () => unlisten?.();
-  }, [documents, setZoom, settings.zoom, settings.crashReports, updater, setTheme, setContentWidth, patch]);
+  };
+  useEffect(() => {
+    if (!isTauri()) return;
+    const subscription = listen<string>("menu-command", (event) => menuCommandRef.current(event.payload));
+    return () => { void subscription.then((dispose) => dispose()); };
+  }, []);
   const toggleTask = (targetIndex: number, checked: boolean) => {
     const line = rendered.tasks[targetIndex]?.line;
     if (!line) return;

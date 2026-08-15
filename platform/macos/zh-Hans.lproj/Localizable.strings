@@ -1,0 +1,9 @@
+/* Standard Cocoa strings localized for the native open/save panels. */
+"Save" = "存储";
+"Save As…" = "存储为…";
+"Cancel" = "取消";
+"Replace" = "替换";
+"OK" = "好";
+"Don't Save" = "不存储";
+"Open" = "打开";
+"Choose" = "选择";

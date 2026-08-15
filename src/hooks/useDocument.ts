@@ -157,6 +157,7 @@ export function useDocument(locale: Locale) {
     if (!isTauri()) return;
     const watched = [active?.path, workspacePath].filter((path): path is string => Boolean(path));
     void watchPaths(watched).catch(showError);
+    let disposed = false;
     let unlisten: (() => void) | undefined;
     let documentTimer = 0;
     let workspaceTimer = 0;
@@ -213,8 +214,9 @@ export function useDocument(locale: Locale) {
         window.clearTimeout(workspaceTimer);
         workspaceTimer = window.setTimeout(() => { void scanFolder(workspacePath).then(setFiles).catch(showError); }, 180);
       }
-    }).then((dispose) => { unlisten = dispose; });
+    }).then((dispose) => { if (disposed) dispose(); else unlisten = dispose; });
     return () => {
+      disposed = true;
       unlisten?.();
       window.clearTimeout(documentTimer);
       window.clearTimeout(workspaceTimer);
@@ -265,6 +267,7 @@ export function useDocument(locale: Locale) {
 
   useEffect(() => {
     if (!isTauri()) return;
+    let disposed = false;
     let unlisten: (() => void) | undefined;
     void listen<OpenPathRequest[]>("open-paths", (event) => {
       void (async () => {
@@ -273,8 +276,8 @@ export function useDocument(locale: Locale) {
           else applyDocument(await readDocument(entry.path), true);
         }
       })().catch(showError);
-    }).then((dispose) => { unlisten = dispose; });
-    return () => unlisten?.();
+    }).then((dispose) => { if (disposed) dispose(); else unlisten = dispose; });
+    return () => { disposed = true; unlisten?.(); };
   }, [applyDocument, openFolderPath, showError]);
 
   const openFile = useCallback(async () => {
