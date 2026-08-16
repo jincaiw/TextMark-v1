@@ -59,7 +59,7 @@ jobs:
   bundle-macos:
     name: macOS Universal 2 + Quick Look
     needs: verify
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
         with: { ref: "${{ inputs.tag || github.ref }}" }

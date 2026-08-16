@@ -1,3 +1,21 @@
+# TextMark v0.5.5
+
+TextMark 0.5.5 guarantees the macOS traffic lights: the app now re-applies the visible title and the close/minimize/zoom buttons at runtime (and disables automatic window tabbing), so the red/yellow/green controls show on every build and launch path, including binaries linked against older macOS SDKs. The macOS CI build also moves to the macOS 26 runner to match the verified build environment. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.5.5 彻底保证 macOS 交通灯显示：应用运行时强制恢复可见标题与关闭/最小化/缩放按钮（并禁用自动窗口标签化），无论构建环境与启动方式，红黄绿三灯均显示；macOS CI 构建改用 macOS 26 runner，与已验证的构建环境一致。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- 交通灯运行时兜底：setup 与启动后各强制一次 `NSWindow.titleVisibility = visible`、三个标准窗口按钮 `setHidden(false)`/`setEnabled(true)`，并 `setAllowsAutomaticWindowTabbing(false)` —— 旧 SDK 链接的二进制在 LaunchServices 启动下曾出现交通灯被抑制，现在无论构建 SDK 如何都保证可见。
+- macOS CI：`runs-on: macos-15` → `macos-26`（Xcode 26 工具链，与实机验证环境一致）。
+- 沿用 v0.5.4：移除原生标签化（`tabbingIdentifier`）、启动零阻塞（最近文件后台预热）、顶栏点击矩阵 e2e、发布说明只含本次版本。
+
+## Trust notice / 安全提示
+
+Same as v0.5.4. 同 v0.5.4。
+
+---
+
 # TextMark v0.5.4
 
 TextMark 0.5.4 fixes the root cause of the still-missing macOS traffic lights and dead top-area clicks, removes a startup hang, and polishes the release notes. Default Chinese and cross-platform support are unchanged.
