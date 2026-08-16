@@ -1,3 +1,24 @@
+# TextMark v0.5.6
+
+TextMark 0.5.6 ships the full desktop UI audit: a complete design-token system, dialog accessibility (Escape close, focus trap), a single theme source of truth, a centralized platform adapter, and an ESLint/Prettier toolchain enforced in CI. Cross-platform window-control layout is verified automatically (unit + WebDriver platform-adapter tests) without needing physical Windows/Linux machines. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.5.6 发布桌面 UI 全面审计成果：完整 Design Tokens 体系、对话框无障碍（Esc 关闭、焦点陷阱）、主题单一数据源、平台适配器集中化，并在 CI 中强制 ESLint/Prettier。跨平台窗口控件布局已通过单元测试 + WebDriver 平台模拟自动验证，无需真实 Win/Linux 机器。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- Design Tokens：建立颜色/间距/圆角/字号/图标/控件高度/阴影完整 Token 体系（`--space-*`、`--radius-*`、`--text-*`、`--shadow-*`、语义色等），替换 App.css 中 30+ 处硬编码颜色与混用圆角/字号，视觉等价、圆角归一到 6/8/12/16 阶梯。
+- 对话框无障碍：新增 `useDialogAccessibility`（打开自动聚焦、Tab 焦点循环、Esc 关闭、关闭后还原焦点），接入设置/导出/自定义工具栏；首次启动"设为默认"提示支持 Esc；查找框补回可见焦点环。
+- 主题与平台：`useTheme` 改为受控单一数据源（跟随系统/浅色/深色）；平台判断（Windows/Linux/macOS、Tauri/浏览器）集中到 `platform.ts` 适配器。
+- 代码清理：移除未挂载的死组件 StatusBar/BrandMark。
+- 工程化：新增 ESLint（flat config，Babel 解析 TS，适配 TypeScript 7 原生编译器无编译器 API 的限制）与 Prettier（semi:false、单引号、printWidth 140），`npm run lint` / `format:check` 纳入 CI 门禁。
+- 跨平台自动验证：新增 `detectPlatform/detectRuntime/isMacos` 单元测试（9 项）；e2e 新增平台适配断言——macOS 窗口控件居左、Windows/Linux 控件右上且关闭按钮居右、浏览器回退可见性。
+
+## Trust notice / 安全提示
+
+Same as v0.5.5. 同 v0.5.5。
+
+---
+
 # TextMark v0.5.5
 
 TextMark 0.5.5 guarantees the macOS traffic lights: the app now re-applies the visible title and the close/minimize/zoom buttons at runtime (and disables automatic window tabbing), so the red/yellow/green controls show on every build and launch path, including binaries linked against older macOS SDKs. The macOS CI build also moves to the macOS 26 runner to match the verified build environment. Default Chinese and cross-platform support are unchanged.

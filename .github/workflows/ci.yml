@@ -44,6 +44,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - run: npm ci --include=dev
       - run: npm test -- --run
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run build
       - run: npm run check:bundle
       - name: Production dependency audit

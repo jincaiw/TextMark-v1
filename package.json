@@ -1,7 +1,7 @@
 {
   "name": "textmark",
   "private": true,
-  "version": "0.5.5",
+  "version": "0.5.6",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -14,7 +14,11 @@
     "test:e2e": "wdio run wdio.conf.mjs",
     "build:e2e": "cross-env VITE_WDIO=1 tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"e2e/**/*.mjs\" \"scripts/**/*.mjs\" \"vite.config.ts\" \"vitest.config.ts\" \"wdio.conf.mjs\" \"eslint.config.js\" \"package.json\" \"tsconfig.json\" \"tsconfig.node.json\" \".prettierrc.json\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"e2e/**/*.mjs\" \"scripts/**/*.mjs\" \"vite.config.ts\" \"vitest.config.ts\" \"wdio.conf.mjs\" \"eslint.config.js\" \"package.json\" \"tsconfig.json\" \"tsconfig.node.json\" \".prettierrc.json\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -51,6 +55,9 @@
     "serialize-javascript": "7.1.0"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.11.1",
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.14",
@@ -62,7 +69,10 @@
     "@wdio/tauri-plugin": "^1.3.0",
     "@wdio/tauri-service": "^1.3.0",
     "cross-env": "^10.1.0",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
     "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
     "typescript": "~7.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"

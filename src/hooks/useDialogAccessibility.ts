@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react'
 
-const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * Desktop dialog accessibility: while `open`, moves focus into the dialog,
@@ -9,40 +10,44 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
  * the effect never re-runs from parent re-renders.
  */
 export function useDialogAccessibility(open: boolean, onClose: () => void) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const ref = useRef<HTMLDivElement | null>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
-    if (!open) return;
-    const container = ref.current;
-    if (!container) return;
+    if (!open) return
+    const container = ref.current
+    if (!container) return
     const focusable = () =>
-      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.offsetParent !== null);
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    focusable()[0]?.focus();
+      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.offsetParent !== null)
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    focusable()[0]?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onCloseRef.current(); return; }
-      if (event.key !== "Tab") return;
-      const items = focusable();
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || active === container || !container.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || active === document.body)) {
-        event.preventDefault();
-        first.focus();
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
       }
-    };
-    container.addEventListener("keydown", onKeyDown);
+      if (event.key !== 'Tab') return
+      const items = focusable()
+      if (!items.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || active === container || !container.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || active === document.body)) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    container.addEventListener('keydown', onKeyDown)
     return () => {
-      container.removeEventListener("keydown", onKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [open]);
+      container.removeEventListener('keydown', onKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [open])
 
-  return ref;
+  return ref
 }

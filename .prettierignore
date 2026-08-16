@@ -1,0 +1,8 @@
+dist/
+node_modules/
+src-tauri/
+coverage/
+package-lock.json
+docs/
+RELEASE_NOTES.md
+*.svg

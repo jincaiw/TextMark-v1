@@ -45,6 +45,8 @@ jobs:
           test "$rust_version" = "$package_version"
           test "$config_version" = "$package_version"
       - run: npm test -- --run
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run build
       - run: npm run check:bundle
       - run: npm audit --omit=dev --audit-level=high
