@@ -1,7 +1,8 @@
-# TextMark v0.5.4 — 交通灯与顶部点击根治方案
+# TextMark v0.5.4 / v0.5.5 — 交通灯与顶部点击根治方案
 
-> 状态：**已实施并通过发布包实机验证**。
+> 状态：**已实施并通过发布包实机验证（v0.5.4 → v0.5.5）**。
 > 实施记录：移除 `tabbingIdentifier` + 启动零阻塞（后台预热最近文件缓存）+ macOS 清除残留 `NSWindowTabbingShoudShowTabBarKey-*` 偏好 + 顶栏点击矩阵 e2e（16/16 绿）+ 发布说明润色。实机验证：LaunchServices 启动 3 秒出窗（此前可挂起数分钟）、AX 无标签栏、激活后红/黄/绿三灯像素可见、`--new-window` 双窗口不合并、AX 真实点击生效。
+> **v0.5.5 补充（发布后追加）**：CI（Xcode 16.4/macOS 15.5 SDK）构建的二进制在 LaunchServices 启动下实测交通灯仍被抑制（本地 Xcode 26.6 构建正常；裸启动正常）。v0.5.5 双管齐下：① 运行时强制 —— setup 与启动后各执行一次 `NSWindow.titleVisibility = visible` + 三个标准窗口按钮 `setHidden(false)`/`setEnabled(true)` + `setAllowsAutomaticWindowTabbing(false)`（objc2-app-kit），构建环境无关地保证三灯可见；② macOS CI 改用 `macos-26` runner（Xcode 26 工具链，与实机验证环境一致）。发布包 v0.5.5 实机复验：`open` 启动 3 秒出窗、三灯红/黄/绿像素可见、按钮 16×16、无标签栏、残留偏好键被清除、双窗口不合并、release body 仅含本次版本。
 > 对应请求 4 项：① macOS 交通灯不显示；② 窗口顶部按钮点击无效；③ CI 发布说明只含本次版本；④ 先深度检查、输出方案、待确认后实施。
 
 ---
