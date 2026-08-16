@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppWindow, ChevronLeft, Clipboard, FileDown, FilePenLine, GripVertical, Info, PanelLeft, Printer, RotateCcw, Search, Share, Sparkles, X, ZoomIn } from "lucide-react";
 import { t } from "../lib/i18n";
 import { DEFAULT_TOOLBAR } from "../lib/settings";
+import { useDialogAccessibility } from "../hooks/useDialogAccessibility";
 import type { Locale, ToolbarDisplayMode, ToolbarItem } from "../types";
 
 const AVAILABLE: ToolbarItem[] = ["navigation", "sidebar", "openActions", "openWith", "openInLlm", "zoom", "inspector", "share", "edit", "search", "print", "copy", "export", "exportPdf", "flexibleSpace", "space"];
@@ -43,6 +44,7 @@ interface ToolbarCustomizerProps {
 }
 
 export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, onDisplayModeChange, onClose }: ToolbarCustomizerProps) {
+  const backdropRef = useDialogAccessibility(open, onClose);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   if (!open) return null;
@@ -67,7 +69,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
     return null;
   };
 
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose} ref={backdropRef}>
     <section className="toolbar-customizer" role="dialog" aria-modal="true" aria-labelledby="toolbar-title" onMouseDown={(event) => event.stopPropagation()}>
       <header>
         <div><h2 id="toolbar-title">{t(locale, "toolbarTitle")}</h2><p>{t(locale, "toolbarHint")}</p></div>

@@ -12,6 +12,21 @@ export const isTauri = () => Boolean(window.__TAURI_INTERNALS__);
 
 export const isMacos = () => typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent);
 
+export type Platform = "windows" | "linux" | "macos";
+
+/** Resolves the host OS once; drives the CSS `[data-platform]` adapter. */
+export function detectPlatform(): Platform {
+  const agent = navigator.userAgent.toLowerCase();
+  if (agent.includes("windows")) return "windows";
+  if (agent.includes("linux")) return "linux";
+  return "macos";
+}
+
+/** Resolves the runtime; drives the CSS `[data-runtime]` adapter. */
+export function detectRuntime(): "tauri" | "browser" {
+  return isTauri() ? "tauri" : "browser";
+}
+
 export async function tempExportPath(extension: string): Promise<string> {
   if (!isTauri()) return "";
   return invoke<string>("temp_export_path", { extension });

@@ -20,7 +20,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
 import { useUpdater } from "./hooks/useUpdater";
 import { t } from "./lib/i18n";
-import { clearRecentFiles, discoverApplications, isMacos, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, recordRecentFile, revealInFileManager, refreshMenu, saveExportFile, setDefaultHandler, tempExportPath, writeExportBytes } from "./lib/platform";
+import { clearRecentFiles, detectPlatform, detectRuntime, discoverApplications, isMacos, isTauri, installCli, openDocumentWindow, openInApplication, readDocument, recordRecentFile, revealInFileManager, refreshMenu, saveExportFile, setDefaultHandler, tempExportPath, writeExportBytes } from "./lib/platform";
 import { editMarkdownTable } from "./lib/table";
 import { setTaskChecked } from "./lib/task";
 import { configureCrashReporting, crashReportingAvailable } from "./lib/telemetry";
@@ -36,7 +36,6 @@ const EMPTY_RENDER: RenderedMarkdown = {
 function App() {
   const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, patch } = useSettings();
   const documents = useDocument(settings.locale);
-  const { theme, setTheme: setDocumentTheme } = useTheme();
   const updater = useUpdater(settings.updateChannel);
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -70,9 +69,8 @@ function App() {
     links: (documents.document.contents.match(/(?<!!)\[[^\]]*]\([^)]+\)/g) ?? []).length,
     images: (documents.document.contents.match(/!\[[^\]]*]\([^)]+\)/g) ?? []).length,
   }), [documents.document.contents, rendered.outline.length]);
-  const resolvedTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  const resolvedTheme = useTheme(settings.theme);
 
-  useEffect(() => { setDocumentTheme(settings.theme); }, [settings.theme, setDocumentTheme]);
   useEffect(() => { void configureCrashReporting(settings.crashReports); }, [settings.crashReports]);
   useEffect(() => {
     if (!isTauri()) return;
@@ -132,9 +130,8 @@ function App() {
     return () => worker.terminate();
   }, [deferredMarkdown, settings.locale]);
   useEffect(() => {
-    const agent = navigator.userAgent.toLowerCase();
-    document.documentElement.dataset.platform = agent.includes("windows") ? "windows" : agent.includes("linux") ? "linux" : "macos";
-    document.documentElement.dataset.runtime = isTauri() ? "tauri" : "browser";
+    document.documentElement.dataset.platform = detectPlatform();
+    document.documentElement.dataset.runtime = detectRuntime();
   }, []);
   useEffect(() => {
     document.documentElement.lang = settings.locale;
@@ -330,6 +327,12 @@ function App() {
       const target = event.target as HTMLElement;
       const isTyping = target.matches("input, textarea, select, [contenteditable=true]");
       if (event.key === "Escape" && findOpen) { event.preventDefault(); setFindOpen(false); return; }
+      if (event.key === "Escape" && defaultHandlerPrompt) {
+        event.preventDefault();
+        localStorage.setItem("textmark.defaultHandlerPrompted", "1");
+        setDefaultHandlerPrompt(false);
+        return;
+      }
       if (event.altKey && !modifier && !event.shiftKey) {
         if (event.key === "ArrowUp" && viewMode === "preview") { event.preventDefault(); jumpToHeading(-1); return; }
         if (event.key === "ArrowDown" && viewMode === "preview") { event.preventDefault(); jumpToHeading(1); return; }
@@ -390,7 +393,7 @@ function App() {
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [documents, findOpen, searchCount, setZoom, settings.zoom, viewMode, activeHeading, rendered.outline]);
+  }, [documents, findOpen, defaultHandlerPrompt, searchCount, setZoom, settings.zoom, viewMode, activeHeading, rendered.outline]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => { if (documents.sessions.some((session) => session.dirty)) event.preventDefault(); };
@@ -437,7 +440,7 @@ function App() {
     <ToolbarCustomizer open={toolbarOpen} locale={settings.locale} items={settings.toolbar} displayMode={settings.toolbarDisplay} onChange={(toolbar) => patch({ toolbar })} onDisplayModeChange={(toolbarDisplay) => patch({ toolbarDisplay })} onClose={() => setToolbarOpen(false)} />
     <SettingsDialog open={settingsOpen} locale={settings.locale} crashReports={settings.crashReports} crashReportsAvailable={crashReportingAvailable} updateChannel={settings.updateChannel}
       updateStatus={updater.status} onCheckUpdate={() => void updater.checkNow()} onInstallUpdate={() => void updater.install()}
-      theme={theme} contentWidth={settings.contentWidth} editorFontSize={settings.editorFontSize} onLocaleChange={setLocale}
+      theme={settings.theme} contentWidth={settings.contentWidth} editorFontSize={settings.editorFontSize} onLocaleChange={setLocale}
       onCrashReportsChange={(crashReports) => patch({ crashReports })} onUpdateChannelChange={(updateChannel) => patch({ updateChannel })}
       onThemeChange={setTheme} onContentWidthChange={setContentWidth} onEditorFontSizeChange={setEditorFontSize} onClose={() => setSettingsOpen(false)} />
   </main>;

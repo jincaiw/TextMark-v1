@@ -252,6 +252,21 @@ describe("TextMark toolbar click matrix", () => {
     await $(".settings-dialog button[aria-label='关闭']").click();
   });
 
+  it("dialogs trap focus and close on Escape", async () => {
+    // Settings opens with focus moved inside the dialog.
+    await browser.keys([process.platform === "darwin" ? "Meta" : "Control", ","]);
+    await expect(await $(".settings-dialog")).toBeDisplayed();
+    await browser.waitUntil(async () => (await browser.execute(() => document.activeElement?.closest(".settings-dialog") != null)));
+    // Tab wraps inside the dialog, never leaving it.
+    for (let i = 0; i < 6; i += 1) {
+      await browser.keys("Tab");
+      expect(await browser.execute(() => document.activeElement?.closest(".settings-dialog") != null)).toBe(true);
+    }
+    // Escape closes the dialog.
+    await browser.keys("Escape");
+    await expect(await $(".settings-dialog")).not.toBeDisplayed();
+  });
+
   it("navigation buttons exist and reflect history state", async () => {
     await expect(await $('.history-buttons button[aria-label="Back"]')).toExist();
     await expect(await $('.history-buttons button[aria-label="Forward"]')).toExist();

@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { t } from "../lib/i18n";
+import { useDialogAccessibility } from "../hooks/useDialogAccessibility";
 import type { AppSettings, ContentWidth, Locale, ThemeMode } from "../types";
 import type { UpdateStatus } from "../hooks/useUpdater";
 
@@ -25,6 +26,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog(props: SettingsDialogProps) {
+  const backdropRef = useDialogAccessibility(props.open, props.onClose);
   if (!props.open) return null;
   const updateText = props.updateStatus.state === "checking" ? t(props.locale, "checking")
     : props.updateStatus.state === "current" ? t(props.locale, "upToDate")
@@ -32,7 +34,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         : props.updateStatus.state === "downloading" ? t(props.locale, "downloadingUpdate", { progress: props.updateStatus.progress ?? 0 })
           : props.updateStatus.state === "error" ? t(props.locale, "updateError") : "";
   return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={props.onClose}>
+    <div className="dialog-backdrop" role="presentation" onMouseDown={props.onClose} ref={backdropRef}>
       <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
         <header><h2 id="settings-title">TextMark {t(props.locale, "preferences")}</h2><button onClick={props.onClose} aria-label={t(props.locale, "close")}><X /></button></header>
         <label><span>{t(props.locale, "language")}</span><select value={props.locale} onChange={(event) => props.onLocaleChange(event.target.value as Locale)}><option value="zh-CN">{t(props.locale, "chinese")}</option><option value="en">{t(props.locale, "english")}</option></select></label>
