@@ -1,6 +1,6 @@
 [package]
 name = "textmark"
-version = "0.5.3"
+version = "0.5.4"
 description = "A fast, secure, cross-platform Markdown reader and editor"
 authors = ["TextMark contributors"]
 license = "MIT"
@@ -41,3 +41,6 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 font8x8 = "0.3"
 tauri-plugin-wdio-webdriver = { version = "1.3", optional = true }
 tauri-plugin-wdio = "1.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSUserDefaults", "NSString"] }

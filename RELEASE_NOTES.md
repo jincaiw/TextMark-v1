@@ -1,3 +1,22 @@
+# TextMark v0.5.4
+
+TextMark 0.5.4 fixes the root cause of the still-missing macOS traffic lights and dead top-area clicks, removes a startup hang, and polishes the release notes. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.5.4 根治 macOS 交通灯仍不显示与顶部点击失效问题，消除启动卡顿，并润色发布说明。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- macOS 交通灯彻底修复：根因是 `tabbingIdentifier` 启用了原生窗口标签化 —— 标签栏一旦出现过，macOS 就会持久化"显示标签栏"（`NSWindowTabbingShoudShowTabBarKey`）并在每次启动时恢复，标签栏下交通灯被抑制、工具栏顶部被覆盖。v0.5.4 移除 `tabbingIdentifier`（不再启用自动标签化），并在启动时清除历史残留的标签栏偏好。
+- 顶部按钮点击彻底修复：移除原生标签栏后不再有原生层覆盖工具栏；`data-tauri-drag-region` 仍只保留在空白弹性空间/空格项上；新增 WebDriver 顶栏点击全量矩阵（边栏/打开方式/缩放/搜索/编辑/简介/共享/更多菜单/自定义/设置/查找栏逐一断言）。
+- 启动卡顿修复：菜单初始化不再在主线程同步读取"最近使用"（Group Container 再供给期间该 I/O 可阻塞数十秒，导致窗口迟迟不出现）；改为后台线程预热缓存后回主线程重建菜单，启动零阻塞。
+- 发布说明润色：publish 作业截取本次版本段落后去除末尾分隔线。
+
+## Trust notice / 安全提示
+
+Same as v0.5.3. 同 v0.5.3。
+
+---
+
 # TextMark v0.5.3
 
 TextMark 0.5.3 restores the macOS traffic lights (red/yellow/green window controls) and native window title, fully aligns the top area with upstream Markdown Preview, fixes intermittent toolbar clicks, and makes GitHub release notes show only the current release. Default Chinese and cross-platform support are unchanged.

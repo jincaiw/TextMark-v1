@@ -4418,7 +4418,7 @@ dependencies = [
 
 [[package]]
 name = "textmark"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "atomic-write-file",
  "base64 0.22.1",
@@ -4427,6 +4427,7 @@ dependencies = [
  "image",
  "mime_guess",
  "notify",
+ "objc2-foundation",
  "percent-encoding",
  "serde",
  "serde_json",

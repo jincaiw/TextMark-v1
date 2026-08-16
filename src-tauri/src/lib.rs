@@ -11,7 +11,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Command,
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
     time::UNIX_EPOCH,
 };
 use tauri::{
@@ -226,10 +226,39 @@ fn recent_files_path() -> AppResult<PathBuf> {
     Ok(directory.join("recent.json"))
 }
 
-fn load_recent_files() -> Vec<String> {
+/// In-memory cache of the recent files list. Startup (`setup`) must not do
+/// blocking I/O on the main thread: the Group Container backing store can
+/// block for tens of seconds while macOS (re)provisions it, which previously
+/// stalled `applicationDidFinishLaunching` and kept the main window from
+/// appearing. The cache is warmed on a background thread and the menu is
+/// rebuilt once it is ready.
+static RECENT_FILES_CACHE: LazyLock<Mutex<Option<Vec<String>>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn read_recent_files_from_disk() -> Vec<String> {
     let Ok(path) = recent_files_path() else { return Vec::new() };
     let Ok(contents) = fs::read_to_string(path) else { return Vec::new() };
     serde_json::from_str::<Vec<String>>(&contents).unwrap_or_default()
+}
+
+fn recent_cache() -> std::sync::MutexGuard<'static, Option<Vec<String>>> {
+    RECENT_FILES_CACHE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn load_recent_files() -> Vec<String> {
+    if let Some(files) = recent_cache().as_ref() {
+        return files.clone();
+    }
+    let files = read_recent_files_from_disk();
+    let mut cache = recent_cache();
+    if cache.is_none() {
+        *cache = Some(files.clone());
+    }
+    files
+}
+
+fn update_recent_cache(files: Vec<String>) {
+    *recent_cache() = Some(files);
 }
 
 fn save_recent_files(files: &[String]) -> AppResult<()> {
@@ -244,12 +273,16 @@ fn record_recent_file(path: String) -> AppResult<()> {
     files.retain(|existing| existing != &path);
     files.insert(0, path);
     files.truncate(15);
-    save_recent_files(&files)
+    save_recent_files(&files)?;
+    update_recent_cache(files);
+    Ok(())
 }
 
 #[tauri::command]
 fn clear_recent_files() -> AppResult<()> {
-    save_recent_files(&[])
+    save_recent_files(&[])?;
+    update_recent_cache(Vec::new());
+    Ok(())
 }
 
 #[tauri::command]
@@ -445,7 +478,12 @@ fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
     .map_err(io_error)
 }
 
-fn build_menu(app: &tauri::AppHandle, locale: &str, state: &MenuUiState) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(
+    app: &tauri::AppHandle,
+    locale: &str,
+    state: &MenuUiState,
+    recent_files: &[String],
+) -> tauri::Result<Menu<tauri::Wry>> {
     let zh = locale == "zh-CN";
     let item = |id: &str, zh_text: &str, en_text: &str, accelerator: Option<&str>| {
         let mut builder = MenuItemBuilder::with_id(id, if zh { zh_text } else { en_text });
@@ -496,7 +534,6 @@ fn build_menu(app: &tauri::AppHandle, locale: &str, state: &MenuUiState) -> taur
     let print = item("print", "打印…", "Print…", Some("CmdOrCtrl+P"))?;
 
     // Open Recent submenu (dynamic; rebuilt by refresh_menu)
-    let recent_files = load_recent_files();
     let mut recent_builder = SubmenuBuilder::new(app, if zh { "打开最近使用" } else { "Open Recent" });
     for (index, path) in recent_files.iter().enumerate() {
         let recent_item = MenuItemBuilder::with_id(format!("recent-{index}"), path.clone()).build(app)?;
@@ -809,7 +846,7 @@ fn refresh_menu(
         },
         sidebar_visible,
     };
-    let menu = build_menu(&app, &locale, &state).map_err(io_error)?;
+    let menu = build_menu(&app, &locale, &state, &load_recent_files()).map_err(io_error)?;
     app.set_menu(menu).map_err(io_error)?;
     Ok(())
 }
@@ -1354,6 +1391,20 @@ fn set_default_handler_on_platform() -> IntegrationResult {
     IntegrationResult { ok: false, detail: None }
 }
 
+/// Removes the stale "show tab bar" preference that macOS persisted for the
+/// removed `tabbingIdentifier` (`app.textmark.desktop.documents`). AppKit
+/// remembers a once-shown native tab bar per tabbing identifier and restored
+/// it on every LaunchServices launch, hiding the traffic lights and covering
+/// the top of the toolbar. The window no longer opts into native tabbing, so
+/// the leftover key is dropped to guarantee a clean chrome on user machines.
+#[cfg(target_os = "macos")]
+fn clear_stale_tab_bar_preference() {
+    use objc2_foundation::{NSString, NSUserDefaults};
+    let defaults = NSUserDefaults::standardUserDefaults();
+    let key = NSString::from_str("NSWindowTabbingShoudShowTabBarKey-app.textmark.desktop.documents");
+    defaults.removeObjectForKey(&key);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1378,8 +1429,30 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            let menu = build_menu(app.handle(), "zh-CN", &MenuUiState::default())?;
+            // Startup must stay non-blocking: the menu is built without the
+            // recent-files list (no I/O on the main thread), and the list is
+            // loaded on a background thread and merged in when ready. This
+            // avoids stalling `applicationDidFinishLaunching` on macOS Group
+            // Container (re)provisioning, which kept the window from showing.
+            #[cfg(target_os = "macos")]
+            clear_stale_tab_bar_preference();
+            let menu = build_menu(app.handle(), "zh-CN", &MenuUiState::default(), &[])?;
             app.set_menu(menu)?;
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let recent_files = load_recent_files();
+                let app_handle = handle.clone();
+                let _ = handle.run_on_main_thread(move || {
+                    if let Ok(menu) = build_menu(
+                        &app_handle,
+                        "zh-CN",
+                        &MenuUiState::default(),
+                        &recent_files,
+                    ) {
+                        let _ = app_handle.set_menu(menu);
+                    }
+                });
+            });
             Ok(())
         })
         .on_menu_event(|app, event| {

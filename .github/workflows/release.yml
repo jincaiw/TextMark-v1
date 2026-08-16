@@ -309,7 +309,7 @@ jobs:
         run: cp RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
       - name: Prepare current-release notes only
         run: |
-          awk 'BEGIN { n = 0 } /^# TextMark v[0-9]/ { n++; if (n > 1) exit } { print }' RELEASE_NOTES.md > current-release-notes.md
+          awk 'BEGIN { n = 0 } /^# TextMark v[0-9]/ { n++; if (n > 1) exit } { print }' RELEASE_NOTES.md | sed '/^---$/,$d' > current-release-notes.md
           test -s current-release-notes.md
       - name: Create SHA-256 checksums
         working-directory: release-assets
