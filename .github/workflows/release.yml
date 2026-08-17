@@ -61,20 +61,16 @@ jobs:
   prepare:
     name: Prepare draft release
     runs-on: ubuntu-24.04
-    outputs:
-      release_id: ${{ steps.draft.outputs.release_id }}
     steps:
       - uses: actions/checkout@v6
         with: { ref: '${{ inputs.tag || github.ref }}' }
-      # Create the draft release exactly once. tauri-action's by-tag lookup does
-      # not see drafts, so every concurrent job would otherwise create its own
-      # draft; the prepare job guarantees a single draft and every uploader
-      # targets it through releaseId.
+      # Create the draft release exactly once so every uploader targets the
+      # same release (gh release upload resolves the tag to the single draft).
       - name: Ensure draft release exists
         id: draft
         run: |
           # Retry through transient GitHub API outages (HTTP 5xx/429): view
-          # first, create only when the tag has no release yet, then emit the id.
+          # first, create only when the tag has no release yet.
           for attempt in 1 2 3 4 5 6; do
             if gh release view "$RELEASE_TAG" --json databaseId >/dev/null 2>&1; then
               break
@@ -82,9 +78,7 @@ jobs:
             gh release create "$RELEASE_TAG" --draft --title "TextMark $RELEASE_TAG" --notes "See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md" >/dev/null 2>&1 || true
             sleep 15
           done
-          id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
-          test -n "$id"
-          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+          gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId >/dev/null
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -104,26 +98,33 @@ jobs:
       - run: npm run build
       - name: Build and test the native Quick Look host
         run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
+      - name: Build macOS release bundles
+        shell: bash
+        run: npm run tauri build -- --target universal-apple-darwin
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: '-'
       - name: Acquire release upload lock
         shell: bash
         run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Build and upload macOS release assets
-        uses: tauri-apps/tauri-action@v0
+      - name: Upload macOS release assets
+        shell: bash
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          for asset in "$bundle_dir"/dmg/*.dmg "$bundle_dir"/macos/*.tar.gz "$bundle_dir"/macos/*.sig; do
+            [ -f "$asset" ] || continue
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$RELEASE_TAG" "$asset" --clobber 2>/dev/null; then break; fi
+              [ "$attempt" = 5 ] && { echo "upload failed: $asset"; exit 1; }
+              sleep 20
+            done
+          done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: '-'
-        with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          releaseName: TextMark ${{ env.RELEASE_TAG }}
-          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
-          releaseDraft: true
-          prerelease: false
-          args: --target universal-apple-darwin
+          GH_TOKEN: ${{ github.token }}
       - name: Release upload lock
         if: always()
         shell: bash
@@ -136,7 +137,6 @@ jobs:
           dmg=$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
           test -n "$dmg"
           platform/macos/test-package.sh "$dmg"
-
   bundle-windows:
     name: Windows ${{ matrix.architecture }} installers + Explorer preview
     needs: [verify, prepare]
@@ -163,25 +163,12 @@ jobs:
       - name: Build and host-test the Explorer preview handler
         shell: pwsh
         run: ./platform/windows/build-preview-handler.ps1 -Architecture ${{ matrix.architecture }}
-      - name: Acquire release upload lock
+      - name: Build Windows release bundles
         shell: bash
-        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        run: npm run tauri build -- --target ${{ matrix.target }}
         env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Build and upload Windows release assets
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          releaseName: TextMark ${{ env.RELEASE_TAG }}
-          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }}
       - name: Install, preview and uninstall MSI + NSIS
         shell: pwsh
         run: |
@@ -192,6 +179,26 @@ jobs:
           if ($null -eq $msi -or $null -eq $nsis) { throw "Both MSI and NSIS installers are required." }
           ./platform/windows/test-installer.ps1 -Kind msi -Installer $msi.FullName -Architecture ${{ matrix.architecture }} -PreviewSmokeHost $smoke
           ./platform/windows/test-installer.ps1 -Kind nsis -Installer $nsis.FullName -Architecture ${{ matrix.architecture }} -PreviewSmokeHost $smoke
+      - name: Acquire release upload lock
+        shell: bash
+        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Upload Windows release assets
+        shell: bash
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          for asset in "$bundle_dir"/msi/*.msi "$bundle_dir"/msi/*.sig "$bundle_dir"/nsis/*.exe "$bundle_dir"/nsis/*.sig; do
+            [ -f "$asset" ] || continue
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$RELEASE_TAG" "$asset" --clobber 2>/dev/null; then break; fi
+              [ "$attempt" = 5 ] && { echo "upload failed: $asset"; exit 1; }
+              sleep 20
+            done
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Package and upload portable ZIP
         shell: pwsh
         run: |
@@ -251,25 +258,32 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { targets: '${{ matrix.target }}' }
       - run: npm ci --include=dev
+      - name: Build AppImage + DEB bundles
+        shell: bash
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles appimage,deb
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Acquire release upload lock
         shell: bash
         run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Build and upload AppImage + DEB assets
-        uses: tauri-apps/tauri-action@v0
+      - name: Upload AppImage + DEB assets
+        shell: bash
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          for asset in "$bundle_dir"/appimage/*.AppImage "$bundle_dir"/appimage/*.sig "$bundle_dir"/deb/*.deb "$bundle_dir"/deb/*.sig; do
+            [ -f "$asset" ] || continue
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$RELEASE_TAG" "$asset" --clobber 2>/dev/null; then break; fi
+              [ "$attempt" = 5 ] && { echo "upload failed: $asset"; exit 1; }
+              sleep 20
+            done
+          done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          releaseName: TextMark ${{ env.RELEASE_TAG }}
-          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }} --bundles appimage,deb
+          GH_TOKEN: ${{ github.token }}
       - name: Release upload lock
         if: always()
         shell: bash
@@ -285,7 +299,6 @@ jobs:
           test -n "$deb" && test -n "$appimage"
           platform/linux/test-package.sh deb "$deb"
           platform/linux/test-appimage.sh "$appimage"
-
   bundle-linux-rpm:
     name: Fedora 40 ${{ matrix.architecture }} RPM + KDE 6 preview
     needs: [verify, prepare]
@@ -334,25 +347,32 @@ jobs:
       - run: npm ci --include=dev
       - name: Build and test the KDE 6 plugin
         run: platform/linux/build-kde-plugin.sh
+      - name: Build RPM bundle
+        shell: bash
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles rpm --config src-tauri/tauri.linux-kde.conf.json
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Acquire release upload lock
         shell: bash
         run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Build and upload RPM asset
-        uses: tauri-apps/tauri-action@v0
+      - name: Upload RPM asset
+        shell: bash
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          for asset in "$bundle_dir"/rpm/*.rpm "$bundle_dir"/rpm/*.sig; do
+            [ -f "$asset" ] || continue
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$RELEASE_TAG" "$asset" --clobber 2>/dev/null; then break; fi
+              [ "$attempt" = 5 ] && { echo "upload failed: $asset"; exit 1; }
+              sleep 20
+            done
+          done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          releaseName: TextMark ${{ env.RELEASE_TAG }}
-          releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }} --bundles rpm --config src-tauri/tauri.linux-kde.conf.json
+          GH_TOKEN: ${{ github.token }}
       - name: Release upload lock
         if: always()
         shell: bash
@@ -376,6 +396,8 @@ jobs:
       - name: Download all draft release assets
         run: gh release download "$RELEASE_TAG" --dir release-assets
         env: { GH_TOKEN: '${{ github.token }}' }
+      - name: Generate signed updater metadata
+        run: node scripts/create-latest-json.mjs release-assets "$RELEASE_TAG"
       - name: Verify complete architecture/package/updater inventory
         run: node scripts/verify-release-assets.mjs release-assets "$RELEASE_TAG"
       - name: Generate source SBOM
