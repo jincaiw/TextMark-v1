@@ -74,6 +74,10 @@ jobs:
       - run: npm run build
       - name: Build and test the native Quick Look host
         run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
+      - name: Acquire release upload lock
+        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Build and upload macOS release assets
         uses: tauri-apps/tauri-action@v0
         env:
@@ -88,6 +92,11 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target universal-apple-darwin
+      - name: Release upload lock
+        if: always()
+        run: node scripts/release-lock.mjs release "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Install/mount/Quick Look registration smoke
         shell: bash
         run: |
@@ -121,6 +130,10 @@ jobs:
       - name: Build and host-test the Explorer preview handler
         shell: pwsh
         run: ./platform/windows/build-preview-handler.ps1 -Architecture ${{ matrix.architecture }}
+      - name: Acquire release upload lock
+        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Build and upload Windows release assets
         uses: tauri-apps/tauri-action@v0
         env:
@@ -168,6 +181,11 @@ jobs:
           gh release upload "${{ env.RELEASE_TAG }}" "$folder.zip" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: Release upload lock
+        if: always()
+        run: node scripts/release-lock.mjs release "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   bundle-linux-deb:
     name: Linux ${{ matrix.architecture }} AppImage + DEB
@@ -197,6 +215,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { targets: "${{ matrix.target }}" }
       - run: npm ci --include=dev
+      - name: Acquire release upload lock
+        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Build and upload AppImage + DEB assets
         uses: tauri-apps/tauri-action@v0
         env:
@@ -210,6 +232,11 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }} --bundles appimage,deb
+      - name: Release upload lock
+        if: always()
+        run: node scripts/release-lock.mjs release "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Package installation and portable-mode smoke
         shell: bash
         run: |
@@ -268,6 +295,10 @@ jobs:
       - run: npm ci --include=dev
       - name: Build and test the KDE 6 plugin
         run: platform/linux/build-kde-plugin.sh
+      - name: Acquire release upload lock
+        run: node scripts/release-lock.mjs acquire "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Build and upload RPM asset
         uses: tauri-apps/tauri-action@v0
         env:
@@ -281,6 +312,11 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }} --bundles rpm --config src-tauri/tauri.linux-kde.conf.json
+      - name: Release upload lock
+        if: always()
+        run: node scripts/release-lock.mjs release "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: RPM install/KDE thumbnail/uninstall smoke
         shell: bash
         run: |

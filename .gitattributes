@@ -1,0 +1,4 @@
+# Normalize line endings to LF so prettier/format:check behave the same
+# on every platform (GitHub Windows runners otherwise check out CRLF).
+* text=auto eol=lf
+*.cmd text eol=crlf
