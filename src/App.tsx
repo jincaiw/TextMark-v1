@@ -72,6 +72,10 @@ function App() {
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [toolbarOpen, setToolbarOpen] = useState(false)
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false)
+  // Ref keeps the keydown/menu closures reading the live value without adding
+  // alwaysOnTop to every effect dependency list.
+  const alwaysOnTopRef = useRef(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
@@ -112,8 +116,9 @@ function App() {
       contentWidth: settings.contentWidth,
       sidebarMode,
       sidebarVisible,
+      alwaysOnTop,
     })
-  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible])
+  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible, alwaysOnTop])
   useEffect(() => {
     if (!isTauri() || !documents.document.path) return
     void recordRecentFile(documents.document.path).then(() =>
@@ -123,6 +128,7 @@ function App() {
         contentWidth: settings.contentWidth,
         sidebarMode,
         sidebarVisible,
+        alwaysOnTop,
       }),
     )
   }, [documents.document.path])
@@ -203,6 +209,12 @@ function App() {
     setNotice(message)
     window.setTimeout(() => setNotice(null), 1800)
   }
+  const toggleAlwaysOnTop = () => {
+    const next = !alwaysOnTopRef.current
+    alwaysOnTopRef.current = next
+    setAlwaysOnTop(next)
+    if (isTauri()) void getCurrentWindow().setAlwaysOnTop(next)
+  }
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
@@ -275,14 +287,20 @@ function App() {
       )
   }
   const openInLlm = async (application: 'codex' | 'claude' | 'chatgpt') => {
-    const isLong = documents.document.contents.length > 12_000
-    const clipboardText = isLong
-      ? documents.document.contents
-      : `${settings.locale === 'zh-CN' ? '请审阅此 Markdown 文档' : 'Please review this Markdown document'}:\n\n${documents.document.contents}`
-    await navigator.clipboard.writeText(clipboardText)
-    const scheme = application === 'chatgpt' ? 'chatgpt://' : `${application}://`
+    const { buildLlmHandoff } = await import('./lib/llmHandoff')
+    const handoff = buildLlmHandoff({
+      target: application,
+      path: documents.document.path,
+      contents: documents.document.contents,
+      folder: documents.workspacePath,
+      name: documents.document.name,
+      locale: settings.locale,
+    })
+    localStorage.setItem('textmark.lastLlmTarget', application)
+    await navigator.clipboard.writeText(handoff.clipboard)
+    const url = handoff.url ?? (application === 'chatgpt' ? 'chatgpt://' : `${application}://`)
     try {
-      if (isTauri()) await openUrl(scheme)
+      if (isTauri()) await openUrl(url)
       else
         window.open(
           application === 'chatgpt' ? 'https://chatgpt.com' : application === 'claude' ? 'https://claude.ai' : 'https://chatgpt.com/codex',
@@ -290,7 +308,7 @@ function App() {
     } catch {
       /* app not installed; clipboard already holds the content */
     }
-    if (isLong)
+    if (handoff.long)
       flash(
         settings.locale === 'zh-CN'
           ? '文档较长，全文已拷贝，请粘贴到对话中。'
@@ -370,6 +388,7 @@ function App() {
           contentWidth: settings.contentWidth,
           sidebarMode,
           sidebarVisible,
+          alwaysOnTop,
         }),
       )
     else if (command === 'open-folder') {
@@ -399,6 +418,7 @@ function App() {
       setSidebarMode('files')
       setSidebarVisible(true)
     } else if (command === 'show-toolbar') setToolbarVisible((value) => !value)
+    else if (command === 'always-on-top') toggleAlwaysOnTop()
     else if (command === 'inspector') setInspectorVisible((value) => !value)
     else if (command === 'appearance-auto') setTheme('system')
     else if (command === 'appearance-light') setTheme('light')
@@ -548,6 +568,11 @@ function App() {
         }
         return
       }
+      if (event.ctrlKey && event.metaKey && key === 't') {
+        event.preventDefault()
+        toggleAlwaysOnTop()
+        return
+      }
       if (key === 's' && event.shiftKey) {
         event.preventDefault()
         void documents.saveAs()
@@ -667,12 +692,14 @@ function App() {
         sidebarVisible={sidebarVisible}
         sidebarMode={sidebarMode}
         inspectorVisible={inspectorVisible}
+        alwaysOnTop={alwaysOnTop}
         zoom={settings.zoom}
         searchQuery={searchQuery}
         onToggleSidebar={() => setSidebarVisible((value) => !value)}
         onSidebarModeChange={chooseSidebarMode}
         onViewModeChange={setViewMode}
         onToggleInspector={() => setInspectorVisible((value) => !value)}
+        onToggleAlwaysOnTop={toggleAlwaysOnTop}
         onZoomChange={setZoom}
         onSearchQueryChange={(value) => {
           setSearchQuery(value)
@@ -859,12 +886,17 @@ function App() {
         theme={settings.theme}
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
+        zoom={settings.zoom}
+        applications={applications}
+        defaultOpenTarget={settings.defaultOpenTarget}
         onLocaleChange={setLocale}
         onCrashReportsChange={(crashReports) => patch({ crashReports })}
         onUpdateChannelChange={(updateChannel) => patch({ updateChannel })}
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
+        onZoomChange={setZoom}
+        onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
         onClose={() => setSettingsOpen(false)}
       />
     </main>

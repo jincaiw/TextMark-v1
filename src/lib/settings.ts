@@ -9,6 +9,7 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'openInLlm',
   'zoom',
   'inspector',
+  'alwaysOnTop',
   'share',
   'edit',
   'search',

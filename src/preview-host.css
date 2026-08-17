@@ -33,13 +33,13 @@ html, body { min-height: 100%; margin: 0; background: var(--document-background)
   line-height: var(--document-line-height, 1.52);
   overflow-wrap: anywhere;
 }
-.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { margin: 1em 0 .42em; padding-top: 4px; line-height: 1.22; letter-spacing: -.018em; }
-.markdown-body h1 { font-size: 2em; }
-.markdown-body h2 { font-size: 1.88em; }
-.markdown-body h3 { font-size: 1.65em; }
-.markdown-body h4 { font-size: 1.41em; }
-.markdown-body h5 { font-size: 1.29em; }
-.markdown-body h6 { color: var(--document-secondary); font-size: 1em; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { margin: 1em 0 .42em; padding-top: 4px; line-height: 1.22; letter-spacing: -.018em; font-weight: 600; }
+.markdown-body h1 { font-size: 1.802em; font-weight: 700; }
+.markdown-body h2 { font-size: 1.602em; }
+.markdown-body h3 { font-size: 1.424em; }
+.markdown-body h4 { font-size: 1.266em; }
+.markdown-body h5 { font-size: 1.125em; }
+.markdown-body h6 { font-size: 1em; }
 .markdown-body p { margin: .72em 0; }
 .markdown-body a { color: var(--document-link); text-decoration: none; }
 .markdown-body a:hover { text-decoration: underline; }
@@ -47,6 +47,18 @@ html, body { min-height: 100%; margin: 0; background: var(--document-background)
 .markdown-body blockquote { margin: 1.1em 0; padding: .45em 1em; border-left: 3px solid var(--document-grid); color: var(--document-secondary); }
 .markdown-body ul, .markdown-body ol { padding-left: 1.65em; }
 .markdown-body li + li { margin-top: .23em; }
+.markdown-body ul > li { position: relative; }
+.markdown-body ul > li::marker { color: transparent; }
+.markdown-body ul > li:not(.task-list-item)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1.2em;
+  top: .56em;
+  width: 0;
+  height: 0;
+  border: .2em solid var(--document-text);
+  border-radius: 50%;
+}
 .markdown-body code { padding: .15em .35em; border-radius: 5px; background: var(--document-fill); font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .88em; }
 .markdown-body pre { position: relative; margin: 1em 0; padding: 16px 18px; overflow: auto; border-radius: 8px; background: var(--document-fill); white-space: pre-wrap; word-break: break-word; }
 .markdown-body pre code { padding: 0; background: transparent; }
@@ -60,6 +72,7 @@ html, body { min-height: 100%; margin: 0; background: var(--document-background)
 .markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; }
 .markdown-body .task-list-item { list-style: none; }
 .markdown-body .task-list-item-checkbox { margin-left: -1.35em; margin-right: .45em; }
+.markdown-body li.task-list-item:has(input.task-list-item-checkbox:checked) { color: var(--document-secondary); text-decoration: line-through; }
 .table-of-contents, .md-frontmatter { margin: 1em 0 1.6em; padding: 12px 16px; border-radius: 8px; background: var(--document-fill); }
 .table-of-contents ol { margin: 0; padding-left: 1.4em; }
 .md-frontmatter table { margin: 0; }

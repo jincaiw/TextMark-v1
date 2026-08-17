@@ -8,6 +8,7 @@ import {
   GripVertical,
   Info,
   PanelLeft,
+  Pin,
   Printer,
   RotateCcw,
   Search,
@@ -29,6 +30,7 @@ const AVAILABLE: ToolbarItem[] = [
   'openInLlm',
   'zoom',
   'inspector',
+  'alwaysOnTop',
   'share',
   'edit',
   'search',
@@ -48,6 +50,7 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   openInLlm: 'openInLlm',
   zoom: 'zoom',
   inspector: 'inspector',
+  alwaysOnTop: 'alwaysOnTop',
   share: 'share',
   edit: 'edit',
   search: 'searchItem',
@@ -74,6 +77,8 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
       return <ZoomIn />
     case 'inspector':
       return <Info />
+    case 'alwaysOnTop':
+      return <Pin />
     case 'share':
       return <Share />
     case 'edit':

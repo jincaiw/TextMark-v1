@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
-import type { AppSettings, ContentWidth, Locale, ThemeMode } from '../types'
+import type { AppSettings, ContentWidth, ExternalApplication, Locale, ThemeMode } from '../types'
 import type { UpdateStatus } from '../hooks/useUpdater'
 
 interface SettingsDialogProps {
@@ -9,6 +9,9 @@ interface SettingsDialogProps {
   theme: ThemeMode
   contentWidth: ContentWidth
   editorFontSize: number
+  zoom: number
+  applications: ExternalApplication[]
+  defaultOpenTarget: string
   locale: Locale
   crashReports: boolean
   crashReportsAvailable: boolean
@@ -22,6 +25,8 @@ interface SettingsDialogProps {
   onThemeChange: (theme: ThemeMode) => void
   onContentWidthChange: (width: ContentWidth) => void
   onEditorFontSizeChange: (size: number) => void
+  onZoomChange: (zoom: number) => void
+  onDefaultOpenTargetChange: (target: string) => void
   onClose: () => void
 }
 
@@ -78,6 +83,19 @@ export function SettingsDialog(props: SettingsDialogProps) {
           </select>
         </label>
         <label>
+          <span>{t(props.locale, 'defaultOpenTarget')}</span>
+          <select value={props.defaultOpenTarget} onChange={(event) => props.onDefaultOpenTargetChange(event.target.value)}>
+            <option value="system">{t(props.locale, 'systemDefault')}</option>
+            {props.applications
+              .filter((application) => application.kind !== 'llm' && application.available && application.id !== 'system')
+              .map((application) => (
+                <option key={application.id} value={application.id}>
+                  {application.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
           <span>{t(props.locale, 'editorFontSize')}</span>
           <div className="setting-range">
             <input
@@ -88,6 +106,31 @@ export function SettingsDialog(props: SettingsDialogProps) {
               onChange={(event) => props.onEditorFontSizeChange(Number(event.target.value))}
             />
             <output>{props.editorFontSize}px</output>
+          </div>
+        </label>
+        <label>
+          <span>{t(props.locale, 'textSize')}</span>
+          <div className="settings-text-size">
+            {(
+              [
+                { stop: 90, key: 'textSizeSmall', sample: 10 },
+                { stop: 100, key: 'textSizeMedium', sample: 12 },
+                { stop: 125, key: 'textSizeLarge', sample: 15 },
+              ] as const
+            ).map(({ stop, key, sample }) => (
+              <button
+                key={key}
+                type="button"
+                className={props.zoom === stop ? 'selected' : ''}
+                aria-pressed={props.zoom === stop}
+                onClick={() => props.onZoomChange(stop)}
+              >
+                <span className="settings-text-size-sample" style={{ fontSize: sample }}>
+                  Aa
+                </span>
+                {t(props.locale, key)}
+              </button>
+            ))}
           </div>
         </label>
         <label>

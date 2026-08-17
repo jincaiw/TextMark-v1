@@ -162,6 +162,7 @@ export type ToolbarItem =
   | 'openInLlm'
   | 'zoom'
   | 'inspector'
+  | 'alwaysOnTop'
   | 'share'
   | 'edit'
   | 'search'

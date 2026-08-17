@@ -14,6 +14,7 @@ import {
   Minus,
   MoreHorizontal,
   PanelLeft,
+  Pin,
   Plus,
   Printer,
   Save,
@@ -35,6 +36,7 @@ interface ToolbarProps {
   sidebarVisible: boolean
   sidebarMode: SidebarMode
   inspectorVisible: boolean
+  alwaysOnTop: boolean
   zoom: number
   searchQuery: string
   locale: Locale
@@ -50,6 +52,7 @@ interface ToolbarProps {
   onSidebarModeChange: (mode: SidebarMode) => void
   onViewModeChange: (mode: ViewMode) => void
   onToggleInspector: () => void
+  onToggleAlwaysOnTop: () => void
   onZoomChange: (zoom: number) => void
   onSearchQueryChange: (value: string) => void
   onSearchOpen: () => void
@@ -74,6 +77,7 @@ const SIMPLE_ACTIONS: Partial<
   Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; action: (p: ToolbarProps) => void }>
 > = {
   inspector: { title: 'getInfo', icon: <Info />, action: (p) => p.onToggleInspector() },
+  alwaysOnTop: { title: 'alwaysOnTop', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
   share: { title: 'shareSource', icon: <Share />, action: (p) => p.onShare() },
   edit: { title: 'toggleEdit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
   print: { title: 'printItem', icon: <Printer />, action: (p) => p.onPrint() },
@@ -96,6 +100,7 @@ export function Toolbar(props: ToolbarProps) {
     else void window.toggleMaximize()
   }
 
+  const lastLlmTarget = typeof localStorage !== 'undefined' ? localStorage.getItem('textmark.lastLlmTarget') : null
   const editorApps = props.applications.filter((application) => application.kind !== 'llm' && application.available)
   const llmApps = props.applications.filter((application) => application.kind === 'llm')
 
@@ -120,6 +125,7 @@ export function Toolbar(props: ToolbarProps) {
     >
       <Sparkles />
       {application.name}
+      {application.id === lastLlmTarget ? <Check className="check" /> : null}
     </button>
   ))
   const emptyAppItem = () => (
@@ -283,7 +289,10 @@ export function Toolbar(props: ToolbarProps) {
       )
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
-      const active = (item === 'inspector' && props.inspectorVisible) || (item === 'edit' && props.viewMode === 'edit')
+      const active =
+        (item === 'inspector' && props.inspectorVisible) ||
+        (item === 'edit' && props.viewMode === 'edit') ||
+        (item === 'alwaysOnTop' && props.alwaysOnTop)
       return slot(
         <button
           className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''} ${item === 'edit' && active ? 'edit-active' : ''}`}

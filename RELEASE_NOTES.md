@@ -1,3 +1,24 @@
+# TextMark v0.6.0
+
+TextMark 0.6.0 aligns with the latest Markdown Preview `main` (v0.0.48/v0.0.49): Always on Top keeps the window in front (⌃⌘T on macOS or the toolbar pin), Open in LLM hands the document to Codex/Claude with file and folder context through their deep links (with a copy-and-open fallback for long documents), Settings gains a preview text-size (Aa) picker and a default Open With target, and Mermaid popup windows are titled from the nearest heading. Typography follows the upstream minor-third heading scale (only H1 is weight 700), completed tasks render struck through and muted, and list bullets are drawn as larger circles. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.6.0 对齐最新 Markdown Preview `main`（v0.0.48/v0.0.49）：Always on Top 让预览窗口置顶（macOS ⌃⌘T 或工具栏图钉）；在 LLM 中打开改为通过深链接把文件与文件夹上下文交给 Codex/Claude（长文档自动回退「拷贝全文+打开」）；设置新增预览文字大小（Aa）与默认打开方式；Mermaid 独立窗口标题跟随最近标题。排版采用上游小三度标题音阶（仅 H1 为 700 字重），已完成任务显示删除线与弱化，列表圆点放大为圆环。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- Always on Top（对齐上游 0.0.48）：View 菜单「窗口置顶」+ macOS ⌃⌘T 加速键 + 菜单勾选状态实时同步；工具栏新增可自定义置顶项（图钉图标、激活态）；会话级不持久化，与上游一致。
+- Open in LLM 深链接与上下文（对齐上游 0.0.49）：Codex 使用 `codex://new?prompt=<路径提示词>&path=<文件夹>`；Claude 使用 `claude://code/new?q=<内嵌文档>&folder=<文件夹>`（≤12,000 字符，超长自动回退「拷贝全文+打开」）；未保存文档安全回退；ChatGPT 维持原行为（上游为 macOS 专有事件，跨平台不可复刻）；工具栏 LLM 菜单记忆并勾选上次选择。
+- 设置窗口：新增预览文字大小 Aa 三档（小 90 / 中 100 / 大 125，映射既有缩放档位，非档位时不显示选中）；新增「默认打开方式」下拉（列出已安装编辑器，写入 `defaultOpenTarget`）。
+- Mermaid 独立窗口：标题跟随文档中最近的标题（清洗/截断 120 字符），无标题时回退「图表窗口 / Diagram Window」。
+- 排版对齐上游 0.0.48：六档标题改用小三度音阶（1.802/1.602/1.424/1.266/1.125/1em），仅 H1 使用 700 字重、其余 600，h6 移除次要色；已完成任务 `- [x]` 勾选后即时删除线+弱化（`:has`）；列表圆点放大为 0.2em 圆环（透明 marker + `::before`，兼容 RTL）。
+- 新增 8 项单元测试（LLM 深链接构造/边界/回退 7 项 + 设置归一化 1 项），全部 191 项测试通过；`cargo clippy -D warnings` 通过。
+
+## Trust notice / 安全提示
+
+Same as v0.5.6. 同 v0.5.6。
+
+---
+
 # TextMark v0.5.6
 
 TextMark 0.5.6 ships the full desktop UI audit: a complete design-token system, dialog accessibility (Escape close, focus trap), a single theme source of truth, a centralized platform adapter, and an ESLint/Prettier toolchain enforced in CI. Cross-platform window-control layout is verified automatically (unit + WebDriver platform-adapter tests) without needing physical Windows/Linux machines. Default Chinese and cross-platform support are unchanged.

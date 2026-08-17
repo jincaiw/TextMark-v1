@@ -173,6 +173,15 @@ const zh = {
   installUpdate: '安装并重启',
   updateError: '检查更新失败',
   downloadingUpdate: '正在下载 {progress}%',
+  alwaysOnTop: '窗口置顶',
+  textSize: '预览文字大小',
+  textSizeSmall: '小',
+  textSizeMedium: '中',
+  textSizeLarge: '大',
+  defaultOpenTarget: '默认打开方式',
+  llmCodexPrompt: '请打开此 Markdown 文件并将其作为工作上下文：\n{path}',
+  llmClaudePrompt:
+    '请将此 Markdown 文档作为工作上下文。\n\n本地路径仅供参考，请勿依赖打开文件来读取文档内容。\n\n文件名：{name}\n本地路径：{path}\n\nMarkdown 内容：\n````markdown\n{contents}\n````',
 } as const
 
 const en: Record<keyof typeof zh, string> = {
@@ -347,6 +356,15 @@ const en: Record<keyof typeof zh, string> = {
   installUpdate: 'Install and Restart',
   updateError: 'Update check failed',
   downloadingUpdate: 'Downloading {progress}%',
+  alwaysOnTop: 'Always on Top',
+  textSize: 'Text Size',
+  textSizeSmall: 'Small',
+  textSizeMedium: 'Medium',
+  textSizeLarge: 'Large',
+  defaultOpenTarget: 'Default Open Target',
+  llmCodexPrompt: 'Open this Markdown file and use it as the working context:\n{path}',
+  llmClaudePrompt:
+    'Use this Markdown document as the working context.\n\nThe local path is included only as a reference. Do not rely on opening it to read the document contents.\n\nFile name: {name}\nLocal path: {path}\n\nMarkdown content:\n````markdown\n{contents}\n````',
 }
 
 const dictionary = { 'zh-CN': zh, en } as const

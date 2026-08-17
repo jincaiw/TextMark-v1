@@ -202,7 +202,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       const id = `diagram-${Date.now()}-${Math.random().toString(36).slice(2)}`
       localStorage.setItem(`textmark.${id}`, source)
       try {
-        await invoke('open_mermaid_window', { id, locale: props.locale })
+        await invoke('open_mermaid_window', { id, locale: props.locale, title: nearestHeadingText(figure) })
       } catch {
         localStorage.removeItem(`textmark.${id}`)
         setDiagram(figure.innerHTML)
@@ -210,6 +210,17 @@ export function PreviewPane(props: PreviewPaneProps) {
       return
     }
     setDiagram(sourceNode?.innerHTML ?? figure.innerHTML)
+  }
+  const nearestHeadingText = (figure: HTMLElement): string => {
+    // The popup window is titled from the nearest preceding heading, matching
+    // the upstream "open diagram in a separate window" behavior.
+    const headings = Array.from(containerRef.current?.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]') ?? [])
+    let text = ''
+    for (const heading of headings) {
+      if (heading.compareDocumentPosition(figure) & Node.DOCUMENT_POSITION_FOLLOWING) text = heading.textContent?.trim() ?? ''
+      else break
+    }
+    return text
   }
 
   useLayoutEffect(() => {

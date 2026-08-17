@@ -159,6 +159,7 @@ struct MenuUiState {
     content_width: &'static str, // "normal" | "full"
     sidebar_mode: &'static str,  // "outline" | "files"
     sidebar_visible: bool,
+    always_on_top: bool,
 }
 
 #[derive(Serialize)]
@@ -638,6 +639,20 @@ fn build_menu(
         "Customize Toolbar…",
         None,
     )?;
+    // Upstream (markdown-preview) keeps the preview window in front; the
+    // setting applies to the current window and is not persisted. ⌃⌘T is
+    // macOS-only so it does not collide with the New Tab shortcut.
+    let always_on_top = state_item(
+        "always-on-top",
+        state.always_on_top,
+        "窗口置顶",
+        "Always on Top",
+        if cfg!(target_os = "macos") {
+            Some("CmdOrCtrl+Control+T")
+        } else {
+            None
+        },
+    )?;
 
     let appearance_auto = state_item("appearance-auto", state.appearance == "system", "自动", "Automatic", None)?;
     let appearance_light = state_item("appearance-light", state.appearance == "light", "浅色", "Light", None)?;
@@ -663,6 +678,8 @@ fn build_menu(
         .item(&inspector)
         .separator()
         .items(&[&zoom_in, &zoom_out, &zoom_reset])
+        .separator()
+        .item(&always_on_top)
         .separator()
         .item(&edit_mode);
     #[cfg(target_os = "macos")]
@@ -829,6 +846,7 @@ fn refresh_menu(
     content_width: String,
     sidebar_mode: String,
     sidebar_visible: bool,
+    always_on_top: bool,
 ) -> AppResult<()> {
     let state = MenuUiState {
         appearance: match appearance.as_str() {
@@ -845,6 +863,7 @@ fn refresh_menu(
             _ => "outline",
         },
         sidebar_visible,
+        always_on_top,
     };
     let menu = build_menu(&app, &locale, &state, &load_recent_files()).map_err(io_error)?;
     app.set_menu(menu).map_err(io_error)?;
@@ -1281,7 +1300,12 @@ async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppRe
 }
 
 #[tauri::command]
-fn open_mermaid_window(app: tauri::AppHandle, id: String, locale: String) -> AppResult<()> {
+fn open_mermaid_window(
+    app: tauri::AppHandle,
+    id: String,
+    locale: String,
+    title: Option<String>,
+) -> AppResult<()> {
     if !id.starts_with("diagram-")
         || !id
             .chars()
@@ -1295,16 +1319,31 @@ fn open_mermaid_window(app: tauri::AppHandle, id: String, locale: String) -> App
         "mermaid.html?id={id}&locale={}",
         if locale == "en" { "en" } else { "zh-CN" }
     );
+    // Title the popup from the nearest heading in the document; fall back to
+    // the localized default when the caller provides no usable text.
+    let window_title = title
+        .map(|value| {
+            value
+                .chars()
+                .filter(|character| !character.is_control())
+                .take(120)
+                .collect::<String>()
+        })
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| {
+            if locale == "zh-CN" {
+                "图表窗口".to_string()
+            } else {
+                "Diagram Window".to_string()
+            }
+        });
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let window_handle = handle.clone();
         let _ = handle.run_on_main_thread(move || {
             let _ = WebviewWindowBuilder::new(&window_handle, id, WebviewUrl::App(url.into()))
-                .title(if locale == "zh-CN" {
-                    "图表窗口"
-                } else {
-                    "Diagram Window"
-                })
+                .title(window_title)
                 .inner_size(980.0, 720.0)
                 .min_inner_size(520.0, 360.0)
                 .center()

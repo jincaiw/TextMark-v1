@@ -293,11 +293,11 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .markdown-body.content-full { width: 100%; padding-inline: 40px; }
 .markdown-body > *:first-child { margin-top: 0 !important; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { scroll-margin-top: 24px; margin: 1.6em 0 0; color: var(--document-text); font-weight: 600; line-height: 1.18; }
-.markdown-body h1 { margin-top: .8em; font-size: 2em; }
-.markdown-body h2 { font-size: 1.88em; line-height: 1.06; }
-.markdown-body h3 { font-size: 1.65em; line-height: 1.07; }
-.markdown-body h4 { font-size: 1.41em; line-height: 1.08; }
-.markdown-body h5 { font-size: 1.29em; line-height: 1.09; }
+.markdown-body h1 { margin-top: .8em; font-size: 1.802em; font-weight: 700; }
+.markdown-body h2 { font-size: 1.602em; line-height: 1.06; }
+.markdown-body h3 { font-size: 1.424em; line-height: 1.07; }
+.markdown-body h4 { font-size: 1.266em; line-height: 1.08; }
+.markdown-body h5 { font-size: 1.125em; line-height: 1.09; }
 .markdown-body h6 { font-size: 1em; line-height: 1.24; }
 .markdown-body .md-source-blank-line { height: var(--document-source-line-height, 22.8px); }
 .markdown-body .md-inline-tab { white-space: pre; tab-size: 4; }
@@ -306,6 +306,18 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .markdown-body ul, .markdown-body ol { margin: 12px 0 0; padding-left: 1.6em; }
 .markdown-body li { margin-top: 6px; }
 .markdown-body li:first-child { margin-top: 0; }
+.markdown-body ul > li { position: relative; }
+.markdown-body ul > li::marker { color: transparent; }
+.markdown-body ul > li:not(.task-list-item)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1.2em;
+  top: .56em;
+  width: 0;
+  height: 0;
+  border: .2em solid var(--document-text);
+  border-radius: 50%;
+}
 .markdown-body a { color: var(--document-link); text-decoration: none; }
 .markdown-body a:hover { text-decoration: underline; }
 .markdown-body hr { height: 1px; margin: 35.25px 0; border: 0; background: var(--document-grid); }
@@ -337,6 +349,7 @@ pre:hover .copy-code-button { opacity: 1; }
 .markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; }
 .markdown-body .task-list-item { list-style: none; }
 .markdown-body .task-list-item-checkbox { width: 16px; height: 16px; margin: 0 .55em 0 -1.4em; accent-color: var(--accent); vertical-align: -2px; cursor: pointer; }
+.markdown-body li.task-list-item:has(input.task-list-item-checkbox:checked) { color: var(--document-secondary); text-decoration: line-through; }
 .markdown-body .footnotes { margin-top: 2.35em; padding-top: 1em; border-top: 1px solid var(--document-grid); font-size: .9em; }
 .table-of-contents { margin: 1em 0 2em; padding: 16px 20px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--muted) 7%, transparent); }
 .table-of-contents ol { margin: 0; padding-left: 18px; }
@@ -403,6 +416,23 @@ mark.search-match.active { outline: 2px solid var(--search-match-active-ring); b
 .settings-dialog header svg { width: 16px; }
 .settings-dialog label { min-height: 58px; display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); font-size: var(--text-md); }
 .settings-update { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: var(--text-xs); }
+.settings-text-size { display: flex; gap: 8px; }
+.settings-text-size button {
+  height: var(--control-h-lg);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.settings-text-size button:hover { background: var(--hover); }
+.settings-text-size button.selected { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.settings-text-size-sample { line-height: 1; }
 .settings-update button { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); cursor: pointer; }
 .settings-update button:disabled { opacity: .5; cursor: default; }
 .settings-dialog select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); }

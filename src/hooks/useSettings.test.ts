@@ -52,6 +52,8 @@ describe('settings migration', () => {
     ]))
   it('migrates the toolbar display mode', () =>
     expect(normalizeSettings({ toolbarDisplay: 'iconAndLabel' }).toolbarDisplay).toBe('iconAndLabel'))
+  it('accepts the alwaysOnTop toolbar item and removes unknown entries', () =>
+    expect(normalizeSettings({ toolbar: ['alwaysOnTop', 'bogus', 'zoom'] }).toolbar).toEqual(['alwaysOnTop', 'zoom']))
   it('never enables crash reporting from a truthy non-boolean', () => {
     expect(normalizeSettings({ crashReports: 'yes' }).crashReports).toBe(false)
     expect(normalizeSettings({ crashReports: true }).crashReports).toBe(true)

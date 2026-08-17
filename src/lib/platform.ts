@@ -89,6 +89,7 @@ export async function refreshMenu(state: {
   contentWidth: string
   sidebarMode: string
   sidebarVisible: boolean
+  alwaysOnTop: boolean
 }): Promise<void> {
   if (!isTauri()) return
   await invoke('refresh_menu', {
@@ -97,6 +98,7 @@ export async function refreshMenu(state: {
     contentWidth: state.contentWidth,
     sidebarMode: state.sidebarMode,
     sidebarVisible: state.sidebarVisible,
+    alwaysOnTop: state.alwaysOnTop,
   })
 }
 
