@@ -58,9 +58,31 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 
+  prepare:
+    name: Prepare draft release
+    runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v6
+        with: { ref: "${{ inputs.tag || github.ref }}" }
+      # Create the draft release exactly once. tauri-action's by-tag lookup does
+      # not see drafts, so every concurrent job would otherwise create its own
+      # draft; the prepare job guarantees a single draft and every uploader
+      # targets it through releaseId.
+      - name: Ensure draft release exists
+        id: draft
+        run: |
+          if ! gh release view "$RELEASE_TAG" --json databaseId >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --title "TextMark $RELEASE_TAG" --notes "See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md"
+          fi
+          echo "release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   bundle-macos:
     name: macOS Universal 2 + Quick Look
-    needs: verify
+    needs: [verify, prepare]
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
@@ -87,6 +109,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: ${{ env.RELEASE_TAG }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseName: TextMark ${{ env.RELEASE_TAG }}
           releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
           releaseDraft: true
@@ -106,7 +129,7 @@ jobs:
 
   bundle-windows:
     name: Windows ${{ matrix.architecture }} installers + Explorer preview
-    needs: verify
+    needs: [verify, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -142,6 +165,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.RELEASE_TAG }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseName: TextMark ${{ env.RELEASE_TAG }}
           releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
           releaseDraft: true
@@ -189,7 +213,7 @@ jobs:
 
   bundle-linux-deb:
     name: Linux ${{ matrix.architecture }} AppImage + DEB
-    needs: verify
+    needs: [verify, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -227,6 +251,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.RELEASE_TAG }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseName: TextMark ${{ env.RELEASE_TAG }}
           releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
           releaseDraft: true
@@ -249,7 +274,7 @@ jobs:
 
   bundle-linux-rpm:
     name: Fedora 40 ${{ matrix.architecture }} RPM + KDE 6 preview
-    needs: verify
+    needs: [verify, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -307,6 +332,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.RELEASE_TAG }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseName: TextMark ${{ env.RELEASE_TAG }}
           releaseBody: See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md
           releaseDraft: true
