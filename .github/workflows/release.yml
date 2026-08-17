@@ -73,10 +73,18 @@ jobs:
       - name: Ensure draft release exists
         id: draft
         run: |
-          if ! gh release view "$RELEASE_TAG" --json databaseId >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --draft --title "TextMark $RELEASE_TAG" --notes "See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md"
-          fi
-          echo "release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
+          # Retry through transient GitHub API outages (HTTP 5xx/429): view
+          # first, create only when the tag has no release yet, then emit the id.
+          for attempt in 1 2 3 4 5 6; do
+            if gh release view "$RELEASE_TAG" --json databaseId >/dev/null 2>&1; then
+              break
+            fi
+            gh release create "$RELEASE_TAG" --draft --title "TextMark $RELEASE_TAG" --notes "See RELEASE_NOTES.md / 发布说明见 RELEASE_NOTES.md" >/dev/null 2>&1 || true
+            sleep 15
+          done
+          id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
+          test -n "$id"
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 

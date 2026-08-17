@@ -35,43 +35,67 @@ if (!repoName) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function api(path, options = {}) {
-  const response = await fetch(`https://api.github.com${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...options.headers,
-    },
-    body: options.body,
-  })
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} ${response.statusText} for ${path}`)
+  let lastError
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.github.com${path}`, {
+        method: options.method ?? 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...options.headers,
+        },
+        body: options.body,
+      })
+      if (!response.ok) {
+        if (response.status < 500 && response.status !== 429) {
+          throw new Error(`HTTP ${response.status} ${response.statusText} for ${path}`)
+        }
+        throw new Error(`HTTP ${response.status} for ${path}`)
+      }
+      const text = await response.text()
+      return text ? JSON.parse(text) : null
+    } catch (error) {
+      lastError = error
+      if (error.message.includes('HTTP 4')) throw error
+      await sleep(5_000 * (attempt + 1))
+    }
   }
-  const text = await response.text()
-  return text ? JSON.parse(text) : null
+  throw lastError ?? new Error(`Request failed for ${path}`)
 }
 
 async function releaseId(tag) {
   // The REST releases list endpoint does not return this repository's drafts,
   // so resolve through GraphQL (gh release view uses the same path).
-  const response = await fetch('https://api.github.com/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query:
-        'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { releases(first: 50, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { databaseId tagName } } } }',
-      variables: { owner: repoName.split('/')[0], name: repoName.split('/')[1] },
-    }),
-  })
-  const payload = await response.json()
-  const nodes = payload?.data?.repository?.releases?.nodes ?? []
-  const match = nodes.find((release) => release.tagName === tag)
-  if (!match) throw new Error(`Cannot resolve release ${tag}`)
-  return match.databaseId
+  let lastError
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch('https://api.github.com/graphql', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query:
+            'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { releases(first: 50, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { databaseId tagName } } } }',
+          variables: { owner: repoName.split('/')[0], name: repoName.split('/')[1] },
+        }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status} for GraphQL`)
+      const payload = await response.json()
+      const nodes = payload?.data?.repository?.releases?.nodes ?? []
+      const match = nodes.find((release) => release.tagName === tag)
+      if (!match) throw new Error(`Cannot resolve release ${tag}`)
+      return match.databaseId
+    } catch (error) {
+      lastError = error
+      if (error.message.includes('Cannot resolve')) throw error
+      await sleep(5_000 * (attempt + 1))
+    }
+  }
+  throw lastError ?? new Error(`Cannot resolve release ${tag}`)
 }
 
 async function listAssets(tag) {
@@ -90,19 +114,33 @@ async function deleteAsset(id) {
 async function createLock(tag) {
   // Asset uploads go to the uploads.github.com host, not api.github.com.
   const id = await releaseId(tag)
-  const response = await fetch(`https://uploads.github.com/repos/${repoName}/releases/${id}/assets?name=${lockName}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/octet-stream',
-    },
-    body: new Date().toISOString(),
-  })
-  if (!response.ok) {
-    if (response.status === 422) throw new Error('LOCK_TAKEN')
-    throw new Error(`HTTP ${response.status} ${response.statusText} for asset upload`)
+  let lastError
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(`https://uploads.github.com/repos/${repoName}/releases/${id}/assets?name=${lockName}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/octet-stream',
+        },
+        body: new Date().toISOString(),
+      })
+      if (!response.ok) {
+        if (response.status === 422) throw new Error('LOCK_TAKEN')
+        if (response.status < 500 && response.status !== 429) {
+          throw new Error(`HTTP ${response.status} ${response.statusText} for asset upload`)
+        }
+        throw new Error(`HTTP ${response.status} for asset upload`)
+      }
+      return
+    } catch (error) {
+      lastError = error
+      if (error.message.includes('LOCK_TAKEN') || error.message.includes('HTTP 4')) throw error
+      await sleep(5_000 * (attempt + 1))
+    }
   }
+  throw lastError ?? new Error('asset upload failed')
 }
 
 async function acquire(tag) {
