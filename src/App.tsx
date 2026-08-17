@@ -19,6 +19,7 @@ import { useDocument } from './hooks/useDocument'
 import { useSettings } from './hooks/useSettings'
 import { useTheme } from './hooks/useTheme'
 import { useUpdater } from './hooks/useUpdater'
+import { clampScrollFraction } from './lib/scrollFraction'
 import { t } from './lib/i18n'
 import {
   clearRecentFiles,
@@ -79,6 +80,7 @@ function App() {
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
   const [searchCount, setSearchCount] = useState(0)
@@ -215,6 +217,22 @@ function App() {
     setAlwaysOnTop(next)
     if (isTauri()) void getCurrentWindow().setAlwaysOnTop(next)
   }
+  const previewFraction = () => {
+    const pane = document.querySelector<HTMLElement>('.preview-pane')
+    if (!pane || pane.scrollHeight <= pane.clientHeight) return 0
+    return clampScrollFraction(pane.scrollTop / (pane.scrollHeight - pane.clientHeight))
+  }
+  // Hand the reading position between the preview and the editor on mode
+  // switches (upstream restores the exact scroll anchor across the crossfade).
+  const switchViewMode = (mode: ViewMode) => {
+    if (mode === viewMode) return
+    if (mode === 'edit') setPendingScrollFraction(previewFraction())
+    else setPendingScrollFraction(editorRef.current?.getScrollFraction() ?? 0)
+    setViewMode(mode)
+  }
+  useEffect(() => {
+    if (pendingScrollFraction != null) setPendingScrollFraction(null)
+  }, [pendingScrollFraction])
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
@@ -408,7 +426,7 @@ function App() {
     else if (command === 'find') setFindOpen(true)
     else if (command === 'find-next') nextMatch(1)
     else if (command === 'find-prev') nextMatch(-1)
-    else if (command === 'edit-mode') setViewMode((mode) => (mode === 'edit' ? 'preview' : 'edit'))
+    else if (command === 'edit-mode') switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
     else if (command === 'sidebar') setSidebarVisible((value) => !value)
     else if (command === 'sidebar-hide') setSidebarVisible(false)
     else if (command === 'sidebar-outline') {
@@ -461,7 +479,7 @@ function App() {
   }
   const format = (command: FormatCommand) => {
     setPendingFormat(command)
-    setViewMode('edit')
+    switchViewMode('edit')
   }
   const nextMatch = (direction: 1 | -1) =>
     setSearchIndex((current) => (searchCount ? (current + direction + searchCount) % searchCount : 0))
@@ -589,7 +607,7 @@ function App() {
         void documents.openFile()
       } else if (key === 'e') {
         event.preventDefault()
-        setViewMode((mode) => (mode === 'edit' ? 'preview' : 'edit'))
+        switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
       } else if (key === 'l' && event.shiftKey) {
         event.preventDefault()
         format('taskList')
@@ -697,7 +715,7 @@ function App() {
         searchQuery={searchQuery}
         onToggleSidebar={() => setSidebarVisible((value) => !value)}
         onSidebarModeChange={chooseSidebarMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={switchViewMode}
         onToggleInspector={() => setInspectorVisible((value) => !value)}
         onToggleAlwaysOnTop={toggleAlwaysOnTop}
         onZoomChange={setZoom}
@@ -727,7 +745,6 @@ function App() {
         onSettings={() => setSettingsOpen(true)}
         onCustomizeToolbar={() => setToolbarOpen(true)}
       />
-      {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
       {findOpen ? (
         <FindBar
           locale={settings.locale}
@@ -781,6 +798,7 @@ function App() {
             />
           ) : null}
           <div className="document-workspace">
+            {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
             {viewMode === 'edit' ? (
               <Suspense fallback={<div className="editor-loading" />}>
                 <EditorPane
@@ -790,6 +808,7 @@ function App() {
                   fontSize={settings.editorFontSize}
                   zoom={settings.zoom}
                   contentWidth={settings.contentWidth}
+                  initialScrollFraction={pendingScrollFraction ?? undefined}
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
                   onChange={documents.updateContents}
@@ -802,6 +821,7 @@ function App() {
                 rendered={rendered}
                 documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
                 initialScrollTop={documents.document.scrollTop}
+                initialScrollFraction={pendingScrollFraction ?? undefined}
                 baseDirectory={documents.baseDirectory}
                 workspacePath={documents.workspacePath}
                 zoom={settings.zoom}

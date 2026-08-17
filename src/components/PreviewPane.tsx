@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { isTauri, loadLocalAsset } from '../lib/platform'
 import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
+import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
@@ -14,6 +15,8 @@ interface PreviewPaneProps {
   rendered: RenderedMarkdown
   documentKey: string
   initialScrollTop: number
+  /** Scroll fraction (0–1) handed over from the editor when leaving edit mode. */
+  initialScrollFraction?: number
   baseDirectory: string | null
   workspacePath: string | null
   zoom: number
@@ -113,6 +116,12 @@ export function PreviewPane(props: PreviewPaneProps) {
   useEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = props.initialScrollTop
   }, [props.documentKey, props.initialScrollTop])
+
+  useEffect(() => {
+    if (props.initialScrollFraction == null || !paneRef.current) return
+    const pane = paneRef.current
+    pane.scrollTop = clampScrollFraction(props.initialScrollFraction) * Math.max(0, pane.scrollHeight - pane.clientHeight)
+  }, [props.initialScrollFraction])
 
   useEffect(() => {
     const pane = paneRef.current

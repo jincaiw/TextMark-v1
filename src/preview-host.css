@@ -43,7 +43,7 @@ html, body { min-height: 100%; margin: 0; background: var(--document-background)
 .markdown-body p { margin: .72em 0; }
 .markdown-body a { color: var(--document-link); text-decoration: none; }
 .markdown-body a:hover { text-decoration: underline; }
-.markdown-body hr { height: 1px; margin: 2em 0; border: 0; background: var(--document-grid); }
+.markdown-body hr { height: 1px; margin: 12px 0 0; border: 0; background: var(--document-grid); }
 .markdown-body blockquote { margin: 1.1em 0; padding: .45em 1em; border-left: 3px solid var(--document-grid); color: var(--document-secondary); }
 .markdown-body ul, .markdown-body ol { padding-left: 1.65em; }
 .markdown-body li + li { margin-top: .23em; }

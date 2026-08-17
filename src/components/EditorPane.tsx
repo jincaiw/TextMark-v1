@@ -5,11 +5,16 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
+import { editorHeadings } from '../lib/editorHeadings'
+import { clampScrollFraction } from '../lib/scrollFraction'
 import type { ContentWidth, FormatCommand } from '../types'
 
 export interface EditorPaneHandle {
   focus: () => void
   format: (command: FormatCommand) => void
+  /** Fraction of the editor's scroll range (0–1); used to hand the reading
+   * position over to the preview when leaving edit mode. */
+  getScrollFraction: () => number
 }
 
 interface EditorPaneProps {
@@ -18,6 +23,8 @@ interface EditorPaneProps {
   fontSize: number
   zoom: number
   contentWidth: ContentWidth
+  /** Scroll fraction (0–1) to restore when entering edit mode from the preview. */
+  initialScrollFraction?: number
   initialFormat?: FormatCommand | null
   onInitialFormatApplied?: () => void
   onChange: (value: string) => void
@@ -78,9 +85,24 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
       },
+      getScrollFraction: () => {
+        const dom = viewRef.current?.scrollDOM
+        if (!dom || dom.scrollHeight <= dom.clientHeight) return 0
+        return clampScrollFraction(dom.scrollTop / (dom.scrollHeight - dom.clientHeight))
+      },
     }),
     [],
   )
+
+  useEffect(() => {
+    if (!ready || props.initialScrollFraction == null || !viewRef.current) return
+    const dom = viewRef.current.scrollDOM
+    const fraction = clampScrollFraction(props.initialScrollFraction)
+    const frame = requestAnimationFrame(() => {
+      dom.scrollTop = fraction * Math.max(0, dom.scrollHeight - dom.clientHeight)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [ready, props.initialScrollFraction])
 
   useEffect(() => {
     if (ready && props.initialFormat && viewRef.current) {
@@ -90,11 +112,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   }, [ready, props.initialFormat, props.onInitialFormatApplied])
 
   return (
-    <section
-      className={`editor-pane content-${props.contentWidth}`}
-      aria-label="Markdown editor"
-      style={{ '--editor-zoom': props.zoom / 100 } as React.CSSProperties}
-    >
+    <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
       <div className="editor-page">
         <CodeMirror
           value={props.value}
@@ -102,6 +120,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           theme={props.theme === 'dark' ? oneDark : 'light'}
           extensions={[
             markdown(),
+            editorHeadings,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([

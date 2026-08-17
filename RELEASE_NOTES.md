@@ -1,3 +1,27 @@
+# TextMark v0.7.0
+
+TextMark 0.7.0 completes a desktop UI layout deep-check against the latest Markdown Preview `main`: the editor now measures like the preview (40px gutters, a 740px centered column, 1.52 line height) and renders source headings at the preview's typographic scale; switching between edit and preview hands the reading position over instead of restarting at the top; the find bar follows the upstream two-stack layout; Windows/Linux toolbars no longer reserve dead space for window controls; the sidebar rows and section header match the upstream source list; and the formatting toolbar aligns with the editor column even when the sidebar or inspector is open. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.7.0 完成对标最新 Markdown Preview `main` 的桌面 UI 布局深检：编辑器与预览度量逐像素一致（40px 页边距、740px 居中内容列、1.52 行高），源码标题按预览音阶渲染；编辑/预览切换时交接阅读位置而非回到顶部；查找栏对齐上游左右双栈布局；Windows/Linux 工具栏不再为窗口按钮预留死空间；侧边栏行高与节标题对齐上游源列表；格式工具栏在侧栏/检查器打开时仍与编辑列对齐。默认中文、三平台不变。
+
+## Highlights / 主要更新
+
+- 编辑器/预览度量对齐：`cm-scroller` 40px 内边距 + `cm-content` 740px 居中列 + 32/0/48 页边距 + 1.52 行高，与预览列逐像素一致；`content-full` 同步；移除死变量 `--editor-zoom`。
+- 编辑器标题样式：新增 `editorHeadings` ViewPlugin，源码标题按预览小三度音阶渲染（`cm-md-h1…h6`，H1 700/其余 600，`heading-after-blank` 紧凑 4px）；语法树判定覆盖 ATX/Setext/引用内标题，围栏/行内代码内不误判，setext 下划线行不放大。
+- 编辑↔预览滚动交接：切换模式时按滚动 fraction 双向恢复阅读位置（预览→编辑、编辑→预览），同模式调用不跳滚动；新增 `scrollFraction` 钳制辅助。
+- 查找栏对齐上游左右双栈：左组（输入 + Match: + 包含/开头为），右组（计数 + 区分大小写 + 上/下一个 + 完成）。
+- Windows/Linux 工具栏 150px 预留仅浏览器回退模式保留（`data-runtime=browser`），Tauri 运行时消除死空间；macOS 92px 交通灯预留不变。
+- 侧边栏对齐上游：大纲/文件树行高统一 30px，节标题 12px semibold + secondary 色，标题行 52→40px。
+- 格式工具栏移入工作区列并随列宽居中（`calc((100% - 820px)/2)`），侧栏/检查器打开时控件与编辑列精确对齐。
+- 小修：hr 间距两处统一为 12px 上距（对齐上游 0.0.48）；zoom 按钮圆角统一；清理 `.document-actions` 6 条死 CSS。
+- 新增 9 项单元测试（editorHeadings 6 + scrollFraction 3），全部 200 项通过；WebDriver e2e 顶栏/查找/模式矩阵通过。
+
+## Trust notice / 安全提示
+
+Same as v0.6.0. 同 v0.6.0。
+
+---
+
 # TextMark v0.6.0
 
 TextMark 0.6.0 aligns with the latest Markdown Preview `main` (v0.0.48/v0.0.49): Always on Top keeps the window in front (⌃⌘T on macOS or the toolbar pin), Open in LLM hands the document to Codex/Claude with file and folder context through their deep links (with a copy-and-open fallback for long documents), Settings gains a preview text-size (Aa) picker and a default Open With target, and Mermaid popup windows are titled from the nearest heading. Typography follows the upstream minor-third heading scale (only H1 is weight 700), completed tasks render struck through and muted, and list bullets are drawn as larger circles. Default Chinese and cross-platform support are unchanged.
