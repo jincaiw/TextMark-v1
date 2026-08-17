@@ -18,11 +18,12 @@ if (!directory || !rawTag) {
 }
 const version = rawTag.replace(/^v/, '')
 const root = resolve(directory)
-const files = readdirSync(root).filter((name) => statSync(resolve(root, name)).isFile()).sort()
+const files = readdirSync(root)
+  .filter((name) => statSync(resolve(root, name)).isFile())
+  .sort()
 
 const find = (pattern) => files.find((name) => pattern.test(name))
-const signatureOf = (name) =>
-  files.includes(`${name}.sig`) ? readFileSync(resolve(root, `${name}.sig`), 'utf8').trim() : null
+const signatureOf = (name) => (files.includes(`${name}.sig`) ? readFileSync(resolve(root, `${name}.sig`), 'utf8').trim() : null)
 const urlFor = (name) =>
   `https://github.com/${process.env.GITHUB_REPOSITORY || 'jincaiw/TextMark-v1'}/releases/download/${rawTag}/${encodeURIComponent(name)}`
 
