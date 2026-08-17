@@ -170,7 +170,10 @@ async function release(tag) {
   }
 }
 
-const [action, tag] = process.argv.slice(2)
+const [action] = process.argv.slice(2)
+// Accept the tag from argv or the RELEASE_TAG environment variable (the
+// workflow sets it for every step; some shells mangle argv on Windows).
+const tag = process.argv[3] ?? process.env.RELEASE_TAG
 if (!action || !tag) {
   console.error('Usage: node scripts/release-lock.mjs <acquire|release> <release-tag>')
   process.exit(2)
