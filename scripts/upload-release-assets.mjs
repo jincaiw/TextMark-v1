@@ -94,19 +94,31 @@ async function deleteAssetIfExists(id, name) {
 const name = basename(file)
 const size = statSync(file).size
 const id = await releaseId(rawTag)
-await deleteAssetIfExists(id, name)
-const response = await fetchWithRetry(
-  `https://uploads.github.com/repos/${repoName}/releases/${id}/assets?name=${encodeURIComponent(name)}`,
-  {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': String(size),
+// Clobber semantics: delete any same-name asset, then upload. When the
+// delete races a transient API failure, the upload 422s because the old
+// asset still exists — retry the whole delete+upload sequence instead of
+// failing fast.
+for (let attempt = 0; attempt < 4; attempt += 1) {
+  await deleteAssetIfExists(id, name)
+  const response = await fetchWithRetry(
+    `https://uploads.github.com/repos/${repoName}/releases/${id}/assets?name=${encodeURIComponent(name)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(size),
+      },
+      body: readFileSync(file),
     },
-    body: readFileSync(file),
-  },
-)
-if (!response.ok) throw new Error(`Upload failed: HTTP ${response.status} for ${name}`)
-console.log(`Uploaded ${name}`)
+  )
+  if (response.ok) {
+    console.log(`Uploaded ${name}`)
+    process.exit(0)
+  }
+  if (response.status !== 422) throw new Error(`Upload failed: HTTP ${response.status} for ${name}`)
+  console.error(`Conflict on ${name}, retrying delete+upload (${attempt + 1}/4)`)
+  await sleep(5_000 * (attempt + 1))
+}
+throw new Error(`Upload failed after conflicts for ${name}`)
