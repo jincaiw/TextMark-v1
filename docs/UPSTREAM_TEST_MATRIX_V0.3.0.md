@@ -1,8 +1,20 @@
-# TextMark v0.3.0 upstream test traceability
+# TextMark v0.8.0 upstream test traceability
 
-Frozen reference: `pluk-inc/markdown-preview@v0.0.47`, commit `e364421b76df9f650012a270e4b5b6c9d799323f`.
+Frozen reference: `pluk-inc/markdown-preview@main`, commit `53f4d35cd81b237e20c6011dc20f41d8c54aa914` (v0.0.49 plus the sidebar-selection fix).
 
-This matrix was audited against every test function present in the reference Swift test package on 2026-08-14. The frozen baseline contains **139** behaviors (the earlier plan estimated 132). “Behavior” means TextMark tests the same user-visible contract in its portable implementation. “Native” means the matching macOS adapter test runs under Xcode. “Equivalent” is reserved for an AppKit/WKWebView implementation detail that does not exist in Tauri; the replacement boundary and user-visible result are tested instead. “Stricter” or “Superset” records an intentional security or capability improvement over the baseline.
+This matrix was originally audited against every test function present in the v0.0.47 reference Swift package. The current upstream baseline contains **165** behaviors, up from 139. “Behavior” means TextMark tests the same user-visible contract in its portable implementation. “Native” means the matching macOS adapter test runs under Xcode. “Equivalent” is reserved for an AppKit/WKWebView implementation detail that does not exist in Tauri; the replacement boundary and user-visible result are tested instead. “Stricter” or “Superset” records an intentional security or capability improvement over the baseline.
+
+## v0.0.48–v0.0.49 delta under implementation
+
+| Upstream addition | TextMark status | Evidence / gate |
+| --- | --- | --- |
+| Render all Mermaid before output; temporary light print theme | Behavior | `PreviewPane` hydration signal; output actions wait before capture; `export.test.ts` + print CSS contract |
+| Always on Top respects full-screen spaces | Behavior | `src/lib/alwaysOnTop.test.ts`; native Tauri full-screen E2E pending |
+| Final blank in a blank run is compact | Behavior | `src/lib/markdown.parity.test.ts`; `src/lib/styleContract.test.ts` |
+| Larger, correctly offset list bullets | Behavior | `src/App.css`; visual golden pending |
+| Quick Look immediate ⌘A/⌘C and copy source | Release gate | `PreviewViewController.swift`; Xcode Quick Look tests pending |
+| Native multi-pane Settings | Behavior | dedicated Tauri Settings window; v1–v4 preference migration is covered by `useSettings.test.ts` |
+| Sidebar selection only commits after navigation succeeds | Equivalent | active document state owns `Sidebar.activePath`; failure-path E2E pending |
 
 A row is release-green only when its named local test and, where applicable, the native GitHub runner pass. The release workflow cannot publish while any native job is red.
 

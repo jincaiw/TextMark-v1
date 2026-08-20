@@ -15,7 +15,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 use tauri::{
-    Emitter, State, WebviewUrl, WebviewWindowBuilder,
+    Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 use tauri_plugin_updater::UpdaterExt;
@@ -518,7 +518,10 @@ fn build_menu(
     };
 
     // File menu
-    let new_tab = item("new-tab", "新建标签页", "New Tab", Some("CmdOrCtrl+T"))?;
+    // Upstream's New Tab opens a document chooser. TextMark retains a separate
+    // explicit empty-document action for authors who need a scratch buffer.
+    let new_tab = item("new-tab", "新建标签页…", "New Tab…", Some("CmdOrCtrl+T"))?;
+    let new_document = item("new-document", "新建空白文档", "New Blank Document", None)?;
     let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
     let open_folder = item(
@@ -547,7 +550,7 @@ fn build_menu(
     let open_recent = recent_builder.item(&clear_recent).build()?;
 
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
-        .items(&[&new_tab, &close_tab])
+        .items(&[&new_tab, &new_document, &close_tab])
         .separator()
         .items(&[&open, &open_folder])
         .item(&open_recent)
@@ -1365,6 +1368,31 @@ fn install_cli() -> IntegrationResult {
     install_cli_on_platform(&exe, &home)
 }
 
+#[tauri::command]
+fn open_settings_window(app: tauri::AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window.show().map_err(io_error)?;
+        window.set_focus().map_err(io_error)?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html?settings=1".into()))
+        .title("TextMark Settings")
+        .inner_size(680.0, 520.0)
+        .min_inner_size(600.0, 440.0)
+        .resizable(true)
+        .center()
+        .build()
+        .map_err(io_error)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn print_current_window(window: tauri::WebviewWindow) -> AppResult<()> {
+    // Wry exposes the system print dialog on macOS. Unlike an image-backed
+    // export, this keeps text and vector diagrams selectable in “Save as PDF”.
+    window.print().map_err(io_error)
+}
+
 #[cfg(unix)]
 fn install_cli_on_platform(exe: &Path, home: &str) -> IntegrationResult {
     let bin = Path::new(home).join(".local").join("bin");
@@ -1553,6 +1581,8 @@ pub fn run() {
             check_update_channel,
             install_update_channel,
             open_mermaid_window,
+            open_settings_window,
+            print_current_window,
             install_cli,
             set_default_handler,
             refresh_menu,

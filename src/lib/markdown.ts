@@ -118,6 +118,9 @@ function makeRenderer() {
         for (let blankIndex = 0; blankIndex < gap; blankIndex += 1) {
           const Token = state.Token as new (type: string, tag: string, nesting: number) => typeof token
           const blank = new Token('textmark_blank', 'div', 0)
+          // The final blank in a run is deliberately compact. This preserves
+          // authored vertical rhythm without doubling paragraph/heading gaps.
+          if (blankIndex === gap - 1) blank.attrSet('class', 'md-source-blank-line-final')
           output.push(blank)
         }
         previousEnd = Math.max(previousEnd, token.map[1])
@@ -126,7 +129,8 @@ function makeRenderer() {
     }
     state.tokens = output
   })
-  md.renderer.rules.textmark_blank = () => '<div class="md-source-blank-line" aria-hidden="true"></div>'
+  md.renderer.rules.textmark_blank = (tokens, index) =>
+    `<div class="md-source-blank-line${tokens[index].attrGet('class') ? ` ${tokens[index].attrGet('class')}` : ''}" aria-hidden="true"></div>`
 
   return md
 }

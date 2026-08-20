@@ -6,6 +6,7 @@ import { EditorView } from '@codemirror/view'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
+import { editorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
 import { clampScrollFraction } from '../lib/scrollFraction'
 import type { ContentWidth, FormatCommand } from '../types'
 
@@ -39,15 +40,29 @@ const wrappers: Partial<Record<FormatCommand, [string, string]>> = {
   link: ['[', '](https://)'],
 }
 
+function toggledInline(selected: string, wrapper: [string, string]) {
+  if (selected.startsWith(wrapper[0]) && selected.endsWith(wrapper[1]) && selected.length >= wrapper[0].length + wrapper[1].length)
+    return {
+      text: selected.slice(wrapper[0].length, -wrapper[1].length),
+      selectionStart: 0,
+      selectionEnd: selected.length - wrapper[0].length - wrapper[1].length,
+    }
+  const body = selected || 'text'
+  return { text: `${wrapper[0]}${body}${wrapper[1]}`, selectionStart: wrapper[0].length, selectionEnd: wrapper[0].length + body.length }
+}
+
+const stripListMarker = (line: string) => line.replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
+const stripTaskMarker = (line: string) => line.replace(/^\s*(?:[-+*]\s+)?(?:\[[ xX]\]\s+)?/, '')
+
 function applyFormat(view: EditorView, command: FormatCommand) {
   const selection = view.state.selection.main
   const selected = view.state.sliceDoc(selection.from, selection.to)
   const wrapper = wrappers[command]
   if (wrapper) {
-    const inserted = `${wrapper[0]}${selected || 'text'}${wrapper[1]}`
+    const toggled = toggledInline(selected, wrapper)
     view.dispatch({
-      changes: { from: selection.from, to: selection.to, insert: inserted },
-      selection: { anchor: selection.from + wrapper[0].length, head: selection.from + wrapper[0].length + (selected || 'text').length },
+      changes: { from: selection.from, to: selection.to, insert: toggled.text },
+      selection: { anchor: selection.from + toggled.selectionStart, head: selection.from + toggled.selectionEnd },
     })
     view.focus()
     return
@@ -59,14 +74,30 @@ function applyFormat(view: EditorView, command: FormatCommand) {
   const to = endLine.to
   const lines = view.state.sliceDoc(from, to).split('\n')
   const heading = command.match(/^h([0-3])$/)?.[1]
+  const allHave = (pattern: RegExp) => lines.every((line) => pattern.test(line))
+  const removing =
+    heading !== undefined
+      ? allHave(heading === '0' ? /^#{1,6}\s+/ : new RegExp(`^#{${heading}}\\s+`))
+      : command === 'bulletList'
+        ? allHave(/^\s*[-+*]\s+/)
+        : command === 'orderedList'
+          ? allHave(/^\s*\d+[.)]\s+/)
+          : command === 'taskList'
+            ? allHave(/^\s*(?:[-+*]\s+)?\[[ xX]\]\s+/)
+            : command === 'quote'
+              ? allHave(/^>\s?/)
+              : false
   let index = 0
   const transformed = lines
     .map((line) => {
-      if (heading !== undefined) return `${heading === '0' ? '' : `${'#'.repeat(Number(heading))} `}${line.replace(/^#{1,6}\s+/, '')}`
-      if (command === 'bulletList') return `- ${line.replace(/^\s*(?:[-+*]|\d+\.)\s+/, '')}`
-      if (command === 'orderedList') return `${++index}. ${line.replace(/^\s*(?:[-+*]|\d+\.)\s+/, '')}`
-      if (command === 'taskList') return `- [ ] ${line.replace(/^\s*(?:[-+*]\s+)?(?:\[[ xX]\]\s+)?/, '')}`
-      if (command === 'quote') return `> ${line.replace(/^>\s?/, '')}`
+      if (heading !== undefined)
+        return removing || heading === '0'
+          ? line.replace(/^#{1,6}\s+/, '')
+          : `${'#'.repeat(Number(heading))} ${line.replace(/^#{1,6}\s+/, '')}`
+      if (command === 'bulletList') return removing ? line.replace(/^\s*[-+*]\s+/, '') : `- ${stripListMarker(line)}`
+      if (command === 'orderedList') return removing ? line.replace(/^\s*\d+[.)]\s+/, '') : `${++index}. ${stripListMarker(line)}`
+      if (command === 'taskList') return removing ? stripTaskMarker(line) : `- [ ] ${stripTaskMarker(line)}`
+      if (command === 'quote') return removing ? line.replace(/^>\s?/, '') : `> ${line.replace(/^>\s?/, '')}`
       return line
     })
     .join('\n')
@@ -121,6 +152,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           extensions={[
             markdown(),
             editorHeadings,
+            editorMarkdownDecorations,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([

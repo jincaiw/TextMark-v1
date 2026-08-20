@@ -26,6 +26,10 @@ interface PreviewPaneProps {
   matchCase: boolean
   searchMode: SearchMode
   locale: Locale
+  /** Stable identity for one fully rendered preview. Used by output actions to
+   * wait until async assets and diagrams are present in the live DOM. */
+  renderKey?: string
+  onHydrated?: (renderKey: string) => void
   onSearchCount: (count: number) => void
   onActiveHeading: (id: string | null) => void
   onZoomChange: (zoom: number) => void
@@ -381,7 +385,13 @@ export function PreviewPane(props: PreviewPaneProps) {
         )
       }
     }
-    void hydrate()
+    void hydrate().then(async () => {
+      // `document.fonts.ready` and image decoding are both part of the visible
+      // document. Reporting earlier races export/print against late layout.
+      await document.fonts?.ready
+      await Promise.all(Array.from(root.querySelectorAll<HTMLImageElement>('img')).map((image) => image.decode().catch(() => undefined)))
+      if (!cancelled && props.renderKey) props.onHydrated?.(props.renderKey)
+    })
     return () => {
       cancelled = true
       diagramControllers.forEach((controller) => controller.destroy())
@@ -396,6 +406,8 @@ export function PreviewPane(props: PreviewPaneProps) {
     props.matchCase,
     props.searchMode,
     props.locale,
+    props.renderKey,
+    props.onHydrated,
   ])
 
   return (
