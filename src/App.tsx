@@ -12,6 +12,7 @@ import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
 import { SettingsDialog } from './components/SettingsDialog'
+import { SettingsWindow } from './components/SettingsWindow'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
 import { ToolbarCustomizer } from './components/ToolbarCustomizer'
@@ -20,6 +21,7 @@ import { useSettings } from './hooks/useSettings'
 import { useTheme } from './hooks/useTheme'
 import { useUpdater } from './hooks/useUpdater'
 import { clampScrollFraction } from './lib/scrollFraction'
+import { resolveAlwaysOnTopTransition } from './lib/alwaysOnTop'
 import { t } from './lib/i18n'
 import {
   clearRecentFiles,
@@ -30,6 +32,8 @@ import {
   isTauri,
   installCli,
   openDocumentWindow,
+  openSettingsWindow,
+  printCurrentWindow,
   openInApplication,
   readDocument,
   recordRecentFile,
@@ -61,10 +65,10 @@ const EMPTY_RENDER: RenderedMarkdown = {
   direction: 'auto',
 }
 
-function App() {
+function DocumentApp() {
   const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, patch } = useSettings()
   const documents = useDocument(settings.locale)
-  const updater = useUpdater(settings.updateChannel)
+  const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('outline')
@@ -77,6 +81,7 @@ function App() {
   // Ref keeps the keydown/menu closures reading the live value without adding
   // alwaysOnTop to every effect dependency list.
   const alwaysOnTopRef = useRef(false)
+  const alwaysOnTopSuspendedRef = useRef(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
@@ -94,6 +99,7 @@ function App() {
   const deferredMarkdown = useDeferredValue(documents.document.contents)
   const [rendered, setRendered] = useState<RenderedMarkdown>(EMPTY_RENDER)
   const renderSequence = useRef(0)
+  const hydratedPreviewKeyRef = useRef<string | null>(null)
   const stats = useMemo(
     () => ({
       words: documents.document.contents.trim().split(/\s+/u).filter(Boolean).length,
@@ -106,10 +112,63 @@ function App() {
     [documents.document.contents, rendered.outline.length],
   )
   const resolvedTheme = useTheme(settings.theme)
+  const previewRenderKey = `${documents.document.id}:${documents.document.path ?? documents.document.name}:${rendered.html}`
+
+  const waitForPreviewHydration = async () => {
+    const key = previewRenderKey
+    if (hydratedPreviewKeyRef.current === key) return
+    await new Promise<void>((resolve) => {
+      const complete = (event: Event) => {
+        if ((event as CustomEvent<string>).detail !== key) return
+        window.removeEventListener('textmark-preview-hydrated', complete)
+        window.clearTimeout(timeout)
+        resolve()
+      }
+      // A timeout avoids trapping a user action when a third-party diagram or
+      // a broken image never settles. The export still captures the best
+      // available preview in that case.
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener('textmark-preview-hydrated', complete)
+        resolve()
+      }, 8_000)
+      window.addEventListener('textmark-preview-hydrated', complete)
+    })
+  }
+  const markPreviewHydrated = (key: string) => {
+    hydratedPreviewKeyRef.current = key
+    window.dispatchEvent(new CustomEvent('textmark-preview-hydrated', { detail: key }))
+  }
 
   useEffect(() => {
     void configureCrashReporting(settings.crashReports)
   }, [settings.crashReports])
+  useEffect(() => {
+    if (!isTauri()) return
+    const windowHandle = getCurrentWindow()
+    let disposed = false
+    const synchronize = async () => {
+      const transition = resolveAlwaysOnTopTransition(
+        alwaysOnTopRef.current,
+        await windowHandle.isFullscreen(),
+        alwaysOnTopSuspendedRef.current,
+      )
+      if (disposed || transition.suspended === alwaysOnTopSuspendedRef.current) return
+      alwaysOnTopSuspendedRef.current = transition.suspended
+      await windowHandle.setAlwaysOnTop(transition.nativePinned)
+    }
+    void synchronize()
+    let unlisten: (() => void) | undefined
+    void windowHandle
+      .onResized(() => void synchronize())
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
   useEffect(() => {
     if (!isTauri()) return
     void refreshMenu({
@@ -214,8 +273,16 @@ function App() {
   const toggleAlwaysOnTop = () => {
     const next = !alwaysOnTopRef.current
     alwaysOnTopRef.current = next
+    alwaysOnTopSuspendedRef.current = false
     setAlwaysOnTop(next)
-    if (isTauri()) void getCurrentWindow().setAlwaysOnTop(next)
+    if (isTauri())
+      void getCurrentWindow()
+        .isFullscreen()
+        .then((fullscreen) => {
+          const transition = resolveAlwaysOnTopTransition(next, fullscreen, false)
+          alwaysOnTopSuspendedRef.current = transition.suspended
+          return getCurrentWindow().setAlwaysOnTop(transition.nativePinned)
+        })
   }
   const previewFraction = () => {
     const pane = document.querySelector<HTMLElement>('.preview-pane')
@@ -243,6 +310,16 @@ function App() {
         )
       else flash(settings.locale === 'zh-CN' ? '安装命令行工具失败。' : 'Could not install the command-line tools.')
     })
+  }
+  const openSettings = () => {
+    // The native WebDriver bridge drives one WebView at a time. Keep its
+    // regression suite in the document-hosted dialog; production retains the
+    // dedicated native Settings window.
+    if (isTauri() && !import.meta.env.VITE_WDIO) {
+      void openSettingsWindow().catch(() => setSettingsOpen(true))
+      return
+    }
+    setSettingsOpen(true)
   }
   const resolveDefaultHandler = (choice: boolean) => {
     localStorage.setItem('textmark.defaultHandlerPrompted', '1')
@@ -335,6 +412,7 @@ function App() {
     else flash(t(settings.locale, 'copied'))
   }
   const exportDocument = async (format: 'html' | 'png') => {
+    await waitForPreviewHydration()
     const root = document.querySelector<HTMLElement>('.markdown-body')
     if (!root) return
     const exporter = await import('./lib/export')
@@ -359,6 +437,14 @@ function App() {
     }
   }
   const exportPdf = async () => {
+    // macOS's print dialog provides the native “Save as PDF” workflow and
+    // preserves selectable text/vector diagrams. Keep the byte-export path
+    // for browser and non-macOS desktop runtimes.
+    if (isTauri() && isMacos()) {
+      await printDocument()
+      return
+    }
+    await waitForPreviewHydration()
     const root = document.querySelector<HTMLElement>('.markdown-body')
     if (!root) return
     try {
@@ -374,10 +460,17 @@ function App() {
     }
   }
   const printDocument = async () => {
-    // macOS WKWebView does not implement window.print(); render a PDF and open
-    // it so the user can print from the system viewer. Other platforms print
-    // natively through the webview.
+    // Use Wry's native macOS print dialog first. Its “Save as PDF” path keeps
+    // text and vector diagrams selectable instead of flattening the page.
     if (isTauri() && isMacos()) {
+      await waitForPreviewHydration()
+      try {
+        await printCurrentWindow()
+        return
+      } catch {
+        // Older WebKit/Wry builds can reject native printing. Preserve the
+        // portable PDF-preview fallback for those installations.
+      }
       const root = document.querySelector<HTMLElement>('.markdown-body')
       if (!root) return
       try {
@@ -392,6 +485,7 @@ function App() {
       }
       return
     }
+    await waitForPreviewHydration()
     window.print()
   }
   const menuCommandRef = useRef<(command: string) => void>(() => {})
@@ -413,7 +507,8 @@ function App() {
       void documents.openFolder()
       setSidebarMode('files')
       setSidebarVisible(true)
-    } else if (command === 'new-tab') documents.newDocument()
+    } else if (command === 'new-tab') void documents.openFile()
+    else if (command === 'new-document') documents.newDocument()
     else if (command === 'close-tab') documents.closeSession(documents.activeId)
     else if (command === 'save') void documents.saveFile()
     else if (command === 'save-as') void documents.saveAs()
@@ -446,9 +541,9 @@ function App() {
     else if (command === 'zoom-in') setZoom(nextZoom(settings.zoom, 1))
     else if (command === 'zoom-out') setZoom(nextZoom(settings.zoom, -1))
     else if (command === 'zoom-reset') setZoom(100)
-    else if (command === 'preferences') setSettingsOpen(true)
+    else if (command === 'preferences') openSettings()
     else if (command === 'check-updates') {
-      setSettingsOpen(true)
+      openSettings()
       void updater.checkNow()
     } else if (command === 'install-cli') installCliAction()
     else if (command === 'crash-reports') patch({ crashReports: !settings.crashReports })
@@ -616,7 +711,7 @@ function App() {
         setSidebarVisible((value) => !value)
       } else if (key === 't') {
         event.preventDefault()
-        documents.newDocument()
+        void documents.openFile()
       } else if (key === 'w') {
         event.preventDefault()
         documents.closeSession(documents.activeId)
@@ -628,7 +723,7 @@ function App() {
         nextMatch(event.shiftKey ? -1 : 1)
       } else if (key === 'p') {
         event.preventDefault()
-        window.print()
+        void printDocument()
       } else if (key === '0') {
         event.preventDefault()
         setZoom(100)
@@ -667,7 +762,7 @@ function App() {
         format('quote')
       } else if (key === ',') {
         event.preventDefault()
-        setSettingsOpen(true)
+        openSettings()
       } else if (key === '[') {
         event.preventDefault()
         void documents.goBack(previewScrollTop())
@@ -737,12 +832,12 @@ function App() {
         onSaveAs={() => void documents.saveAs()}
         onShare={() => void shareSource()}
         onCopy={() => void copySource()}
-        onPrint={() => window.print()}
+        onPrint={() => void printDocument()}
         onExportHtml={() => void exportDocument('html')}
         onExportPng={() => void exportDocument('png')}
         onExportPdf={() => exportPdf()}
         onExport={() => setExportOpen(true)}
-        onSettings={() => setSettingsOpen(true)}
+        onSettings={openSettings}
         onCustomizeToolbar={() => setToolbarOpen(true)}
       />
       {findOpen ? (
@@ -819,6 +914,8 @@ function App() {
               <PreviewPane
                 locale={settings.locale}
                 rendered={rendered}
+                renderKey={previewRenderKey}
+                onHydrated={markPreviewHydrated}
                 documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
                 initialScrollTop={documents.document.scrollTop}
                 initialScrollFraction={pendingScrollFraction ?? undefined}
@@ -900,6 +997,8 @@ function App() {
         crashReports={settings.crashReports}
         crashReportsAvailable={crashReportingAvailable}
         updateChannel={settings.updateChannel}
+        autoCheckUpdates={settings.autoCheckUpdates}
+        lastUpdateCheckAt={settings.lastUpdateCheckAt}
         updateStatus={updater.status}
         onCheckUpdate={() => void updater.checkNow()}
         onInstallUpdate={() => void updater.install()}
@@ -912,15 +1011,20 @@ function App() {
         onLocaleChange={setLocale}
         onCrashReportsChange={(crashReports) => patch({ crashReports })}
         onUpdateChannelChange={(updateChannel) => patch({ updateChannel })}
+        onAutoCheckUpdatesChange={(autoCheckUpdates) => patch({ autoCheckUpdates })}
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
         onZoomChange={setZoom}
         onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          setSettingsOpen(false)
+        }}
       />
     </main>
   )
 }
 
-export default App
+export default function App() {
+  return new URLSearchParams(window.location.search).has('settings') ? <SettingsWindow /> : <DocumentApp />
+}

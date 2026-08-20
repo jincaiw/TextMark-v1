@@ -27,8 +27,11 @@ describe('upstream MarkdownHTML rendering parity', () => {
   it('reports Hebrew documents as RTL', () => expect(renderMarkdown('# כותרת\n\nזהו מסמך ארוך בעברית עם תוכן נוסף').direction).toBe('rtl'))
   it('reports Arabic documents as RTL', () =>
     expect(renderMarkdown('# عنوان\n\nهذا مستند عربي طويل يحتوي على نص إضافي').direction).toBe('rtl'))
-  it('preserves every authored blank source line', () =>
-    expect(renderMarkdown('First.\n\n\nSecond.').html.match(/md-source-blank-line/g)).toHaveLength(2))
+  it('preserves authored blank lines while compacting the final blank in a run', () => {
+    const html = renderMarkdown('First.\n\n\nSecond.').html
+    expect(html.match(/<div class="md-source-blank-line(?:\s|")/g)).toHaveLength(2)
+    expect(html.match(/md-source-blank-line-final/g)).toHaveLength(1)
+  })
   it('preserves an inline tab with an explicit tab span', () => expect(renderMarkdown('alpha\tbeta').html).toContain('md-inline-tab'))
   it('keeps standalone indented code as a code block', () => expect(renderMarkdown('    const value = 1').html).toContain('<pre'))
   it('keeps deep list nesting', () => {

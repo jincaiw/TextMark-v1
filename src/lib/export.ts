@@ -148,6 +148,11 @@ const dataUrlToBytes = (dataUrl: string) => {
   return bytes
 }
 
+/** Source-image pixels which fit exactly one output page at the supplied
+ * rendered width. Kept separate so long-document pagination is testable. */
+export const pdfSourceSliceHeight = (imageWidth: number, pageWidth: number, pageHeight: number) =>
+  Math.max(1, Math.floor((pageHeight * imageWidth) / pageWidth))
+
 export async function buildPdfExport(name: string, root: HTMLElement) {
   const dataUrl = await captureLivePng(root, 2)
   const { jsPDF } = await import('jspdf')
@@ -157,8 +162,9 @@ export async function buildPdfExport(name: string, root: HTMLElement) {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4', compress: true })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
-  // One A4 page-height slice per page, drawn from the continuous tall snapshot.
-  const sliceHeight = Math.floor((image.height / image.width) * pageWidth)
+  // One physical A4 page-height slice per page, expressed in source-image
+  // pixels. Using the full image height here makes page count width-dependent.
+  const sliceHeight = pdfSourceSliceHeight(image.width, pageWidth, pageHeight)
   let offset = 0
   let page = 0
   while (offset < image.height) {

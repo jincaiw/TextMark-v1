@@ -1,6 +1,6 @@
 # TextMark parity ledger
 
-Reference: `pluk-inc/markdown-preview` tag `v0.0.47`, commit `e364421b76df9f650012a270e4b5b6c9d799323f` (2026-08-08).
+Reference: `pluk-inc/markdown-preview` `main`, commit `53f4d35cd81b237e20c6011dc20f41d8c54aa914` (2026-08-20). The current released upstream baseline is v0.0.49; this ledger also tracks the one post-release sidebar-selection fix.
 
 Status meanings: **Complete** is implemented and covered locally; **Release gate** is implemented but must pass its named native runner before v0.3.0 can be published.
 
@@ -30,15 +30,15 @@ Status meanings: **Complete** is implemented and covered locally; **Release gate
 | Open With | Discover installed editors, remember target, Open With / Open As project context menu | Complete | Rust discovery command, context submenu and settings |
 | AI handoff | Codex, Claude and ChatGPT with 12k-char clipboard fallback | Complete | discovered app menu and URL fallback |
 | Zoom | 50–300% discrete stops, keyboard/paging controls, trackpad pinch and ⌘-wheel | Complete | shared stop list, keyboard handler and gesture/wheel layer |
-| Export | Export… panel (PDF/HTML/PNG), Export as PDF…, print/PDF, self-contained HTML and continuous 2× PNG | Complete | export dialog, export/style tests and lazy export module |
+| Export | Export… panel (PDF/HTML/PNG), Export as PDF…, print/PDF, self-contained HTML and continuous 2× PNG | In progress | all export/print entry points wait for the hydrated preview; macOS Print and Export as PDF use Wry's native vector-capable “Save as PDF” dialog; non-macOS direct PDF remains raster-backed |
 | Default handler | Offer to register as the default `.md` opener on first launch | Complete | first-run prompt, `set_default_handler` command |
 | Install CLI | App-menu CLI installer (`textmark`/`tm`/`text-mark`) | Complete | `install_cli` command (symlink on Unix, `.cmd` on Windows) |
 | CLI | files/folders, multi-path, `--new-window`, existing-instance forwarding | Complete | Rust parser tests, startup list and `open-paths` event |
 | CLI aliases | `textmark`, `tm`, `text-mark` installed aliases | Release gate | DEB/RPM install/uninstall and Windows portable tests |
 | Updater | signed update metadata, download/install/restart | Complete | Tauri updater; keys stored outside repository |
 | Crash reporting | explicit opt-in and unavailable without DSN | Complete | settings gate; no SDK initializes without DSN |
-| macOS Quick Look | shared offline renderer, appearance, relative assets, native text selection and cursor feedback | Release gate | Universal extension, Xcode tests and mounted-DMG registration smoke |
+| macOS Quick Look | shared offline renderer, appearance, relative assets, native text selection/cursor feedback, immediate ⌘A/⌘C and source-copy action | Release gate | Universal extension, Xcode tests and mounted-DMG registration smoke |
 | Windows Explorer preview | x64/ARM64 registered preview handler | Release gate | C++ tests, host smoke, architecture/COM/install/uninstall assertions |
 | Linux preview | MIME, thumbnailer, quick-preview action and KDE 6 plugin | Release gate | native x64/ARM64 DEB/RPM/AppImage and KDE host tests |
 
-The exhaustive one-to-one evidence for the upstream test package is in [`UPSTREAM_TEST_MATRIX_V0.3.0.md`](UPSTREAM_TEST_MATRIX_V0.3.0.md). A release-gated row becomes publishable only when its native host test passes; merely producing an installer is insufficient.
+The exhaustive one-to-one evidence for the upstream test package is in [`UPSTREAM_TEST_MATRIX_V0.3.0.md`](UPSTREAM_TEST_MATRIX_V0.3.0.md). The matrix is being expanded from the old 139-test v0.0.47 snapshot to the 165-test v0.0.49/main baseline, including Mermaid print synchronization, full-screen pinning, Settings, and Quick Look keyboard/copy contracts. A release-gated row becomes publishable only when its native host test passes; merely producing an installer is insufficient.

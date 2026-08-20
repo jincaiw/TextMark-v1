@@ -96,6 +96,34 @@ private final class QuickLookWebView: WKWebView {
     private static let maximumVisibleCursorRegions = 4_096
     private var cursorRegions: [CursorRegion] = []
 
+    override var acceptsFirstResponder: Bool { true }
+
+    /// Quick Look hosts the preview in a remote ViewBridge hierarchy, where
+    /// WebKit does not reliably receive command-key equivalents. Claim only
+    /// bare Command-A/C (Caps Lock is harmless); Finder navigation keys remain
+    /// untouched.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
+        let modifiers = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting(.capsLock)
+        guard modifiers == .command else { return super.performKeyEquivalent(with: event) }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "a":
+            evaluateJavaScript("(() => { const preview = document.querySelector('#preview'); const selection = getSelection(); if (!preview || !selection) return false; const range = document.createRange(); range.selectNodeContents(preview); selection.removeAllRanges(); selection.addRange(range); return true; })()")
+            return true
+        case "c":
+            evaluateJavaScript("getSelection()?.toString() || ''") { value, _ in
+                guard let text = value as? String, !text.isEmpty else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            }
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
+    }
+
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         let messageProxy = CursorRegionMessageProxy()
         configuration.userContentController.add(
@@ -448,6 +476,8 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     private var webView: QuickLookWebView!
     private var resourceHandler: PreviewResourceSchemeHandler?
     private var rendererDirectory: URL?
+    private let copyButton = NSButton(title: "Copy Markdown", target: nil, action: nil)
+    private var sourceForCopy = ""
 
     override func loadView() {
         let configuration = WKWebViewConfiguration()
@@ -464,7 +494,18 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         webView = QuickLookWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 900), configuration: configuration)
         webView.navigationDelegate = self
         webView.underPageBackgroundColor = .clear
-        view = webView
+        let container = NSView(frame: webView.frame)
+        webView.autoresizingMask = [.width, .height]
+        container.addSubview(webView)
+        copyButton.bezelStyle = .rounded
+        copyButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        copyButton.target = self
+        copyButton.action = #selector(copySource)
+        copyButton.isHidden = true
+        copyButton.frame = NSRect(x: 780, y: 12, width: 108, height: 28)
+        copyButton.autoresizingMask = [.minXMargin, .maxYMargin]
+        container.addSubview(copyButton)
+        view = container
         preferredContentSize = NSSize(width: 900, height: 900)
     }
 
@@ -475,6 +516,8 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         }
         let data = try Data(contentsOf: url, options: [.mappedIfSafe])
         guard data.count <= 32 * 1024 * 1024, let source = String(data: data, encoding: .utf8) else { throw PreviewFailure.unsupportedEncoding }
+        sourceForCopy = source
+        copyButton.isHidden = true
         _ = view
         webView.clearCursorRegions()
         guard rendererDirectory != nil,
@@ -498,6 +541,20 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             in: nil,
             contentWorld: .page
         )
+        copyButton.isHidden = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.view.window?.makeFirstResponder(self.webView)
+        }
+    }
+
+    @objc private func copySource() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(sourceForCopy, forType: .string)
+        copyButton.title = "Copied"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.copyButton.title = "Copy Markdown"
+        }
     }
 
     private func waitUntilReady() async throws {

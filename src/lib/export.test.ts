@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { buildSelfContainedHtml } from './export'
+import { buildSelfContainedHtml, pdfSourceSliceHeight } from './export'
 
 describe('self-contained HTML export', () => {
   it('keeps rendered content and data images while removing screen-only controls', async () => {
@@ -17,5 +17,12 @@ describe('self-contained HTML export', () => {
     expect(html).not.toContain('copy-code-button">Copy')
     expect(html).not.toContain('search-match">命中')
     root.remove()
+  })
+})
+
+describe('PDF pagination', () => {
+  it('uses page geometry rather than full document height for source slices', () => {
+    expect(pdfSourceSliceHeight(2000, 500, 700)).toBe(2800)
+    expect(pdfSourceSliceHeight(1000, 500, 700)).toBe(1400)
   })
 })

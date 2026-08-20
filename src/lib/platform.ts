@@ -163,6 +163,16 @@ export async function openDocumentWindow(path: string): Promise<void> {
   await invoke('open_document_window', { path })
 }
 
+export async function openSettingsWindow(): Promise<void> {
+  if (!isTauri()) return
+  await invoke('open_settings_window')
+}
+
+export async function printCurrentWindow(): Promise<void> {
+  if (!isTauri()) return
+  await invoke('print_current_window')
+}
+
 export async function installCli(): Promise<{ ok: boolean; detail: string | null }> {
   if (!isTauri()) return { ok: false, detail: null }
   return invoke<{ ok: boolean; detail: string | null }>('install_cli')

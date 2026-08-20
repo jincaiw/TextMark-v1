@@ -41,7 +41,7 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 4
+  schemaVersion: 5
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth
@@ -52,6 +52,8 @@ export interface AppSettings {
   defaultOpenTarget: string
   crashReports: boolean
   updateChannel: 'stable' | 'beta'
+  autoCheckUpdates: boolean
+  lastUpdateCheckAt: number | null
 }
 
 export interface DocumentSession extends TextDocument {

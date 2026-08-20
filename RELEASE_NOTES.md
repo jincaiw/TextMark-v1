@@ -1,3 +1,25 @@
+# TextMark v0.8.0
+
+TextMark 0.8.0 completes the current Markdown Preview `main` parity pass (v0.0.49 plus its sidebar-selection fix). Output actions now wait for Mermaid, fonts and images before capture; macOS Print and Export as PDF use the native vector-capable Save as PDF workflow; Always on Top correctly yields while the window is full screen; settings are a dedicated, lightweight native window with General, Privacy and About panes; and the source editor gains Markdown-aware formatting toggles and visible syntax decorations. Quick Look adds immediate Command-A/Command-C selection and a Copy Markdown action. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.8.0 完成本轮对 Markdown Preview `main`（v0.0.49 及侧边栏选择修复）的对标。所有输出操作会在 Mermaid、字体与图片完成后再捕获；macOS 的打印与导出 PDF 使用保留矢量内容的原生“存储为 PDF”流程；窗口全屏时置顶会正确让出；设置改为轻量、独立的原生窗口，包含通用、隐私与关于分页；源码编辑器新增 Markdown 感知的格式切换和可见语法装饰。Quick Look 支持立即 Command-A/Command-C 选择与“拷贝 Markdown”操作。默认中文与跨平台支持不变。
+
+## Highlights / 主要更新
+
+- 输出可靠性：HTML、PNG、PDF 与打印统一等待预览水合，确保 Mermaid、Web 字体和图片准备完成；PDF 多页切片按实际 A4 几何计算。
+- 原生 PDF：macOS 打印与“导出 PDF”改走 Wry 系统打印面板，可通过“存储为 PDF”保留可选择文字及矢量图；旧 WebKit 接口失败时保留安全回退。
+- 视觉对齐：压缩连续空行的末行、修正标题前间距与列表圆点尺寸/偏移，补齐浅色打印合同。
+- 编辑体验：格式工具栏改为幂等切换（加粗、斜体、删除线、代码、链接、标题、列表、任务、引用）；CodeMirror 仅装饰可视区域，显示 frontmatter、围栏、引用、列表、任务及内联格式。
+- 设置：独立 Settings WebView 提供通用/隐私/关于三页、更新通道与自动检查；v1–v4 设置自动迁移至 v5，独立窗口不再启动文档 I/O、文件监听或 Markdown Worker。
+- 窗口与菜单：全屏时自动暂停置顶、退出全屏恢复；“新标签”与上游一致地打开文件选择器，另保留“新建空白文稿”。
+- Quick Look：原生预览支持 Command-A/Command-C、文本选择与“拷贝 Markdown”按钮；Release CI 继续负责 Xcode host 验证。
+
+## Trust notice / 安全提示
+
+Same as v0.7.0. 同 v0.7.0。
+
+---
+
 # TextMark v0.7.0
 
 TextMark 0.7.0 completes a desktop UI layout deep-check against the latest Markdown Preview `main`: the editor now measures like the preview (40px gutters, a 740px centered column, 1.52 line height) and renders source headings at the preview's typographic scale; switching between edit and preview hands the reading position over instead of restarting at the top; the find bar follows the upstream two-stack layout; Windows/Linux toolbars no longer reserve dead space for window controls; the sidebar rows and section header match the upstream source list; and the formatting toolbar aligns with the editor column even when the sidebar or inspector is open. Default Chinese and cross-platform support are unchanged.

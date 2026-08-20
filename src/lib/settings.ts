@@ -1,6 +1,6 @@
 import type { AppSettings, ToolbarItem } from '../types'
 
-export const SETTINGS_KEYS = ['textmark.settings.v3', 'textmark.settings.v2', 'textmark.settings.v1'] as const
+export const SETTINGS_KEYS = ['textmark.settings.v5', 'textmark.settings.v3', 'textmark.settings.v2', 'textmark.settings.v1'] as const
 export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'navigation',
   'sidebar',
@@ -38,7 +38,7 @@ export const DEFAULT_TOOLBAR: ToolbarItem[] = [
 ]
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   locale: 'zh-CN',
   theme: 'system',
   contentWidth: 'normal',
@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultOpenTarget: 'system',
   crashReports: false,
   updateChannel: 'stable',
+  autoCheckUpdates: true,
+  lastUpdateCheckAt: null,
 }
 
 const valid = <T extends string>(value: unknown, values: readonly T[], fallback: T): T =>
@@ -61,10 +63,13 @@ export function normalizeSettings(value: unknown): AppSettings {
     : DEFAULT_TOOLBAR
   // Prior to v4, "openWith" meant the combined Open With + Open in LLM menu; it
   // is now the dedicated "openActions" item. Preserve existing user layouts.
+  const storedSchemaVersion = (stored as { schemaVersion?: number }).schemaVersion
   const toolbar =
-    stored.schemaVersion === 4 ? rawToolbar : rawToolbar.map((item) => (item === 'openWith' ? ('openActions' as ToolbarItem) : item))
+    storedSchemaVersion === 4 || storedSchemaVersion === 5
+      ? rawToolbar
+      : rawToolbar.map((item) => (item === 'openWith' ? ('openActions' as ToolbarItem) : item))
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
     theme: valid(stored.theme, ['system', 'light', 'dark'], 'system'),
     contentWidth: valid(stored.contentWidth, ['normal', 'full'], 'normal'),
@@ -75,6 +80,8 @@ export function normalizeSettings(value: unknown): AppSettings {
     defaultOpenTarget: typeof stored.defaultOpenTarget === 'string' ? stored.defaultOpenTarget : 'system',
     crashReports: stored.crashReports === true,
     updateChannel: valid(stored.updateChannel, ['stable', 'beta'], 'stable'),
+    autoCheckUpdates: stored.autoCheckUpdates !== false,
+    lastUpdateCheckAt: Number.isFinite(stored.lastUpdateCheckAt) ? Number(stored.lastUpdateCheckAt) : null,
   }
 }
 

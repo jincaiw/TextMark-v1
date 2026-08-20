@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { documentCss } from './export'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
-describe('v0.0.47 visual and print contract', () => {
+describe('v0.0.49 visual and print contract', () => {
   it('uses the frozen 820px content column and exact page gutters', () =>
     expect(UPSTREAM_DOCUMENT_TOKENS).toMatchObject({
       contentColumnWidth: 820,
@@ -19,7 +19,8 @@ describe('v0.0.47 visual and print contract', () => {
       fill: '#f5f5f7',
       grid: '#d2d2d7',
     }))
-  it('gives every authored blank line one source line of height', () => expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(22.8))
+  it('uses the full source line height for all but the final blank in a run', () =>
+    expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(22.8))
   it('keeps system preview typography aligned with the app', () => expect(UPSTREAM_DOCUMENT_TOKENS.fontFamily).toContain('SF Pro Text'))
   it('forces a light print palette and removes screen controls', () => {
     expect(documentCss).toContain('color-scheme:light')
