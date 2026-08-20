@@ -22,6 +22,10 @@ int wmain(int argc, wchar_t** argv) {
   if (getClassObject && SUCCEEDED(getClassObject(CLSID_TextMarkPreviewHandler, IID_PPV_ARGS(&factory))) && SUCCEEDED(factory->CreateInstance(nullptr, IID_PPV_ARGS(&preview))) && SUCCEEDED(preview->QueryInterface(IID_PPV_ARGS(&initialize))) && SUCCEEDED(initialize->Initialize(argv[2], STGM_READ))) {
     parent = CreateWindowExW(0, L"STATIC", L"TextMarkSmokeHost", WS_OVERLAPPEDWINDOW, 0, 0, 900, 700, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     RECT bounds{0, 0, 900, 700};
+    if (parent) {
+      ShowWindow(parent, SW_SHOW);
+      UpdateWindow(parent);
+    }
     if (parent && SUCCEEDED(preview->SetWindow(parent, &bounds)) && SUCCEEDED(preview->DoPreview())) {
       const auto deadline = GetTickCount64() + 30000;
       MSG message{};

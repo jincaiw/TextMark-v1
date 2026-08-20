@@ -115,6 +115,11 @@ jobs:
         run: |
           set -e
           bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          version="${RELEASE_TAG#v}"
+          archive=$(find "$bundle_dir"/macos -maxdepth 1 -name '*.app.tar.gz' -print -quit)
+          test -n "$archive"
+          mv "$archive" "$bundle_dir/macos/TextMark_${version}_universal.app.tar.gz"
+          mv "$archive.sig" "$bundle_dir/macos/TextMark_${version}_universal.app.tar.gz.sig"
           for asset in "$bundle_dir"/dmg/*.dmg "$bundle_dir"/macos/*.tar.gz "$bundle_dir"/macos/*.sig; do
             [ -f "$asset" ] || continue
             for attempt in 1 2 3 4 5; do
