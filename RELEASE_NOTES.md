@@ -1,3 +1,20 @@
+# TextMark v0.8.1
+
+TextMark 0.8.1 fixes a native print fallback reliability issue: repeated or concurrent exports now receive unique, sanitized temporary filenames, preventing one PDF export from replacing another. A Rust regression test covers uniqueness and extension sanitization. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.8.1 修复原生打印回退流程的可靠性问题：重复或并发导出现在会获得唯一且已清洗的临时文件名，避免一个 PDF 导出覆盖另一个。新增 Rust 回归测试，覆盖路径唯一性与扩展名清洗。默认中文与跨平台支持不变。
+
+## Highlights / 主要更新
+
+- 导出可靠性：macOS 原生打印回退的临时 PDF 文件名加入高精度时间戳与进程内序列号；保留扩展名白名单清洗和 `pdf` 默认值。
+- 回归保障：新增 `temporary_export_paths_are_unique_and_sanitize_extensions` Rust 单元测试。
+
+## Trust notice / 安全提示
+
+Same as v0.8.0. 同 v0.8.0。
+
+---
+
 # TextMark v0.8.0
 
 TextMark 0.8.0 completes the current Markdown Preview `main` parity pass (v0.0.49 plus its sidebar-selection fix). Output actions now wait for Mermaid, fonts and images before capture; macOS Print and Export as PDF use the native vector-capable Save as PDF workflow; Always on Top correctly yields while the window is full screen; settings are a dedicated, lightweight native window with General, Privacy and About panes; and the source editor gains Markdown-aware formatting toggles and visible syntax decorations. Quick Look adds immediate Command-A/Command-C selection and a Copy Markdown action. Default Chinese and cross-platform support are unchanged.

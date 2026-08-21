@@ -1,4 +1,4 @@
-# TextMark v0.8.0 upstream test traceability
+# TextMark v0.8.1 upstream test traceability
 
 Frozen reference: `pluk-inc/markdown-preview@main`, commit `53f4d35cd81b237e20c6011dc20f41d8c54aa914` (v0.0.49 plus the sidebar-selection fix).
 

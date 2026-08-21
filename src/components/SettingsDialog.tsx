@@ -184,7 +184,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <>
                 <div className="settings-about">
                   <strong>TextMark</strong>
-                  <span>v0.8.0</span>
+                  <span>v0.8.1</span>
                   <small>
                     {props.locale === 'zh-CN' ? '本地优先的 Markdown 阅读与编辑。' : 'A local-first Markdown reader and editor.'}
                   </small>

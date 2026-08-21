@@ -11,8 +11,11 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Command,
-    sync::{LazyLock, Mutex},
-    time::UNIX_EPOCH,
+    sync::{
+        LazyLock, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
@@ -25,6 +28,7 @@ const MARKDOWN_EXTENSIONS: &[&str] = &[
 ];
 const ASSET_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico"];
 const MAX_ASSET_BYTES: u64 = 8 * 1024 * 1024;
+static TEMP_EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub fn run_cli_mode() -> bool {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -1183,14 +1187,34 @@ fn save_export_bytes(path: String, bytes: Vec<u8>) -> AppResult<()> {
     file.commit().map_err(io_error)
 }
 
-#[tauri::command]
-fn temp_export_path(extension: String) -> String {
-    let ext: String = extension.chars().filter(|c| c.is_ascii_alphanumeric()).take(10).collect();
-    let ext = if ext.is_empty() { "pdf".to_string() } else { ext };
+fn unique_temp_export_path(extension: &str) -> String {
+    let ext: String = extension
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(10)
+        .collect();
+    let ext = if ext.is_empty() {
+        "pdf".to_string()
+    } else {
+        ext
+    };
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let sequence = TEMP_EXPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir()
-        .join(format!("textmark-{}.{}", std::process::id(), ext))
+        .join(format!(
+            "textmark-{}-{timestamp}-{sequence}.{ext}",
+            std::process::id()
+        ))
         .to_string_lossy()
         .to_string()
+}
+
+#[tauri::command]
+fn temp_export_path(extension: String) -> String {
+    unique_temp_export_path(&extension)
 }
 
 #[tauri::command]
@@ -1705,5 +1729,14 @@ mod tests {
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(!output.exists());
         fs::remove_file(input).unwrap();
+    }
+
+    #[test]
+    fn temporary_export_paths_are_unique_and_sanitize_extensions() {
+        let first = unique_temp_export_path("pdf");
+        let second = unique_temp_export_path("pdf");
+        assert_ne!(first, second);
+        assert!(first.ends_with(".pdf"));
+        assert!(unique_temp_export_path("../PNG!").ends_with(".PNG"));
     }
 }
