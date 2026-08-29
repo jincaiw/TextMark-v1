@@ -80,6 +80,7 @@ export function SettingsWindow() {
         onThemeColorChange={(scheme, slot, color) =>
           patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
         }
+        onThemeColorsReset={() => patch({ themeColors: {} })}
         onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
         onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
         onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}

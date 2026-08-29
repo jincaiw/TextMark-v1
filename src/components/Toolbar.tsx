@@ -350,19 +350,20 @@ export function Toolbar(props: ToolbarProps) {
   return (
     <header
       className="native-toolbar"
+      data-tauri-drag-region
       onClick={(event) => {
         const details = (event.target as HTMLElement).closest('.menu-popover button')?.closest('details')
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}
     >
-      <div className="window-leading">
+      <div className="window-leading" data-tauri-drag-region>
         <div className="traffic-lights">
           <button aria-label={tx('close')} onClick={() => windowAction('close')} />
           <button aria-label={tx('minimize')} onClick={() => windowAction('minimize')} />
           <button aria-label={tx('maximize')} onClick={() => windowAction('toggleMaximize')} />
         </div>
       </div>
-      <div className="native-actions" ref={actionsRef}>
+      <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
         {props.items.map(renderItem)}
         <details className="more-menu">
           <summary title={tx('more')}>

@@ -12,6 +12,7 @@ import {
   readDocument,
   renamePastedImage,
   readStartupRequest,
+  resolveOpenPath,
   resolveSiblingPath,
   savePastedImage,
   scanFolder,
@@ -28,7 +29,8 @@ import type {
   OpenPathRequest,
   TextDocument,
 } from '../types'
-import { replacePastedImageReferences } from '../lib/pastedImages'
+import { pastedImageRenameTarget, replacePastedImageReferences } from '../lib/pastedImages'
+import { canReplaceBootstrapDocument, shouldOpenDocumentInCurrentWindow } from '../lib/documentPresentation'
 
 const sessionId = () => globalThis.crypto?.randomUUID?.() ?? `document-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -121,6 +123,8 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [externalChange, setExternalChange] = useState<ExternalDocumentChange | null>(null)
+  const sessionsRef = useRef(sessions)
+  sessionsRef.current = sessions
   const undoRef = useRef(new Map<string, { undo: string[]; redo: string[] }>())
   const pendingRenameRef = useRef<{ originalPath: string; candidate: string | null } | null>(null)
   const startupLoadedRef = useRef(false)
@@ -149,7 +153,9 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
       const existing = next.path ? current.find((session) => session.path === next.path) : undefined
       if (existing) {
         setActiveId(existing.id)
-        return current.map((session) => (session.id === existing.id ? { ...makeSession(next), id: existing.id } : session))
+        // Reopening an existing tab must only focus it. Reloading here would
+        // silently discard any unsaved editor contents in that session.
+        return current
       }
       const session = makeSession(next)
       setActiveId(session.id)
@@ -172,9 +178,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         return null
       }
       const first = firstFile(nextFiles)
-      if (first) applyDocument(await readDocument(first.path), openDocumentsInTabs)
+      if (first) {
+        const replaceBootstrap = canReplaceBootstrapDocument(sessionsRef.current)
+        applyDocument(await readDocument(first.path), replaceBootstrap ? false : openDocumentsInTabs)
+      }
     },
-    [applyDocument],
+    [applyDocument, openDocumentsInTabs],
   )
 
   useEffect(() => {
@@ -196,12 +205,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     void readStartupRequest()
       .then(async (startup) => {
         for (const [index, entry] of startup.paths.entries()) {
-          if (startup.newWindow && index > 0) {
+          if (!entry.isDirectory && index > 0 && (startup.newWindow || !openDocumentsInTabs)) {
             await openDocumentWindow(entry.path)
             continue
           }
           if (entry.isDirectory) await openFolderPath(entry.path)
-          else applyDocument(await readDocument(entry.path), openDocumentsInTabs || index > 0)
+          else applyDocument(await readDocument(entry.path), openDocumentsInTabs && index > 0)
         }
       })
       .catch(showError)
@@ -297,14 +306,19 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
       if (!isTauri()) return
       setBusy(true)
       try {
-        applyDocument(await readDocument(path), newTab || openDocumentsInTabs)
+        const entry = await resolveOpenPath(path)
+        if (entry.isDirectory) await openFolderPath(entry.path)
+        else if (shouldOpenDocumentInCurrentWindow(sessionsRef.current, openDocumentsInTabs, newTab)) {
+          const replaceBootstrap = !newTab && canReplaceBootstrapDocument(sessionsRef.current)
+          applyDocument(await readDocument(entry.path), replaceBootstrap ? false : newTab || openDocumentsInTabs)
+        } else await openDocumentWindow(entry.path)
       } catch (error) {
         showError(error)
       } finally {
         setBusy(false)
       }
     },
-    [applyDocument, openDocumentsInTabs, showError],
+    [applyDocument, openDocumentsInTabs, openFolderPath, showError],
   )
 
   const navigatePath = useCallback(
@@ -381,9 +395,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     let unlisten: (() => void) | undefined
     void listen<OpenPathRequest[]>('open-paths', (event) => {
       void (async () => {
-        for (const entry of event.payload) {
+        const replaceFirst = canReplaceBootstrapDocument(sessionsRef.current)
+        for (const [index, entry] of event.payload.entries()) {
           if (entry.isDirectory) await openFolderPath(entry.path)
-          else applyDocument(await readDocument(entry.path), openDocumentsInTabs)
+          else if (openDocumentsInTabs || (replaceFirst && index === 0))
+            applyDocument(await readDocument(entry.path), openDocumentsInTabs && !(replaceFirst && index === 0))
+          else await openDocumentWindow(entry.path)
         }
       })().catch(showError)
     }).then((dispose) => {
@@ -407,7 +424,13 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         }
         const selected = await open({ multiple: true, directory: false, filters: MARKDOWN_FILTERS })
         const paths = typeof selected === 'string' ? [selected] : (selected ?? [])
-        for (const [index, path] of paths.entries()) applyDocument(await readDocument(path), newTab || openDocumentsInTabs || index > 0)
+        const replaceFirst = canReplaceBootstrapDocument(sessionsRef.current)
+        for (const [index, path] of paths.entries()) {
+          if (newTab || openDocumentsInTabs || (replaceFirst && index === 0)) {
+            const replaceBootstrap = !newTab && replaceFirst && index === 0
+            applyDocument(await readDocument(path), replaceBootstrap ? false : newTab || openDocumentsInTabs || index > 0)
+          } else await openDocumentWindow(path)
+        }
       } catch (error) {
         showError(error)
       } finally {
@@ -544,12 +567,32 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
           ?.replace(/\.png$/i, '') ?? 'image'
       const name = window.prompt(messages[locale].renameImagePrompt, fallback)
       if (!name?.trim()) return
+      const nextPath = pastedImageRenameTarget(relativePath, name)
+      if (!nextPath) {
+        setNotice(messages[locale].invalid_path)
+        return
+      }
+      const next = replacePastedImageReferences(active.contents, relativePath, nextPath)
+      if (!next.count) {
+        setNotice(messages[locale].imageReferenceMissing)
+        return
+      }
       setBusy(true)
       try {
-        const renamed = await renamePastedImage(active.path, relativePath, name)
+        const activeSnapshot = active.contents
+        const renamed = await renamePastedImage(active.path, relativePath, name, next.source, active.revision)
         updateActive((session) => {
-          const next = replacePastedImageReferences(session.contents, relativePath, renamed.relativePath)
-          return next.count ? { ...session, contents: next.source, dirty: next.source !== session.savedContents } : session
+          const current =
+            session.contents === activeSnapshot ? next : replacePastedImageReferences(session.contents, relativePath, renamed.relativePath)
+          const contents = current.count ? current.source : session.contents
+          return {
+            ...session,
+            ...renamed.document,
+            contents,
+            savedContents: renamed.document.contents,
+            diskContents: renamed.document.contents,
+            dirty: contents !== renamed.document.contents,
+          }
         })
       } catch (error) {
         showError(error)
@@ -676,6 +719,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     openFolder,
     openPath,
     openRelative,
+    openWorkspacePath: navigatePath,
     canGoBack: (active?.historyIndex ?? 0) > 0,
     canGoForward: Boolean(active && active.historyIndex < active.history.length - 1),
     goBack: (scrollTop?: number) => moveNavigation(-1, scrollTop),

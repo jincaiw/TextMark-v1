@@ -1,3 +1,24 @@
+# TextMark v0.9.0
+
+TextMark 0.9.0 completes another deep parity pass against the latest Markdown Preview while making editing and desktop workflows substantially more robust. The editor now loads language support for fenced code blocks on demand, renders pasted local images inline, and renames pasted-image files transactionally when their Markdown paths change. New-document and folder deep-link flows are safer, dirty tabs are never silently replaced, seven built-in appearance themes are available from a dedicated settings pane, and the renderer and deep-link lifecycle have been split into focused modules for easier maintenance. Default Chinese and full Windows, Linux, and macOS support remain unchanged.
+
+TextMark 0.9.0 完成新一轮对最新版 Markdown Preview 的深度对标，并显著增强编辑与桌面工作流的可靠性。编辑器现可按需加载围栏代码块的语言支持、在源码中内联预览粘贴的本地图片，并在 Markdown 图片路径变化时以事务方式安全重命名文件；新建文档与文件夹深链接流程更加稳健，未保存标签不会被静默替换；设置新增独立外观页与七套内置主题；渲染器和深链接生命周期也拆分为职责清晰的模块，便于后续维护。默认中文及 Windows、Linux、macOS 三平台支持保持不变。
+
+## Highlights / 主要更新
+
+- 编辑器与代码块：围栏识别覆盖反引号/波浪线、缩进、长围栏及嵌套边界；CodeMirror 语言包按需加载，保持主编辑器包轻量，并补齐对应装饰与回归测试。
+- 图片工作流：粘贴图片可直接在编辑器中预览；修改自动生成的图片路径时，原生端采用预检、冲突保护与回滚机制完成文件重命名，避免覆盖或半完成状态。
+- 文档与窗口：新增可靠的新建文档入口和文件夹深链接处理；打开目标文档时优先复用合适窗口，同时保护含未保存内容的现有标签；工具栏空白区恢复原生窗口拖动。
+- 外观设置：新增独立外观页、七套内置主题、跟随系统模式与一键恢复默认；关于页从应用元数据动态读取版本号。
+- 架构与性能：Markdown 渲染、深链接监听从主应用组件拆分为独立 hooks；代码语言数据拆包加载，主编辑器资源体积显著下降。
+- 回归保障：259 项前端测试、13 项 Rust 测试、20 项原生端到端测试及完整 Markdown 语法文档显示测试通过；类型检查、代码规范、格式、Clippy、生产构建、包体预算与生产依赖安全审计均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.8.2. 同 v0.8.2。
+
+---
+
 # TextMark v0.8.2
 
 TextMark 0.8.2 completes the latest Markdown Preview parity improvements and adds a full-document rendering regression suite. Rendering now follows CommonMark soft-break semantics, preserves safe GFM table alignment, produces stable Chinese anchors, keeps long code lines horizontally scrollable, and prevents literal HTML-looking task text from truncating the remainder of a document. The release also includes auto-save, multi-document tabs, custom themes, image paste and rename workflows, deep-link handoff, and related desktop reliability improvements.

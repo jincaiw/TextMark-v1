@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
-import type { AppError, AppSettings, ExternalApplication, FileNode, StartupRequest, TextDocument } from '../types'
+import type { AppError, AppSettings, ExternalApplication, FileNode, OpenPathRequest, StartupRequest, TextDocument } from '../types'
 
 export interface SavedPastedImage {
   relativePath: string
@@ -8,6 +8,7 @@ export interface SavedPastedImage {
 
 export interface RenamedPastedImage {
   relativePath: string
+  document: TextDocument
 }
 
 declare global {
@@ -79,6 +80,10 @@ export async function readStartupRequest(): Promise<StartupRequest> {
   return invoke<StartupRequest>('startup_request')
 }
 
+export async function resolveOpenPath(path: string): Promise<OpenPathRequest> {
+  return invoke<OpenPathRequest>('resolve_open_path', { path })
+}
+
 export async function writeDocument(path: string, contents: string, expectedRevision?: string, force = false): Promise<TextDocument> {
   return invoke<TextDocument>('write_text_file', { path, contents, expectedRevision, force })
 }
@@ -87,8 +92,14 @@ export async function savePastedImage(documentPath: string, bytes: Uint8Array): 
   return invoke<SavedPastedImage>('save_pasted_image', { documentPath, bytes: Array.from(bytes) })
 }
 
-export async function renamePastedImage(documentPath: string, relativePath: string, name: string): Promise<RenamedPastedImage> {
-  return invoke<RenamedPastedImage>('rename_pasted_image', { documentPath, relativePath, name })
+export async function renamePastedImage(
+  documentPath: string,
+  relativePath: string,
+  name: string,
+  contents: string,
+  expectedRevision?: string,
+): Promise<RenamedPastedImage> {
+  return invoke<RenamedPastedImage>('rename_pasted_image', { documentPath, relativePath, name, contents, expectedRevision })
 }
 
 export async function scanFolder(path: string): Promise<FileNode[]> {

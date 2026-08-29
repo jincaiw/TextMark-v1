@@ -5,6 +5,12 @@ import path from 'node:path'
 const fixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
 const movedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e-renamed.md')
 
+before(async () => {
+  // The document title intentionally replaces "TextMark" once a file opens.
+  // Pin WebDriver to the stable Tauri label after the service API is ready.
+  await browser.tauri.switchWindow('main')
+})
+
 describe('TextMark desktop shell', () => {
   it('opens a real launch-path document in Chinese and renders through the Worker', async () => {
     await browser.setWindowSize(1440, 900)
@@ -269,6 +275,20 @@ describe('TextMark toolbar click matrix', () => {
     await $('.more-menu summary[title="更多"]').click()
     await $("//details[contains(@class,'more-menu')]//button[normalize-space()='偏好设置…']").click()
     await expect(await $('.settings-dialog')).toBeDisplayed()
+    await $("//nav[contains(@class,'settings-nav')]/button[normalize-space()='外观']").click()
+    expect(await $$('.theme-preset-grid > button')).toHaveLength(7)
+    await $("//div[contains(@class,'theme-preset-grid')]/button[normalize-space()='Solarized Dark']").click()
+    expect(await browser.execute(() => document.documentElement.style.getPropertyValue('--window'))).toBe('#0C3742')
+    await browser.execute(() => {
+      const color = document.querySelector('.theme-colors input[type="color"]')
+      const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+      setValue.call(color, '#123456')
+      color.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await expect(await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']")).toBeEnabled()
+    await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']").click()
+    await expect(await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']")).not.toBeEnabled()
+    await $("//div[contains(@class,'theme-preset-grid')]/button[normalize-space()='Normal']").click()
     await $(".settings-dialog button[aria-label='关闭']").click()
   })
 
@@ -342,5 +362,15 @@ describe('TextMark toolbar click matrix', () => {
     } finally {
       await reset()
     }
+  })
+
+  it('creates a new editable document', async () => {
+    await browser.keys([process.platform === 'darwin' ? 'Meta' : 'Control', 'n'])
+    await expect(await $('.app-shell')).toHaveClassContaining('mode-edit')
+    expect(await browser.getTitle()).toBe('未命名.md')
+    const editor = await $('.cm-content')
+    await editor.waitForDisplayed()
+    expect(await editor.getText()).toBe('')
+    await expect(await $('.formatting-toolbar[aria-label="Markdown 格式"]')).toBeDisplayed()
   })
 })

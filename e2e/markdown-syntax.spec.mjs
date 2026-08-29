@@ -5,6 +5,10 @@
  */
 const describeSyntax = process.env.TEXTMARK_SYNTAX_FIXTURE ? describe : describe.skip
 
+before(async () => {
+  await browser.tauri.switchWindow('main')
+})
+
 describeSyntax('Markdown syntax corpus rendering', () => {
   it('renders supported CommonMark and GFM features, while filtering dangerous HTML', async () => {
     await browser.setWindowSize(1280, 900)

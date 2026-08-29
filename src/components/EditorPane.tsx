@@ -1,14 +1,22 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
-import { editorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
-import { editableCodeFenceAtLine, rewriteCodeFenceLanguage, type EditableCodeFence } from '../lib/codeFenceEditing'
+import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
+import {
+  codeFenceAutoCloseInsertion,
+  editableCodeFenceAtLine,
+  isCodeFenceBodyLine,
+  rewriteCodeFenceLanguage,
+  type EditableCodeFence,
+} from '../lib/codeFenceEditing'
 import { clampScrollFraction } from '../lib/scrollFraction'
+import { loadLocalAsset } from '../lib/platform'
 import type { ContentWidth, FormatCommand } from '../types'
 
 export interface EditorPaneHandle {
@@ -32,6 +40,9 @@ interface EditorPaneProps {
   onChange: (value: string) => void
   /** Returns Markdown to insert after a clipboard image has been saved safely. */
   onPasteImage?: (file: File) => Promise<string | null>
+  baseDirectory?: string | null
+  workspacePath?: string | null
+  onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
 }
 
@@ -112,6 +123,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   const viewRef = useRef<EditorView | null>(null)
   const pasteImageRef = useRef(props.onPasteImage)
   pasteImageRef.current = props.onPasteImage
+  const imageContextRef = useRef({
+    baseDirectory: props.baseDirectory,
+    workspacePath: props.workspacePath,
+    onRenameImage: props.onRenameImage,
+  })
+  imageContextRef.current = {
+    baseDirectory: props.baseDirectory,
+    workspacePath: props.workspacePath,
+    onRenameImage: props.onRenameImage,
+  }
   const [ready, setReady] = useState(false)
   const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
   const imagePasteExtension = useMemo(
@@ -141,6 +162,40 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       }),
     [],
   )
+  const codeFenceInputExtension = useMemo(
+    () =>
+      EditorView.inputHandler.of((view, from, to, text) => {
+        if (from !== to) return false
+        const line = view.state.doc.lineAt(from)
+        const insertion = codeFenceAutoCloseInsertion(view.state.sliceDoc(line.from, from), view.state.sliceDoc(to, line.to), text)
+        if (!insertion) return false
+        view.dispatch({
+          changes: { from, to, insert: insertion.insert },
+          selection: { anchor: from + insertion.cursorOffset },
+          userEvent: 'input.type',
+        })
+        return true
+      }),
+    [],
+  )
+  const imagePreviewExtension = useMemo(
+    () =>
+      createEditorMarkdownDecorations({
+        resolveImage: (path) => {
+          const context = imageContextRef.current
+          if (!context.baseDirectory) return Promise.resolve(null)
+          return loadLocalAsset(context.baseDirectory, path, context.workspacePath).catch(() => null)
+        },
+        onRenameImage: (path) => imageContextRef.current.onRenameImage?.(path),
+      }),
+    [],
+  )
+  const indentFenceBody = (view: EditorView, direction: 'more' | 'less') => {
+    const line = view.state.doc.lineAt(view.state.selection.main.head)
+    const fence = editableCodeFenceAtLine(view.state.doc, line.number)
+    if (!isCodeFenceBodyLine(fence, line.number)) return false
+    return direction === 'more' ? indentMore(view) : indentLess(view)
+  }
 
   useImperativeHandle(
     forwardedRef,
@@ -200,15 +255,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           height="100%"
           theme={props.theme === 'dark' ? oneDark : 'light'}
           extensions={[
-            markdown(),
+            markdown({ codeLanguages: languages }),
             editorHeadings,
-            editorMarkdownDecorations,
+            imagePreviewExtension,
             imagePasteExtension,
+            codeFenceInputExtension,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
-              { key: 'Tab', run: indentMore },
-              { key: 'Shift-Tab', run: indentLess },
+              { key: 'Tab', run: (view) => indentFenceBody(view, 'more') },
+              { key: 'Shift-Tab', run: (view) => indentFenceBody(view, 'less') },
             ]),
           ]}
           onCreateEditor={(view) => {

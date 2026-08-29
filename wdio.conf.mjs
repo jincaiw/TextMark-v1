@@ -44,9 +44,10 @@ process.env.TEXTMARK_E2E_CONFIG_DIR = configPath
 export const config = {
   runner: 'local',
   framework: 'mocha',
-  specs: ['./e2e/**/*.spec.mjs'],
+  specs: usesExternalFixture ? ['./e2e/markdown-syntax.spec.mjs'] : ['./e2e/shell.spec.mjs'],
   maxInstances: 1,
   logLevel: 'warn',
+  logLevels: { 'tauri-service:service': 'error' },
   waitforTimeout: 20_000,
   connectionRetryTimeout: 60_000,
   mochaOpts: { timeout: 90_000 },

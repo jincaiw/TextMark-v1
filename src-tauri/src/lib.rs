@@ -143,6 +143,7 @@ struct SavedPastedImage {
 #[serde(rename_all = "camelCase")]
 struct RenamedPastedImage {
     relative_path: String,
+    document: TextDocument,
 }
 
 #[derive(Serialize)]
@@ -463,15 +464,9 @@ fn show_in_file_manager(path: String) -> AppResult<()> {
 
 #[tauri::command]
 fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
-    let canonical = PathBuf::from(path)
-        .canonicalize()
-        .map_err(|_| AppError { code: "not_found" })?;
-    let is_directory = canonical.is_dir();
-    if !is_directory && (!canonical.is_file() || !is_markdown(&canonical)) {
-        return Err(AppError {
-            code: "invalid_document",
-        });
-    }
+    let request = resolve_open_path(path)?;
+    let canonical = PathBuf::from(&request.path);
+    let is_directory = request.is_directory;
     let label = format!(
         "document-{}",
         std::time::SystemTime::now()
@@ -494,6 +489,23 @@ fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
     .build()
     .map(|_| ())
     .map_err(io_error)
+}
+
+#[tauri::command]
+fn resolve_open_path(path: String) -> AppResult<OpenPathRequest> {
+    let canonical = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|_| AppError { code: "not_found" })?;
+    let is_directory = canonical.is_dir();
+    if !is_directory && (!canonical.is_file() || !is_markdown(&canonical)) {
+        return Err(AppError {
+            code: "invalid_document",
+        });
+    }
+    Ok(OpenPathRequest {
+        path: canonical.to_string_lossy().to_string(),
+        is_directory,
+    })
 }
 
 fn build_menu(
@@ -538,7 +550,12 @@ fn build_menu(
     // Upstream's New Tab opens a document chooser. TextMark retains a separate
     // explicit empty-document action for authors who need a scratch buffer.
     let new_tab = item("new-tab", "新建标签页…", "New Tab…", Some("CmdOrCtrl+T"))?;
-    let new_document = item("new-document", "新建空白文档", "New Blank Document", None)?;
+    let new_document = item(
+        "new-document",
+        "新建文稿",
+        "New Document",
+        Some("CmdOrCtrl+N"),
+    )?;
     let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
     let open_folder = item(
@@ -1259,7 +1276,13 @@ fn save_pasted_image(document_path: String, bytes: Vec<u8>) -> AppResult<SavedPa
 }
 
 #[tauri::command]
-fn rename_pasted_image(document_path: String, relative_path: String, name: String) -> AppResult<RenamedPastedImage> {
+fn rename_pasted_image(
+    document_path: String,
+    relative_path: String,
+    name: String,
+    contents: String,
+    expected_revision: Option<String>,
+) -> AppResult<RenamedPastedImage> {
     let document = PathBuf::from(document_path)
         .canonicalize()
         .map_err(|_| AppError { code: "not_found" })?;
@@ -1287,7 +1310,12 @@ fn rename_pasted_image(document_path: String, relative_path: String, name: Strin
     if !current.is_file() {
         return Err(AppError { code: "not_found" });
     }
-    let cleaned = name.trim().trim_end_matches(".png");
+    let trimmed = name.trim();
+    let cleaned = if trimmed.to_ascii_lowercase().ends_with(".png") {
+        &trimmed[..trimmed.len() - 4]
+    } else {
+        trimmed
+    };
     if cleaned.is_empty()
         || !cleaned
             .chars()
@@ -1300,10 +1328,25 @@ fn rename_pasted_image(document_path: String, relative_path: String, name: Strin
     if target.exists() {
         return Err(AppError { code: "invalid_path" });
     }
-    fs::rename(current, target).map_err(io_error)?;
-    Ok(RenamedPastedImage {
-        relative_path: format!("Pictures/{stem}/{filename}"),
-    })
+    fs::rename(&current, &target).map_err(io_error)?;
+    let saved = write_text_file(
+        document.to_string_lossy().to_string(),
+        contents,
+        expected_revision,
+        false,
+    );
+    match saved {
+        Ok(document) => Ok(RenamedPastedImage {
+            relative_path: format!("Pictures/{stem}/{filename}"),
+            document,
+        }),
+        Err(error) => {
+            if fs::rename(&target, &current).is_err() {
+                return Err(AppError { code: "io" });
+            }
+            Err(error)
+        }
+    }
 }
 
 fn unique_temp_export_path(extension: &str) -> String {
@@ -1716,6 +1759,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             read_text_file,
+            resolve_open_path,
             startup_request,
             write_text_file,
             save_export_bytes,
@@ -1778,6 +1822,26 @@ mod tests {
         assert_eq!(request.paths.len(), 2);
         assert!(!request.paths[0].is_directory);
         assert!(request.paths[1].is_directory);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn open_path_resolution_accepts_markdown_and_directories_but_rejects_other_files() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-open-path-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(root.join("folder.with.dots")).unwrap();
+        fs::write(root.join("guide.md"), "# Guide").unwrap();
+        fs::write(root.join("page.html"), "<h1>unsafe</h1>").unwrap();
+
+        let document = resolve_open_path(root.join("guide.md").to_string_lossy().to_string()).unwrap();
+        assert!(!document.is_directory);
+        let directory = resolve_open_path(root.join("folder.with.dots").to_string_lossy().to_string()).unwrap();
+        assert!(directory.is_directory);
+        let error = resolve_open_path(root.join("page.html").to_string_lossy().to_string()).unwrap_err();
+        assert_eq!(error.code, "invalid_document");
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1915,10 +1979,52 @@ mod tests {
             .write_to(&mut bytes, ImageFormat::Png)
             .unwrap();
         let saved = save_pasted_image(document.to_string_lossy().to_string(), bytes.into_inner()).unwrap();
-        let renamed = rename_pasted_image(document.to_string_lossy().to_string(), saved.relative_path, "diagram".into()).unwrap();
+        let original = read_text_file(document.to_string_lossy().to_string()).unwrap();
+        let renamed = rename_pasted_image(
+            document.to_string_lossy().to_string(),
+            saved.relative_path,
+            "diagram.PNG".into(),
+            "# Guide\n\n![diagram](Pictures/guide/diagram.png)".into(),
+            Some(original.revision),
+        )
+        .unwrap();
         assert_eq!(renamed.relative_path, "Pictures/guide/diagram.png");
+        assert!(renamed.document.contents.contains("Pictures/guide/diagram.png"));
         assert!(root.join("Pictures/guide/diagram.png").is_file());
         assert!(!root.join("Pictures/guide/1.png").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pasted_image_rename_rolls_back_when_the_document_changed_on_disk() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-paste-rollback-test-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let document = root.join("guide.md");
+        fs::write(&document, "# Guide").unwrap();
+        let original = read_text_file(document.to_string_lossy().to_string()).unwrap();
+        let mut bytes = Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(ImageBuffer::from_pixel(1, 1, Rgb([8, 9, 10])))
+            .write_to(&mut bytes, ImageFormat::Png)
+            .unwrap();
+        let saved = save_pasted_image(document.to_string_lossy().to_string(), bytes.into_inner()).unwrap();
+        fs::write(&document, "# External change").unwrap();
+
+        let error = rename_pasted_image(
+            document.to_string_lossy().to_string(),
+            saved.relative_path,
+            "diagram".into(),
+            "# Guide\n\n![diagram](Pictures/guide/diagram.png)".into(),
+            Some(original.revision),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "save_conflict");
+        assert!(root.join("Pictures/guide/1.png").is_file());
+        assert!(!root.join("Pictures/guide/diagram.png").exists());
+        assert_eq!(fs::read_to_string(&document).unwrap(), "# External change");
         fs::remove_dir_all(root).unwrap();
     }
 }

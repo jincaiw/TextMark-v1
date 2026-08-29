@@ -1,8 +1,8 @@
-import { Info, Palette, ShieldCheck, X } from 'lucide-react'
+import { Info, Palette, Settings2, ShieldCheck, X } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../lib/i18n'
-import { THEME_COLOR_SLOTS, THEME_PRESETS, resolvedThemePalette } from '../lib/theme'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
+import { AppearanceSettings } from './AppearanceSettings'
 import type {
   AppSettings,
   ContentWidth,
@@ -50,6 +50,7 @@ interface SettingsDialogProps {
   onDocumentFontChange: (font: DocumentFont) => void
   onThemePresetChange: (preset: ThemePreset) => void
   onThemeColorChange: (scheme: ThemeColorScheme, slot: ThemeColorSlot, color: string) => void
+  onThemeColorsReset: () => void
   onAutoSaveIntervalChange: (minutes: number) => void
   onOpenDocumentsInTabsChange: (enabled: boolean) => void
   onAlwaysOnTopChange: (enabled: boolean) => void
@@ -59,8 +60,12 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const backdropRef = useDialogAccessibility(props.open, props.onClose)
-  const [pane, setPane] = useState<'general' | 'privacy' | 'about'>('general')
+  const [pane, setPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
+  const close = () => {
+    setPane('general')
+    props.onClose()
+  }
+  const backdropRef = useDialogAccessibility(props.open, close)
   if (!props.open) return null
   const updateText =
     props.updateStatus.state === 'checking'
@@ -75,7 +80,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               ? t(props.locale, 'updateError')
               : ''
   return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={props.onClose} ref={backdropRef}>
+    <div className="dialog-backdrop" role="presentation" onMouseDown={close} ref={backdropRef}>
       <section
         className="settings-dialog"
         role="dialog"
@@ -85,15 +90,19 @@ export function SettingsDialog(props: SettingsDialogProps) {
       >
         <header>
           <h2 id="settings-title">TextMark {t(props.locale, 'preferences')}</h2>
-          <button onClick={props.onClose} aria-label={t(props.locale, 'close')}>
+          <button onClick={close} aria-label={t(props.locale, 'close')}>
             <X />
           </button>
         </header>
         <div className="settings-layout">
           <nav className="settings-nav" aria-label="Settings sections">
             <button className={pane === 'general' ? 'selected' : ''} onClick={() => setPane('general')}>
-              <Palette />
+              <Settings2 />
               {props.locale === 'zh-CN' ? '通用' : 'General'}
+            </button>
+            <button className={pane === 'appearance' ? 'selected' : ''} onClick={() => setPane('appearance')}>
+              <Palette />
+              {t(props.locale, 'appearance')}
             </button>
             <button className={pane === 'privacy' ? 'selected' : ''} onClick={() => setPane('privacy')}>
               <ShieldCheck />
@@ -114,45 +123,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     <option value="en">{t(props.locale, 'english')}</option>
                   </select>
                 </label>
-                <label>
-                  <span>{t(props.locale, 'appearance')}</span>
-                  <select value={props.theme} onChange={(event) => props.onThemeChange(event.target.value as ThemeMode)}>
-                    <option value="system">{t(props.locale, 'automatic')}</option>
-                    <option value="light">{t(props.locale, 'light')}</option>
-                    <option value="dark">{t(props.locale, 'dark')}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{props.locale === 'zh-CN' ? '主题预设' : 'Theme Preset'}</span>
-                  <select value={props.themePreset} onChange={(event) => props.onThemePresetChange(event.target.value as ThemePreset)}>
-                    {Object.entries(THEME_PRESETS).map(([id, preset]) => (
-                      <option key={id} value={id}>
-                        {preset.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="theme-colors" aria-label={props.locale === 'zh-CN' ? '主题颜色' : 'Theme colors'}>
-                  <strong>{props.locale === 'zh-CN' ? '自定义颜色' : 'Custom colors'}</strong>
-                  {(['light', 'dark'] as const).map((scheme) => {
-                    const colors = resolvedThemePalette(props.themePreset, scheme, props.themeColors)
-                    return (
-                      <fieldset key={scheme}>
-                        <legend>{scheme === 'light' ? t(props.locale, 'light') : t(props.locale, 'dark')}</legend>
-                        {THEME_COLOR_SLOTS.map((slot) => (
-                          <label key={slot}>
-                            <span>{themeSlotLabel(slot, props.locale)}</span>
-                            <input
-                              type="color"
-                              value={colors[slot]}
-                              onChange={(event) => props.onThemeColorChange(scheme, slot, event.target.value)}
-                            />
-                          </label>
-                        ))}
-                      </fieldset>
-                    )
-                  })}
-                </div>
                 <label>
                   <span>{t(props.locale, 'contentWidth')}</span>
                   <select value={props.contentWidth} onChange={(event) => props.onContentWidthChange(event.target.value as ContentWidth)}>
@@ -254,6 +224,18 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 </label>
               </>
             ) : null}
+            {pane === 'appearance' ? (
+              <AppearanceSettings
+                locale={props.locale}
+                theme={props.theme}
+                themePreset={props.themePreset}
+                themeColors={props.themeColors}
+                onThemeChange={props.onThemeChange}
+                onThemePresetChange={props.onThemePresetChange}
+                onThemeColorChange={props.onThemeColorChange}
+                onThemeColorsReset={props.onThemeColorsReset}
+              />
+            ) : null}
             {pane === 'privacy' ? (
               <>
                 <label>
@@ -280,7 +262,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <>
                 <div className="settings-about">
                   <strong>TextMark</strong>
-                  <span>v0.8.1</span>
+                  <span>v{__APP_VERSION__}</span>
                   <small>
                     {props.locale === 'zh-CN' ? '本地优先的 Markdown 阅读与编辑。' : 'A local-first Markdown reader and editor.'}
                   </small>
@@ -331,22 +313,4 @@ export function SettingsDialog(props: SettingsDialogProps) {
       </section>
     </div>
   )
-}
-
-function themeSlotLabel(slot: ThemeColorSlot, locale: Locale) {
-  const zh: Record<ThemeColorSlot, string> = {
-    windowBackground: '窗口背景',
-    editorBackground: '编辑器背景',
-    codeBlockBackground: '代码背景',
-    textColor: '正文文字',
-    linkColor: '链接颜色',
-  }
-  const en: Record<ThemeColorSlot, string> = {
-    windowBackground: 'Window background',
-    editorBackground: 'Editor background',
-    codeBlockBackground: 'Code background',
-    textColor: 'Text',
-    linkColor: 'Links',
-  }
-  return (locale === 'zh-CN' ? zh : en)[slot]
 }

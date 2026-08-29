@@ -1156,6 +1156,37 @@ select:focus-visible {
 .editor-pane .cm-selectionBackground {
   background: color-mix(in srgb, var(--accent) 25%, transparent) !important;
 }
+.editor-pane .cm-md-image-preview {
+  display: inline-flex;
+  width: 112px;
+  height: 76px;
+  margin: 4px 8px;
+  padding: 3px;
+  vertical-align: middle;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--document-fill);
+  cursor: pointer;
+}
+.editor-pane .cm-md-image-preview:hover {
+  border-color: var(--accent);
+}
+.editor-pane .cm-md-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+.editor-pane .cm-md-image-preview.asset-error::after {
+  content: '!';
+  margin: auto;
+  color: var(--danger);
+  font-weight: 700;
+}
+.editor-pane .cm-md-image-preview.asset-error img {
+  display: none;
+}
 /* Editor headings follow the preview's minor-third scale (upstream parity). */
 .editor-pane .cm-md-h1,
 .editor-pane .cm-md-h2,
@@ -2083,6 +2114,81 @@ mark.search-match.active {
 }
 .theme-colors > strong {
   font-size: var(--text-md);
+}
+.theme-colors-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.theme-colors-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.theme-colors-heading button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.theme-colors-heading svg {
+  width: 13px;
+  height: 13px;
+}
+.theme-presets {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-md);
+}
+.theme-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.theme-preset-grid > button {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: start;
+  cursor: pointer;
+}
+.theme-preset-grid > button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.theme-preset-grid > button.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.theme-preset-preview {
+  height: 32px;
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.18);
+}
+.theme-preset-preview i {
+  width: 18%;
+  height: 70%;
+  border-radius: 2px;
+}
+.theme-preset-preview i:nth-child(2) {
+  width: 45%;
+  height: 100%;
 }
 .theme-colors fieldset {
   display: grid;
