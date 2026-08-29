@@ -11,9 +11,19 @@ export const UPSTREAM_DOCUMENT_TOKENS = Object.freeze({
   dark: { text: '#f5f5f7', secondary: '#86868b', link: '#2997ff', fill: '#2a2828', grid: '#424245' },
 })
 
-export function applyUpstreamDocumentTokens(root: HTMLElement = document.documentElement) {
+export const DOCUMENT_FONT_FAMILIES = {
+  system: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+  serif: 'ui-serif, "New York", "Iowan Old Style", Georgia, serif',
+  rounded: 'ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif',
+  monospace: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace',
+} as const
+
+export type DocumentFontName = keyof typeof DOCUMENT_FONT_FAMILIES
+
+export function applyUpstreamDocumentTokens(root: HTMLElement = document.documentElement, documentFont: DocumentFontName = 'system') {
   const tokens = UPSTREAM_DOCUMENT_TOKENS
-  root.style.setProperty('--document-font-family', tokens.fontFamily)
+  root.style.setProperty('--document-font-family', DOCUMENT_FONT_FAMILIES[documentFont])
+  root.style.setProperty('--document-code-font-size', documentFont === 'serif' ? '0.84em' : documentFont === 'monospace' ? '1em' : '0.88em')
   root.style.setProperty('--document-font-size', `${tokens.fontSize}px`)
   root.style.setProperty('--document-line-height', String(tokens.lineHeight))
   root.style.setProperty('--document-column-width', `${tokens.contentColumnWidth}px`)

@@ -3,14 +3,17 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { MARKDOWN_FILTERS, SAMPLE_MARKDOWN } from '../constants'
 import { eventAffectsPath, renamedDestinationInDirectory, resolveChangedDocumentPath } from '../lib/diskChange'
+import { autoSaveDelayMs, shouldAutoSave } from '../lib/autoSave'
 import {
   errorCode,
   isTauri,
   openDocumentWindow,
   parentDirectory,
   readDocument,
+  renamePastedImage,
   readStartupRequest,
   resolveSiblingPath,
+  savePastedImage,
   scanFolder,
   watchPaths,
   writeDocument,
@@ -25,6 +28,7 @@ import type {
   OpenPathRequest,
   TextDocument,
 } from '../types'
+import { replacePastedImageReferences } from '../lib/pastedImages'
 
 const sessionId = () => globalThis.crypto?.randomUUID?.() ?? `document-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -55,6 +59,9 @@ const messages = {
     asset_too_large: '本地图片超过 8 MB 限制。',
     folderDesktopOnly: '文件夹浏览仅在 TextMark 桌面版中可用。',
     saved: '已保存',
+    pasteRequiresSavedDocument: '请先存储文稿，再粘贴图片。',
+    renameImagePrompt: '输入图片名称（仅字母、数字、- 和 _）：',
+    imageReferenceMissing: '当前文稿中找不到该图片引用。',
     closeDirty: '此文档有未保存的更改，仍要关闭吗？',
   },
   en: {
@@ -68,6 +75,9 @@ const messages = {
     asset_too_large: 'The local image exceeds the 8 MB limit.',
     folderDesktopOnly: 'Folder browsing is available in the TextMark desktop app.',
     saved: 'Saved',
+    pasteRequiresSavedDocument: 'Save the document before pasting an image.',
+    renameImagePrompt: 'Enter an image name (letters, numbers, - and _ only):',
+    imageReferenceMissing: 'This image reference is no longer present in the document.',
     closeDirty: 'This document has unsaved changes. Close it anyway?',
   },
 } as const
@@ -96,7 +106,14 @@ function browserSave(name: string, contents: string) {
   URL.revokeObjectURL(url)
 }
 
-export function useDocument(locale: Locale) {
+interface UseDocumentOptions {
+  autoSaveIntervalMinutes?: number
+  openDocumentsInTabs?: boolean
+}
+
+export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
+  const autoSaveIntervalMinutes = options.autoSaveIntervalMinutes ?? 0
+  const openDocumentsInTabs = options.openDocumentsInTabs ?? false
   const [sessions, setSessions] = useState<DocumentSession[]>([initialSession])
   const [activeId, setActiveId] = useState(initialSession.id)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
@@ -107,6 +124,7 @@ export function useDocument(locale: Locale) {
   const undoRef = useRef(new Map<string, { undo: string[]; redo: string[] }>())
   const pendingRenameRef = useRef<{ originalPath: string; candidate: string | null } | null>(null)
   const startupLoadedRef = useRef(false)
+  const autoSaveInFlightRef = useRef(false)
   const active = sessions.find((session) => session.id === activeId) ?? sessions[0]
 
   const updateActive = useCallback(
@@ -154,7 +172,7 @@ export function useDocument(locale: Locale) {
         return null
       }
       const first = firstFile(nextFiles)
-      if (first) applyDocument(await readDocument(first.path), false)
+      if (first) applyDocument(await readDocument(first.path), openDocumentsInTabs)
     },
     [applyDocument],
   )
@@ -183,11 +201,11 @@ export function useDocument(locale: Locale) {
             continue
           }
           if (entry.isDirectory) await openFolderPath(entry.path)
-          else applyDocument(await readDocument(entry.path), index > 0)
+          else applyDocument(await readDocument(entry.path), openDocumentsInTabs || index > 0)
         }
       })
       .catch(showError)
-  }, [applyDocument, openFolderPath, showError])
+  }, [applyDocument, openDocumentsInTabs, openFolderPath, showError])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -279,14 +297,14 @@ export function useDocument(locale: Locale) {
       if (!isTauri()) return
       setBusy(true)
       try {
-        applyDocument(await readDocument(path), newTab)
+        applyDocument(await readDocument(path), newTab || openDocumentsInTabs)
       } catch (error) {
         showError(error)
       } finally {
         setBusy(false)
       }
     },
-    [applyDocument, showError],
+    [applyDocument, openDocumentsInTabs, showError],
   )
 
   const navigatePath = useCallback(
@@ -365,7 +383,7 @@ export function useDocument(locale: Locale) {
       void (async () => {
         for (const entry of event.payload) {
           if (entry.isDirectory) await openFolderPath(entry.path)
-          else applyDocument(await readDocument(entry.path), true)
+          else applyDocument(await readDocument(entry.path), openDocumentsInTabs)
         }
       })().catch(showError)
     }).then((dispose) => {
@@ -376,25 +394,28 @@ export function useDocument(locale: Locale) {
       disposed = true
       unlisten?.()
     }
-  }, [applyDocument, openFolderPath, showError])
+  }, [applyDocument, openDocumentsInTabs, openFolderPath, showError])
 
-  const openFile = useCallback(async () => {
-    setBusy(true)
-    try {
-      if (!isTauri()) {
-        const selected = await browserOpen()
-        if (selected) applyDocument(selected, true)
-        return
+  const openFile = useCallback(
+    async (newTab = false) => {
+      setBusy(true)
+      try {
+        if (!isTauri()) {
+          const selected = await browserOpen()
+          if (selected) applyDocument(selected, newTab || openDocumentsInTabs)
+          return
+        }
+        const selected = await open({ multiple: true, directory: false, filters: MARKDOWN_FILTERS })
+        const paths = typeof selected === 'string' ? [selected] : (selected ?? [])
+        for (const [index, path] of paths.entries()) applyDocument(await readDocument(path), newTab || openDocumentsInTabs || index > 0)
+      } catch (error) {
+        showError(error)
+      } finally {
+        setBusy(false)
       }
-      const selected = await open({ multiple: true, directory: false, filters: MARKDOWN_FILTERS })
-      const paths = typeof selected === 'string' ? [selected] : (selected ?? [])
-      for (const path of paths) applyDocument(await readDocument(path), true)
-    } catch (error) {
-      showError(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [applyDocument, showError])
+    },
+    [applyDocument, openDocumentsInTabs, showError],
+  )
 
   const openFolder = useCallback(async () => {
     if (!isTauri()) {
@@ -435,15 +456,19 @@ export function useDocument(locale: Locale) {
   }, [active, showError, updateActive])
 
   const saveFile = useCallback(
-    async (force = false) => {
+    async (force = false, automatic = false) => {
       if (!active?.path || !isTauri()) return saveAs()
-      setBusy(true)
+      if (automatic && autoSaveInFlightRef.current) return
+      if (automatic) autoSaveInFlightRef.current = true
+      else setBusy(true)
       try {
         const saved = await writeDocument(active.path, active.contents, active.revision, force)
         updateActive((current) => ({ ...current, ...saved, savedContents: saved.contents, diskContents: saved.contents, dirty: false }))
         setExternalChange(null)
-        setNotice(messages[locale].saved)
-        window.setTimeout(() => setNotice(null), 1400)
+        if (!automatic) {
+          setNotice(messages[locale].saved)
+          window.setTimeout(() => setNotice(null), 1400)
+        }
       } catch (error) {
         if (errorCode(error) === 'save_conflict') {
           try {
@@ -454,17 +479,85 @@ export function useDocument(locale: Locale) {
           }
         } else showError(error)
       } finally {
-        setBusy(false)
+        if (automatic) autoSaveInFlightRef.current = false
+        else setBusy(false)
       }
     },
     [active, locale, saveAs, showError, updateActive],
   )
+
+  const autoSaveDelay = autoSaveDelayMs(autoSaveIntervalMinutes)
+  useEffect(() => {
+    const ready = shouldAutoSave({
+      delayMs: autoSaveDelay,
+      hasPath: Boolean(active?.path),
+      dirty: Boolean(active?.dirty),
+      hasExternalChange: Boolean(externalChange),
+      saving: autoSaveInFlightRef.current,
+    })
+    if (!ready || !autoSaveDelay) return
+    const timer = window.setTimeout(() => void saveFile(false, true), autoSaveDelay)
+    return () => window.clearTimeout(timer)
+  }, [active?.contents, active?.dirty, active?.id, active?.path, autoSaveDelay, externalChange, saveFile])
 
   const updateContents = useCallback(
     (contents: string) => {
       updateActive((current) => ({ ...current, contents, dirty: contents !== current.savedContents }))
     },
     [updateActive],
+  )
+
+  const pasteImage = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!isTauri() || !active?.path) {
+        setNotice(messages[locale].pasteRequiresSavedDocument)
+        return null
+      }
+      setBusy(true)
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        const saved = await savePastedImage(active.path, bytes)
+        const alt = file.name.replace(/\.[^.]+$/, '').trim() || 'image'
+        return `![${alt.replace(/[\[\]]/g, '\\$&')}](${saved.relativePath})`
+      } catch (error) {
+        showError(error)
+        return null
+      } finally {
+        setBusy(false)
+      }
+    },
+    [active?.path, locale, showError],
+  )
+
+  const renamePastedImageReference = useCallback(
+    async (relativePath: string) => {
+      if (!isTauri() || !active?.path) return
+      const current = replacePastedImageReferences(active.contents, relativePath, relativePath)
+      if (!current.count) {
+        setNotice(messages[locale].imageReferenceMissing)
+        return
+      }
+      const fallback =
+        relativePath
+          .split('/')
+          .pop()
+          ?.replace(/\.png$/i, '') ?? 'image'
+      const name = window.prompt(messages[locale].renameImagePrompt, fallback)
+      if (!name?.trim()) return
+      setBusy(true)
+      try {
+        const renamed = await renamePastedImage(active.path, relativePath, name)
+        updateActive((session) => {
+          const next = replacePastedImageReferences(session.contents, relativePath, renamed.relativePath)
+          return next.count ? { ...session, contents: next.source, dirty: next.source !== session.savedContents } : session
+        })
+      } catch (error) {
+        showError(error)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [active, locale, showError, updateActive],
   )
 
   const applyEdit = useCallback(
@@ -574,6 +667,8 @@ export function useDocument(locale: Locale) {
     revertDocument,
     resolveExternal,
     updateContents,
+    pasteImage,
+    renamePastedImage: renamePastedImageReference,
     applyEdit,
     undo: () => moveHistory('undo'),
     redo: () => moveHistory('redo'),

@@ -1,3 +1,22 @@
+# TextMark v0.8.2
+
+TextMark 0.8.2 completes the latest Markdown Preview parity improvements and adds a full-document rendering regression suite. Rendering now follows CommonMark soft-break semantics, preserves safe GFM table alignment, produces stable Chinese anchors, keeps long code lines horizontally scrollable, and prevents literal HTML-looking task text from truncating the remainder of a document. The release also includes auto-save, multi-document tabs, custom themes, image paste and rename workflows, deep-link handoff, and related desktop reliability improvements.
+
+TextMark 0.8.2 完成最新 Markdown Preview 对标改进，并新增整篇 Markdown 文档渲染回归测试。渲染现遵循 CommonMark 软换行语义，安全保留 GFM 表格对齐，生成稳定的中文锚点，超长代码行支持横向滚动，并修复任务项中的字面 HTML 样式文本可能截断后续内容的问题。本版本还包含自动保存、多文档标签、自定义主题、图片粘贴与重命名、深链接交接及相关桌面端可靠性改进。
+
+## Highlights / 主要更新
+
+- Markdown 渲染：修复软换行、中文标题锚点、表格对齐和超长代码块横向滚动；保留脚本、事件属性与 iframe 的安全过滤。
+- 文档完整性：任务列表不再重复注入未转义源码，含字面 `<script>` 的任务项不会吞掉后续内容与脚注。
+- 编辑与工作流：增加自动保存、多文档标签、主题自定义、图片粘贴/重命名，以及外部编辑器和 LLM 深链接支持。
+- 回归保障：将完整 Markdown 语法文档接入原生桌面端端到端测试；248 项前端测试、Rust 测试、Clippy、构建与端到端套件均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.8.1. 同 v0.8.1。
+
+---
+
 # TextMark v0.8.1
 
 TextMark 0.8.1 fixes a native print fallback reliability issue: repeated or concurrent exports now receive unique, sanitized temporary filenames, preventing one PDF export from replacing another. A Rust regression test covers uniqueness and extension sanitization. Default Chinese and cross-platform support are unchanged.

@@ -1,6 +1,11 @@
 export type ViewMode = 'edit' | 'preview'
 export type Locale = 'zh-CN' | 'en'
 export type ThemeMode = 'dark' | 'light' | 'system'
+export type DocumentFont = 'system' | 'serif' | 'rounded' | 'monospace'
+export type ThemePreset = 'normal' | 'charcoal' | 'redGraphite' | 'darkGraphite' | 'solarizedLight' | 'solarizedDark' | 'dracula'
+export type ThemeColorScheme = 'light' | 'dark'
+export type ThemeColorSlot = 'windowBackground' | 'editorBackground' | 'codeBlockBackground' | 'textColor' | 'linkColor'
+export type ThemeColors = Partial<Record<ThemeColorScheme, Partial<Record<ThemeColorSlot, string>>>>
 export type SidebarMode = 'outline' | 'files'
 export type ContentWidth = 'normal' | 'full'
 export type ToolbarDisplayMode = 'iconOnly' | 'iconAndLabel'
@@ -41,12 +46,21 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 5
+  schemaVersion: 6
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth
   zoom: number
   editorFontSize: number
+  documentFont: DocumentFont
+  themePreset: ThemePreset
+  themeColors: ThemeColors
+  /** 0 disables automatic saving; -30 represents the 30-second option. */
+  autoSaveIntervalMinutes: number
+  /** Prefer document tabs for ordinary open requests. Explicit tab requests always win. */
+  openDocumentsInTabs: boolean
+  /** A reading preference shared by every TextMark document window. */
+  alwaysOnTop: boolean
   toolbar: ToolbarItem[]
   toolbarDisplay: ToolbarDisplayMode
   defaultOpenTarget: string
@@ -163,6 +177,7 @@ export type ToolbarItem =
   | 'openWith'
   | 'openInLlm'
   | 'zoom'
+  | 'documentActions'
   | 'inspector'
   | 'alwaysOnTop'
   | 'share'

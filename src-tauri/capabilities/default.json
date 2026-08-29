@@ -9,6 +9,7 @@
     "core:window:allow-create",
     "dialog:allow-open",
     "dialog:allow-save",
+    "deep-link:default",
     "opener:default",
     "updater:default",
     "process:allow-restart",

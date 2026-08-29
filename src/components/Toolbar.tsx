@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow,
   Check,
@@ -100,9 +100,14 @@ export function Toolbar(props: ToolbarProps) {
     else void window.toggleMaximize()
   }
 
-  const lastLlmTarget = typeof localStorage !== 'undefined' ? localStorage.getItem('textmark.lastLlmTarget') : null
-  const editorApps = props.applications.filter((application) => application.kind !== 'llm' && application.available)
-  const llmApps = props.applications.filter((application) => application.kind === 'llm')
+  const [lastLlmTarget, setLastLlmTarget] = useState(() =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem('textmark.lastLlmTarget') : null,
+  )
+  const editorApps = useMemo(
+    () => props.applications.filter((application) => application.kind !== 'llm' && application.available),
+    [props.applications],
+  )
+  const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -121,7 +126,10 @@ export function Toolbar(props: ToolbarProps) {
     <button
       key={application.id}
       disabled={!application.available}
-      onClick={() => props.onOpenInLlm(application.id as 'codex' | 'claude' | 'chatgpt')}
+      onClick={() => {
+        setLastLlmTarget(application.id)
+        props.onOpenInLlm(application.id as 'codex' | 'claude' | 'chatgpt')
+      }}
     >
       <Sparkles />
       {application.name}
@@ -272,6 +280,30 @@ export function Toolbar(props: ToolbarProps) {
           <button title={tx('zoomIn')} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, 1))}>
             <span>A</span>
             <Plus />
+          </button>
+        </div>,
+      )
+    if (item === 'documentActions')
+      return slot(
+        <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
+          <button
+            className={props.inspectorVisible ? 'selected' : ''}
+            title={tx('getInfo')}
+            aria-label={tx('getInfo')}
+            onClick={props.onToggleInspector}
+          >
+            {withLabel(<Info />, 'getInfo')}
+          </button>
+          <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
+            {withLabel(<Share />, 'shareSource')}
+          </button>
+          <button
+            className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
+            title={tx('toggleEdit')}
+            aria-label={tx('toggleEdit')}
+            onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
+          >
+            {withLabel(<FilePenLine />, 'toggleEdit')}
           </button>
         </div>,
       )

@@ -134,6 +134,7 @@ describe('localized desktop components', () => {
       onActiveHeading: vi.fn(),
       onZoomChange: vi.fn(),
       onOpenRelative: vi.fn(),
+      onRenameImage: vi.fn(),
       onToggleTask: vi.fn(),
       onEditTable: vi.fn(),
     }

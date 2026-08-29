@@ -1,14 +1,14 @@
 use atomic_write_file::AtomicWriteFile;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use font8x8::UnicodeFonts;
-use image::{ImageBuffer, Rgb};
+use image::{ImageBuffer, ImageFormat, Rgb};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::{
     fs,
-    io::Write,
+    io::{Cursor, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::{
@@ -29,6 +29,7 @@ const MARKDOWN_EXTENSIONS: &[&str] = &[
 const ASSET_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico"];
 const MAX_ASSET_BYTES: u64 = 8 * 1024 * 1024;
 static TEMP_EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static PASTED_IMAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub fn run_cli_mode() -> bool {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -130,6 +131,18 @@ struct TextDocument {
     modified_ms: Option<u128>,
     size_bytes: u64,
     revision: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedPastedImage {
+    relative_path: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RenamedPastedImage {
+    relative_path: String,
 }
 
 #[derive(Serialize)]
@@ -1187,6 +1200,112 @@ fn save_export_bytes(path: String, bytes: Vec<u8>) -> AppResult<()> {
     file.commit().map_err(io_error)
 }
 
+/// Normalizes clipboard pixels to PNG and stores them next to the Markdown
+/// document. The relative link is deliberately stable across platforms.
+#[tauri::command]
+fn save_pasted_image(document_path: String, bytes: Vec<u8>) -> AppResult<SavedPastedImage> {
+    if bytes.len() as u64 > MAX_ASSET_BYTES {
+        return Err(AppError { code: "asset_too_large" });
+    }
+    let document = PathBuf::from(document_path)
+        .canonicalize()
+        .map_err(|_| AppError { code: "not_found" })?;
+    if !document.is_file() || !is_markdown(&document) {
+        return Err(AppError { code: "invalid_document" });
+    }
+    let image = image::load_from_memory(&bytes).map_err(|_| AppError { code: "asset_unsupported" })?;
+    let mut png = Cursor::new(Vec::new());
+    image
+        .write_to(&mut png, ImageFormat::Png)
+        .map_err(io_error)?;
+    let encoded = png.into_inner();
+    if encoded.len() as u64 > MAX_ASSET_BYTES {
+        return Err(AppError { code: "asset_too_large" });
+    }
+    let stem = document
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .ok_or(AppError { code: "invalid_path" })?;
+    let directory = document
+        .parent()
+        .ok_or(AppError { code: "invalid_path" })?
+        .join("Pictures")
+        .join(stem);
+    fs::create_dir_all(&directory).map_err(io_error)?;
+    let sequence = PASTED_IMAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temporary = directory.join(format!(".textmark-paste-{}-{sequence}.tmp", std::process::id()));
+    let mut file = AtomicWriteFile::open(&temporary).map_err(io_error)?;
+    file.write_all(&encoded).map_err(io_error)?;
+    file.commit().map_err(io_error)?;
+    for index in 1..=10_000_u32 {
+        let target = directory.join(format!("{index}.png"));
+        match fs::hard_link(&temporary, &target) {
+            Ok(()) => {
+                fs::remove_file(&temporary).map_err(io_error)?;
+                return Ok(SavedPastedImage {
+                    relative_path: format!("Pictures/{stem}/{index}.png"),
+                });
+            }
+            Err(_) if target.exists() => continue,
+            Err(error) => {
+                let _ = fs::remove_file(&temporary);
+                return Err(io_error(error));
+            }
+        }
+    }
+    let _ = fs::remove_file(&temporary);
+    Err(AppError { code: "io" })
+}
+
+#[tauri::command]
+fn rename_pasted_image(document_path: String, relative_path: String, name: String) -> AppResult<RenamedPastedImage> {
+    let document = PathBuf::from(document_path)
+        .canonicalize()
+        .map_err(|_| AppError { code: "not_found" })?;
+    if !document.is_file() || !is_markdown(&document) {
+        return Err(AppError { code: "invalid_document" });
+    }
+    let stem = document
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .ok_or(AppError { code: "invalid_path" })?;
+    let directory = document
+        .parent()
+        .ok_or(AppError { code: "invalid_path" })?
+        .join("Pictures")
+        .join(stem);
+    let expected_prefix = format!("Pictures/{stem}/");
+    if !relative_path.starts_with(&expected_prefix)
+        || relative_path[expected_prefix.len()..].contains(['/', '\\'])
+        || !relative_path.ends_with(".png")
+    {
+        return Err(AppError { code: "invalid_path" });
+    }
+    let current = directory.join(&relative_path[expected_prefix.len()..]);
+    if !current.is_file() {
+        return Err(AppError { code: "not_found" });
+    }
+    let cleaned = name.trim().trim_end_matches(".png");
+    if cleaned.is_empty()
+        || !cleaned
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return Err(AppError { code: "invalid_path" });
+    }
+    let filename = format!("{cleaned}.png");
+    let target = directory.join(&filename);
+    if target.exists() {
+        return Err(AppError { code: "invalid_path" });
+    }
+    fs::rename(current, target).map_err(io_error)?;
+    Ok(RenamedPastedImage {
+        relative_path: format!("Pictures/{stem}/{filename}"),
+    })
+}
+
 fn unique_temp_export_path(extension: &str) -> String {
     let ext: String = extension
         .chars()
@@ -1538,6 +1657,7 @@ pub fn run() {
                 let _ = app.emit("open-paths", request.paths);
             }
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init());
@@ -1599,6 +1719,8 @@ pub fn run() {
             startup_request,
             write_text_file,
             save_export_bytes,
+            save_pasted_image,
+            rename_pasted_image,
             temp_export_path,
             list_directory,
             read_local_asset,
@@ -1738,5 +1860,65 @@ mod tests {
         assert_ne!(first, second);
         assert!(first.ends_with(".pdf"));
         assert!(unique_temp_export_path("../PNG!").ends_with(".PNG"));
+    }
+
+    #[test]
+    fn pasted_images_are_normalized_numbered_and_linked_relative_to_the_document() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-paste-test-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let document = root.join("guide.md");
+        fs::write(&document, "# Guide").unwrap();
+        let mut bytes = Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(ImageBuffer::from_pixel(1, 1, Rgb([8, 9, 10])))
+            .write_to(&mut bytes, ImageFormat::Png)
+            .unwrap();
+        let first = save_pasted_image(document.to_string_lossy().to_string(), bytes.get_ref().clone()).unwrap();
+        let second = save_pasted_image(document.to_string_lossy().to_string(), bytes.into_inner()).unwrap();
+        assert_eq!(first.relative_path, "Pictures/guide/1.png");
+        assert_eq!(second.relative_path, "Pictures/guide/2.png");
+        assert!(root.join("Pictures/guide/1.png").is_file());
+        assert!(root.join("Pictures/guide/2.png").is_file());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pasted_images_reject_non_image_data() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-paste-invalid-test-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let document = root.join("guide.md");
+        fs::write(&document, "# Guide").unwrap();
+        let error = save_pasted_image(document.to_string_lossy().to_string(), b"not an image".to_vec()).unwrap_err();
+        assert_eq!(error.code, "asset_unsupported");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pasted_images_can_be_renamed_only_inside_their_document_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-paste-rename-test-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let document = root.join("guide.md");
+        fs::write(&document, "# Guide").unwrap();
+        let mut bytes = Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(ImageBuffer::from_pixel(1, 1, Rgb([8, 9, 10])))
+            .write_to(&mut bytes, ImageFormat::Png)
+            .unwrap();
+        let saved = save_pasted_image(document.to_string_lossy().to_string(), bytes.into_inner()).unwrap();
+        let renamed = rename_pasted_image(document.to_string_lossy().to_string(), saved.relative_path, "diagram".into()).unwrap();
+        assert_eq!(renamed.relative_path, "Pictures/guide/diagram.png");
+        assert!(root.join("Pictures/guide/diagram.png").is_file());
+        assert!(!root.join("Pictures/guide/1.png").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 }

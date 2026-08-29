@@ -4,7 +4,7 @@ import taskLists from 'markdown-it-task-lists'
 import type { OutlineItem, RenderedMarkdown } from '../types'
 import { splitFrontmatter } from './frontmatter'
 import { sanitizeRenderedMarkdown } from './sanitize'
-import { parseCodeFenceInfo } from './codeFence'
+import { detectCodeFenceLanguage, parseCodeFenceInfo } from './codeFence'
 
 const slugPattern = /[^\p{L}\p{N}\s-]/gu
 const remotePattern = /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i
@@ -19,7 +19,7 @@ interface RenderEnvironment {
 }
 
 function slugify(value: string): string {
-  return value.toLowerCase().trim().replace(slugPattern, '').replace(/\s+/g, '-') || 'section'
+  return value.toLowerCase().replace(slugPattern, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'section'
 }
 
 function escapeHtml(value: string): string {
@@ -41,7 +41,10 @@ function makeRenderer() {
     html: true,
     linkify: true,
     typographer: true,
-    breaks: true,
+    // CommonMark soft line breaks are whitespace, while an explicit trailing
+    // backslash or two spaces remains a <br>. This matters in imported prose
+    // and keeps source wrapping separate from author-requested line breaks.
+    breaks: false,
     highlight(code, language): string {
       const normalized = parseCodeFenceInfo(language).highlightLanguage
       return `<pre class="hljs"><code${normalized ? ` data-highlight-language="${escapeHtml(normalized)}" data-highlight-source="${encodeURIComponent(code)}"` : ''}>${escapeHtml(code)}</code></pre>`
@@ -49,17 +52,24 @@ function makeRenderer() {
   })
 
   md.use(footnote)
-  md.use(taskLists, { enabled: true, label: true, labelAfter: true })
+  // The plugin's optional label wrapper reinjects raw source text. In a task
+  // such as `- [ ] literal <script>`, that can turn escaped inline code back
+  // into a real tag before DOMPurify sees it. The checkbox remains interactive
+  // through PreviewPane, so omit the unsafe duplicate label markup.
+  md.use(taskLists, { enabled: true, label: false })
 
   const defaultFence = md.renderer.rules.fence
   const fenceRule: RendererRule = (tokens, index, options, env, self) => {
     const token = tokens[index]
-    const language = parseCodeFenceInfo(token.info).language
+    const parsed = parseCodeFenceInfo(token.info)
+    const detectedLanguage = parsed.language ? null : detectCodeFenceLanguage(token.content)
+    const language = parsed.language || detectedLanguage || ''
     const state = env as RenderEnvironment
     if (language === 'mermaid') {
       state.hasMermaid = true
       return `<figure class="diagram"><div class="mermaid" data-mermaid-source="${encodeURIComponent(token.content)}"></div></figure>`
     }
+    if (detectedLanguage) token.info = detectedLanguage
     if (language && language !== 'math') state.hasHighlight = true
     return defaultFence ? defaultFence(tokens, index, options, env, self) : self.renderToken(tokens, index, options)
   }
@@ -141,7 +151,11 @@ let lastRenderLocale: 'zh-CN' | 'en' | undefined
 let lastRenderResult: RenderedMarkdown | undefined
 
 function containsMath(source: string) {
-  return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(source)
+  // Escaped brackets in Markdown link labels are ordinary text. Removing
+  // complete links here keeps the optional KaTeX chunk aligned with the
+  // protected-link path in normalizeMath.
+  const withoutLinks = source.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, '')
+  return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(withoutLinks)
 }
 
 function readingDirection(source: string): 'rtl' | 'auto' {
@@ -166,6 +180,10 @@ function normalizeMath(source: string) {
     },
   )
   normalized = normalized.replace(/(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\1(?!`)/g, protect)
+  // A literal \[...\] in a Markdown link label is an escaped bracket, not a
+  // display-math delimiter. Protect complete links before normalising LaTeX so
+  // reference links such as [\[4\]][source] retain their Markdown meaning.
+  normalized = normalized.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, protect)
   normalized = normalized
     .replace(/(?<!\\)\\\\\[([\s\S]*?)\\\\\]/g, (_match, body: string) => `$$${body}$$`)
     .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (_match, body: string) => `$$${body}$$`)
@@ -258,6 +276,25 @@ function convertRawRelativeImages(html: string) {
   )
 }
 
+/**
+ * markdown-it emits GFM column alignment as inline styles. Inline styles are
+ * forbidden globally for untrusted Markdown, so convert this narrow,
+ * renderer-owned value to classes before sanitisation rather than weakening
+ * the HTML policy.
+ */
+function preserveTableAlignment(html: string) {
+  return html.replace(
+    /<(th|td)\b([^>]*?)\sstyle=(['"])text-align:\s*(left|right|center)\s*;?\3([^>]*)>/gi,
+    (_match, tag: string, before: string, _quote: string, alignment: string, after: string) => {
+      const attributes = `${before}${after}`
+      const className = `md-table-align-${alignment.toLowerCase()}`
+      if (/\bclass=(['"])(.*?)\1/i.test(attributes))
+        return `<${tag}${attributes.replace(/\bclass=(['"])(.*?)\1/i, (_classMatch, quote: string, classes: string) => `class=${quote}${classes} ${className}${quote}`)}>`
+      return `<${tag}${attributes} class="${className}">`
+    },
+  )
+}
+
 function convertAlerts(html: string, locale: 'zh-CN' | 'en') {
   const labels =
     locale === 'zh-CN'
@@ -300,7 +337,7 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   const outline = environment.outline ?? []
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ol></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
-  raw = convertAlerts(convertRawRelativeImages(raw), locale)
+  raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw), locale))
   raw = `${frontmatterHtml(frontmatter.entries)}${raw}`
   const maps = buildSourceMaps(source)
   const hasMermaid = environment.hasMermaid ?? false

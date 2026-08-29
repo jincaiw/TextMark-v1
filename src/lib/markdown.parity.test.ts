@@ -115,8 +115,11 @@ describe('upstream MarkdownHTML rendering parity', () => {
   })
   it('sanitizes executable alert title HTML', () =>
     expect(renderMarkdown('> [!CAUTION] <script>alert(1)</script>').html).not.toContain('script'))
-  it('renders soft breaks visibly', () =>
-    expect(renderMarkdown('First line\nSecond line').html).toMatch(/First line<br\s*\/?>\s*Second line/))
+  it('keeps CommonMark soft breaks as source whitespace', () => {
+    const html = renderMarkdown('First line\nSecond line').html
+    expect(html).toContain('First line\nSecond line')
+    expect(html).not.toContain('<br')
+  })
   it('builds a localized TOC', () => expect(renderMarkdown('# A\n\n[TOC]', 'zh-CN').html).toContain('aria-label="目录"'))
   it('builds Setext heading anchors', () =>
     expect(renderMarkdown('Heading\n=======').outline).toEqual([{ id: 'heading', text: 'Heading', level: 1 }]))

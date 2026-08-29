@@ -1,18 +1,23 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 const binaryName = process.platform === 'win32' ? 'textmark.exe' : 'textmark'
-const fixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
+const generatedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
 const movedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e-renamed.md')
 const configPath = path.join(os.tmpdir(), 'textmark-v030-e2e-config')
-rmSync(fixturePath, { force: true })
+const syntaxFixturePath = process.env.TEXTMARK_SYNTAX_FIXTURE
+if (syntaxFixturePath && !existsSync(syntaxFixturePath)) throw new Error(`TEXTMARK_SYNTAX_FIXTURE does not exist: ${syntaxFixturePath}`)
+const fixturePath = syntaxFixturePath || generatedFixturePath
+const usesExternalFixture = Boolean(syntaxFixturePath)
+rmSync(generatedFixturePath, { force: true })
 rmSync(movedFixturePath, { force: true })
 rmSync(configPath, { recursive: true, force: true })
 mkdirSync(configPath, { recursive: true })
-writeFileSync(
-  fixturePath,
-  `---
+if (!usesExternalFixture)
+  writeFileSync(
+    generatedFixturePath,
+    `---
 title: Native shell fixture
 owner: TextMark QA
 ---
@@ -32,8 +37,8 @@ This state must survive incremental preview updates.
 | Preview | Ready |
 | Editor | Ready |
 `,
-  'utf8',
-)
+    'utf8',
+  )
 process.env.TEXTMARK_E2E_CONFIG_DIR = configPath
 
 export const config = {
@@ -59,7 +64,7 @@ export const config = {
     ],
   ],
   onComplete() {
-    rmSync(fixturePath, { force: true })
+    if (!usesExternalFixture) rmSync(generatedFixturePath, { force: true })
     rmSync(movedFixturePath, { force: true })
     rmSync(configPath, { recursive: true, force: true })
   },

@@ -7,11 +7,12 @@ import { useTheme } from '../hooks/useTheme'
 import { useUpdater } from '../hooks/useUpdater'
 import type { ExternalApplication } from '../types'
 import { SettingsDialog } from './SettingsDialog'
+import { THEME_PRESETS } from '../lib/theme'
 
 /** A dedicated Settings WebView must not initialize document I/O or Markdown
  * rendering. Keeping this as a separate root makes that boundary explicit. */
 export function SettingsWindow() {
-  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, patch } = useSettings()
+  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, setDocumentFont, patch } = useSettings()
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [applications, setApplications] = useState<ExternalApplication[]>([])
   useTheme(settings.theme)
@@ -55,6 +56,12 @@ export function SettingsWindow() {
         theme={settings.theme}
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
+        documentFont={settings.documentFont}
+        themePreset={settings.themePreset}
+        themeColors={settings.themeColors}
+        autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
+        openDocumentsInTabs={settings.openDocumentsInTabs}
+        alwaysOnTop={settings.alwaysOnTop}
         zoom={settings.zoom}
         applications={applications}
         defaultOpenTarget={settings.defaultOpenTarget}
@@ -65,6 +72,17 @@ export function SettingsWindow() {
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
+        onDocumentFontChange={setDocumentFont}
+        onThemePresetChange={(themePreset) => {
+          const flavor = THEME_PRESETS[themePreset].flavor
+          patch({ themePreset, theme: flavor === 'system' ? 'system' : flavor, themeColors: {} })
+        }}
+        onThemeColorChange={(scheme, slot, color) =>
+          patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
+        }
+        onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
+        onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
+        onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
         onZoomChange={setZoom}
         onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
         onClose={close}

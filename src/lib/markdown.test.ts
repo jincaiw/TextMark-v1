@@ -75,9 +75,49 @@ describe('renderMarkdown', () => {
     expect(rendered.html).toContain('\\(literal\\)')
   })
 
+  it('keeps escaped brackets in reference-link labels out of the math parser', () => {
+    const rendered = renderMarkdown('[\\[4\\]][source]\n\n[source]: https://example.com')
+    expect(rendered.html).toContain('href="https://example.com"')
+    expect(rendered.html).toContain('[4]')
+    expect(rendered.html).not.toContain('textmark-math-placeholder')
+    expect(rendered.hasMath).toBe(false)
+  })
+
   it('uses a real HCL grammar for Terraform fences', async () => {
     const rendered = await renderMarkdownEnhanced('```terraform\nresource "aws_s3_bucket" "example" { enabled = true }\n```')
     expect(rendered.html).toContain('hljs-keyword')
     expect(rendered.html).toContain('hljs-attr')
+  })
+
+  it('highlights an unlabeled common-language code fence without changing explicit source syntax', async () => {
+    const rendered = await renderMarkdownEnhanced('```\nconst title: string = "TextMark"\n```')
+    expect(rendered.optionalRenderers).toContain('highlight')
+    expect(rendered.html).toContain('language-javascript')
+  })
+
+  it('keeps CommonMark soft breaks soft while preserving explicit hard breaks', () => {
+    const rendered = renderMarkdown('soft line\ncontinues\n\nhard line  \ncontinues\n\\\nhard again')
+    expect(rendered.html).toContain('<p>soft line\ncontinues</p>')
+    expect(rendered.html).toContain('hard line<br>\ncontinues\n<br>\nhard again')
+  })
+
+  it('uses safe alignment classes instead of inline table styles', () => {
+    const rendered = renderMarkdown('| A | B | C |\n| :--- | ---: | :---: |\n| left | right | center |')
+    expect(rendered.html).toContain('md-table-align-right')
+    expect(rendered.html).toContain('md-table-align-center')
+    expect(rendered.html).not.toContain('style=')
+  })
+
+  it('creates manual-link-compatible Chinese heading anchors after marker punctuation', () => {
+    const rendered = renderMarkdown('## 一、标题与分隔线 🅲')
+    expect(rendered.outline).toEqual([{ id: '一标题与分隔线', text: '一、标题与分隔线 🅲', level: 2 }])
+  })
+
+  it('does not let task labels turn escaped code into raw HTML that consumes following content', () => {
+    const rendered = renderMarkdown('- [ ] Inline `<script>` must stay literal\n\n# After task\n\nText[^a]\n\n[^a]: Note')
+    expect(rendered.html).toContain('&lt;script&gt;')
+    expect(rendered.html).toContain('After task')
+    expect(rendered.html).toContain('footnotes')
+    expect(rendered.html).not.toContain('<script')
   })
 })

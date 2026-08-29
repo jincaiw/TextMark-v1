@@ -34,6 +34,7 @@ interface PreviewPaneProps {
   onActiveHeading: (id: string | null) => void
   onZoomChange: (zoom: number) => void
   onOpenRelative: (path: string) => void
+  onRenameImage: (path: string) => void
   onToggleTask: (index: number, checked: boolean) => void
   onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void
 }
@@ -464,6 +465,11 @@ export function PreviewPane(props: PreviewPaneProps) {
           setTableSelection((selection) => (selection ? { ...selection, endRow: cell.row, endColumn: cell.column } : selection))
         }}
         onDoubleClick={(event) => {
+          const image = (event.target as HTMLElement).closest<HTMLImageElement>('img[data-local-src]')
+          if (image?.dataset.localSrc) {
+            props.onRenameImage(image.dataset.localSrc)
+            return
+          }
           const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>('td, th')
           if (cell) {
             event.preventDefault()

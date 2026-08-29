@@ -1,14 +1,18 @@
 import DOMPurify from 'dompurify'
 import './preview-host.css'
 import { renderMarkdownEnhanced } from './lib/markdown'
-import type { Locale, ThemeMode } from './types'
+import type { DocumentFont, Locale, ThemeColors, ThemeMode, ThemePreset } from './types'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { loadOptionalRendererStyles } from './lib/optionalStyles'
+import { applyThemeColors } from './lib/theme'
 
 export interface PreviewRequest {
   source: string
   locale?: Locale
   appearance?: ThemeMode
+  documentFont?: DocumentFont
+  themePreset?: ThemePreset
+  themeColors?: ThemeColors
   assets?: Record<string, string>
 }
 
@@ -50,6 +54,8 @@ export async function renderPreview(request: PreviewRequest) {
           : 'light'
   document.documentElement.lang = locale
   document.documentElement.dataset.theme = appearance
+  applyUpstreamDocumentTokens(document.documentElement, request.documentFont)
+  applyThemeColors(document.documentElement, request.themePreset ?? 'normal', appearance, request.themeColors)
   const result = await renderMarkdownEnhanced(request.source, locale)
   await loadOptionalRendererStyles(result.optionalRenderers)
   root.dir = result.direction

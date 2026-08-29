@@ -5,9 +5,9 @@ import { normalizeSettings } from '../lib/settings'
 const storage = (values: Record<string, string>) => ({ getItem: (key: string) => values[key] ?? null })
 
 describe('settings migration', () => {
-  it('starts in Chinese with a stable v5 schema', () => {
+  it('starts in Chinese with a stable v6 schema', () => {
     expect(readSettings(storage({}))).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       locale: 'zh-CN',
       updateChannel: 'stable',
       toolbarDisplay: 'iconOnly',
@@ -17,7 +17,7 @@ describe('settings migration', () => {
     const settings = readSettings(
       storage({ 'textmark.settings.v1': JSON.stringify({ locale: 'en', zoom: 999, toolbar: ['sidebar', 'bad', 'search'] }) }),
     )
-    expect(settings).toMatchObject({ schemaVersion: 5, locale: 'en', zoom: 300, toolbar: ['sidebar', 'search'] })
+    expect(settings).toMatchObject({ schemaVersion: 6, locale: 'en', zoom: 300, toolbar: ['sidebar', 'search'] })
   })
   it('migrates pre-v4 openWith into the combined openActions item', () => {
     expect(normalizeSettings({ schemaVersion: 3, toolbar: ['openWith', 'zoom'] }).toolbar).toEqual(['openActions', 'zoom'])
@@ -57,5 +57,50 @@ describe('settings migration', () => {
   it('never enables crash reporting from a truthy non-boolean', () => {
     expect(normalizeSettings({ crashReports: 'yes' }).crashReports).toBe(false)
     expect(normalizeSettings({ crashReports: true }).crashReports).toBe(true)
+  })
+  it('upgrades the previous default toolbar to grouped document actions without rewriting custom layouts', () => {
+    expect(
+      normalizeSettings({
+        toolbar: [
+          'flexibleSpace',
+          'sidebar',
+          'navigation',
+          'flexibleSpace',
+          'openActions',
+          'space',
+          'zoom',
+          'inspector',
+          'share',
+          'edit',
+          'search',
+        ],
+      }).toolbar,
+    ).toContain('documentActions')
+    expect(normalizeSettings({ toolbar: ['inspector', 'search'] }).toolbar).toEqual(['inspector', 'search'])
+  })
+  it('migrates document lifecycle preferences with safe defaults and bounds', () => {
+    expect(normalizeSettings({ autoSaveIntervalMinutes: -30, openDocumentsInTabs: true, alwaysOnTop: true })).toMatchObject({
+      autoSaveIntervalMinutes: -30,
+      openDocumentsInTabs: true,
+      alwaysOnTop: true,
+    })
+    expect(normalizeSettings({ autoSaveIntervalMinutes: 999, openDocumentsInTabs: 'yes', alwaysOnTop: 1 })).toMatchObject({
+      autoSaveIntervalMinutes: 60,
+      openDocumentsInTabs: false,
+      alwaysOnTop: false,
+    })
+  })
+  it('keeps only valid document fonts, presets, and per-scheme color overrides', () => {
+    expect(
+      normalizeSettings({
+        documentFont: 'serif',
+        themePreset: 'dracula',
+        themeColors: { light: { linkColor: '#abc123', textColor: 'invalid' }, dark: { windowBackground: '#1e1e1e' } },
+      }),
+    ).toMatchObject({
+      documentFont: 'serif',
+      themePreset: 'dracula',
+      themeColors: { light: { linkColor: '#ABC123' }, dark: { windowBackground: '#1E1E1E' } },
+    })
   })
 })

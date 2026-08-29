@@ -1,8 +1,20 @@
 import { Info, Palette, ShieldCheck, X } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../lib/i18n'
+import { THEME_COLOR_SLOTS, THEME_PRESETS, resolvedThemePalette } from '../lib/theme'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
-import type { AppSettings, ContentWidth, ExternalApplication, Locale, ThemeMode } from '../types'
+import type {
+  AppSettings,
+  ContentWidth,
+  DocumentFont,
+  ExternalApplication,
+  Locale,
+  ThemeColorScheme,
+  ThemeColorSlot,
+  ThemeColors,
+  ThemeMode,
+  ThemePreset,
+} from '../types'
 import type { UpdateStatus } from '../hooks/useUpdater'
 
 interface SettingsDialogProps {
@@ -10,6 +22,12 @@ interface SettingsDialogProps {
   theme: ThemeMode
   contentWidth: ContentWidth
   editorFontSize: number
+  documentFont: DocumentFont
+  themePreset: ThemePreset
+  themeColors: ThemeColors
+  autoSaveIntervalMinutes: number
+  openDocumentsInTabs: boolean
+  alwaysOnTop: boolean
   zoom: number
   applications: ExternalApplication[]
   defaultOpenTarget: string
@@ -29,6 +47,12 @@ interface SettingsDialogProps {
   onThemeChange: (theme: ThemeMode) => void
   onContentWidthChange: (width: ContentWidth) => void
   onEditorFontSizeChange: (size: number) => void
+  onDocumentFontChange: (font: DocumentFont) => void
+  onThemePresetChange: (preset: ThemePreset) => void
+  onThemeColorChange: (scheme: ThemeColorScheme, slot: ThemeColorSlot, color: string) => void
+  onAutoSaveIntervalChange: (minutes: number) => void
+  onOpenDocumentsInTabsChange: (enabled: boolean) => void
+  onAlwaysOnTopChange: (enabled: boolean) => void
   onZoomChange: (zoom: number) => void
   onDefaultOpenTargetChange: (target: string) => void
   onClose: () => void
@@ -99,10 +123,50 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   </select>
                 </label>
                 <label>
+                  <span>{props.locale === 'zh-CN' ? '主题预设' : 'Theme Preset'}</span>
+                  <select value={props.themePreset} onChange={(event) => props.onThemePresetChange(event.target.value as ThemePreset)}>
+                    {Object.entries(THEME_PRESETS).map(([id, preset]) => (
+                      <option key={id} value={id}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="theme-colors" aria-label={props.locale === 'zh-CN' ? '主题颜色' : 'Theme colors'}>
+                  <strong>{props.locale === 'zh-CN' ? '自定义颜色' : 'Custom colors'}</strong>
+                  {(['light', 'dark'] as const).map((scheme) => {
+                    const colors = resolvedThemePalette(props.themePreset, scheme, props.themeColors)
+                    return (
+                      <fieldset key={scheme}>
+                        <legend>{scheme === 'light' ? t(props.locale, 'light') : t(props.locale, 'dark')}</legend>
+                        {THEME_COLOR_SLOTS.map((slot) => (
+                          <label key={slot}>
+                            <span>{themeSlotLabel(slot, props.locale)}</span>
+                            <input
+                              type="color"
+                              value={colors[slot]}
+                              onChange={(event) => props.onThemeColorChange(scheme, slot, event.target.value)}
+                            />
+                          </label>
+                        ))}
+                      </fieldset>
+                    )
+                  })}
+                </div>
+                <label>
                   <span>{t(props.locale, 'contentWidth')}</span>
                   <select value={props.contentWidth} onChange={(event) => props.onContentWidthChange(event.target.value as ContentWidth)}>
                     <option value="normal">{t(props.locale, 'normal')}</option>
                     <option value="full">{t(props.locale, 'fullWidth')}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'documentFont')}</span>
+                  <select value={props.documentFont} onChange={(event) => props.onDocumentFontChange(event.target.value as DocumentFont)}>
+                    <option value="system">{t(props.locale, 'fontSystem')}</option>
+                    <option value="serif">{t(props.locale, 'fontSerif')}</option>
+                    <option value="rounded">{t(props.locale, 'fontRounded')}</option>
+                    <option value="monospace">{t(props.locale, 'fontMonospace')}</option>
                   </select>
                 </label>
                 <label>
@@ -130,6 +194,38 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     />
                     <output>{props.editorFontSize}px</output>
                   </div>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'autoSave')}</span>
+                  <select
+                    value={props.autoSaveIntervalMinutes}
+                    onChange={(event) => props.onAutoSaveIntervalChange(Number(event.target.value))}
+                  >
+                    <option value={0}>{t(props.locale, 'autoSaveOff')}</option>
+                    <option value={-30}>{t(props.locale, 'autoSaveThirtySeconds')}</option>
+                    <option value={1}>{t(props.locale, 'autoSaveOneMinute')}</option>
+                    <option value={5}>{t(props.locale, 'autoSaveFiveMinutes')}</option>
+                    <option value={10}>{t(props.locale, 'autoSaveTenMinutes')}</option>
+                    <option value={15}>{t(props.locale, 'autoSaveFifteenMinutes')}</option>
+                    <option value={30}>{t(props.locale, 'autoSaveThirtyMinutes')}</option>
+                    <option value={60}>{t(props.locale, 'autoSaveSixtyMinutes')}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'openDocumentsInTabs')}</span>
+                  <input
+                    type="checkbox"
+                    checked={props.openDocumentsInTabs}
+                    onChange={(event) => props.onOpenDocumentsInTabsChange(event.target.checked)}
+                  />
+                </label>
+                <label>
+                  <span>{t(props.locale, 'alwaysOnTop')}</span>
+                  <input
+                    type="checkbox"
+                    checked={props.alwaysOnTop}
+                    onChange={(event) => props.onAlwaysOnTopChange(event.target.checked)}
+                  />
                 </label>
                 <label>
                   <span>{t(props.locale, 'textSize')}</span>
@@ -235,4 +331,22 @@ export function SettingsDialog(props: SettingsDialogProps) {
       </section>
     </div>
   )
+}
+
+function themeSlotLabel(slot: ThemeColorSlot, locale: Locale) {
+  const zh: Record<ThemeColorSlot, string> = {
+    windowBackground: '窗口背景',
+    editorBackground: '编辑器背景',
+    codeBlockBackground: '代码背景',
+    textColor: '正文文字',
+    linkColor: '链接颜色',
+  }
+  const en: Record<ThemeColorSlot, string> = {
+    windowBackground: 'Window background',
+    editorBackground: 'Editor background',
+    codeBlockBackground: 'Code background',
+    textColor: 'Text',
+    linkColor: 'Links',
+  }
+  return (locale === 'zh-CN' ? zh : en)[slot]
 }

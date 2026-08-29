@@ -15,12 +15,16 @@ export function Inspector({
   stats,
   frontmatter,
   locale,
+  onCopyPath,
+  onRevealPath,
   onClose,
 }: {
   document: TextDocument
   stats: DocumentStats
   frontmatter: FrontmatterEntry[]
   locale: Locale
+  onCopyPath: (path: string) => void
+  onRevealPath: (path: string) => void
   onClose: () => void
 }) {
   const [tab, setTab] = useState<'document' | 'properties'>('document')
@@ -63,7 +67,27 @@ export function Inspector({
           <dl>
             {field('fileName', <strong>{document.name}</strong>, document.path ?? undefined)}
             {field('documentType', t(locale, 'markdownDocument'))}
+            {field(
+              'location',
+              document.path ? (
+                <div className="inspector-location">
+                  <code>{document.path}</code>
+                  <span>
+                    <button type="button" onClick={() => onCopyPath(document.path!)}>
+                      {t(locale, 'copyPath')}
+                    </button>
+                    <button type="button" onClick={() => onRevealPath(document.path!)}>
+                      {t(locale, 'showInFileManager')}
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                t(locale, 'unsaved')
+              ),
+              document.path ?? undefined,
+            )}
             {field('fileSize', formatBytes(bytes, locale))}
+            {field('created', formatDate(document.createdMs, locale))}
             {field('modified', formatDate(document.modifiedMs, locale))}
           </dl>
           <h3>{t(locale, 'documentInfo')}</h3>

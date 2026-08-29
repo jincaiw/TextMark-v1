@@ -2,6 +2,7 @@ import { lazy, startTransition, Suspense, useDeferredValue, useEffect, useMemo, 
 import { openPath as openExternalPath, openUrl } from '@tauri-apps/plugin-opener'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getCurrent as getCurrentDeepLinks, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import './App.css'
 import type { EditorPaneHandle } from './components/EditorPane'
 import { ConflictDialog } from './components/ConflictDialog'
@@ -48,7 +49,10 @@ import { editMarkdownTable } from './lib/table'
 import { setTaskChecked } from './lib/task'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
 import { loadOptionalRendererStyles } from './lib/optionalStyles'
-import type { ExternalApplication, FormatCommand, RenderedMarkdown, SearchMode, SidebarMode, ViewMode } from './types'
+import { applyUpstreamDocumentTokens } from './lib/designTokens'
+import { applyThemeColors, THEME_PRESETS } from './lib/theme'
+import { parseTextmarkFileUrl } from './lib/deepLink'
+import type { ExternalApplication, FormatCommand, Locale, RenderedMarkdown, SearchMode, SidebarMode, ViewMode } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
@@ -66,8 +70,11 @@ const EMPTY_RENDER: RenderedMarkdown = {
 }
 
 function DocumentApp() {
-  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, patch } = useSettings()
-  const documents = useDocument(settings.locale)
+  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, setDocumentFont, patch } = useSettings()
+  const documents = useDocument(settings.locale, {
+    autoSaveIntervalMinutes: settings.autoSaveIntervalMinutes,
+    openDocumentsInTabs: settings.openDocumentsInTabs,
+  })
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
   const [sidebarVisible, setSidebarVisible] = useState(true)
@@ -77,11 +84,12 @@ function DocumentApp() {
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [toolbarOpen, setToolbarOpen] = useState(false)
-  const [alwaysOnTop, setAlwaysOnTop] = useState(false)
+  const alwaysOnTop = settings.alwaysOnTop
   // Ref keeps the keydown/menu closures reading the live value without adding
   // alwaysOnTop to every effect dependency list.
-  const alwaysOnTopRef = useRef(false)
+  const alwaysOnTopRef = useRef(alwaysOnTop)
   const alwaysOnTopSuspendedRef = useRef(false)
+  const nativeAlwaysOnTopRef = useRef<boolean | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
@@ -99,6 +107,8 @@ function DocumentApp() {
   const deferredMarkdown = useDeferredValue(documents.document.contents)
   const [rendered, setRendered] = useState<RenderedMarkdown>(EMPTY_RENDER)
   const renderSequence = useRef(0)
+  const renderWorkerRef = useRef<Worker | null>(null)
+  const renderRequestsRef = useRef(new Map<number, { source: string; locale: Locale }>())
   const hydratedPreviewKeyRef = useRef<string | null>(null)
   const stats = useMemo(
     () => ({
@@ -143,6 +153,15 @@ function DocumentApp() {
     void configureCrashReporting(settings.crashReports)
   }, [settings.crashReports])
   useEffect(() => {
+    applyUpstreamDocumentTokens(document.documentElement, settings.documentFont)
+  }, [settings.documentFont])
+  useEffect(() => {
+    applyThemeColors(document.documentElement, settings.themePreset, resolvedTheme, settings.themeColors)
+  }, [resolvedTheme, settings.themeColors, settings.themePreset])
+  useEffect(() => {
+    alwaysOnTopRef.current = alwaysOnTop
+  }, [alwaysOnTop])
+  useEffect(() => {
     if (!isTauri()) return
     const windowHandle = getCurrentWindow()
     let disposed = false
@@ -152,8 +171,12 @@ function DocumentApp() {
         await windowHandle.isFullscreen(),
         alwaysOnTopSuspendedRef.current,
       )
-      if (disposed || transition.suspended === alwaysOnTopSuspendedRef.current) return
+      if (disposed) return
+      const stateChanged =
+        transition.suspended !== alwaysOnTopSuspendedRef.current || transition.nativePinned !== nativeAlwaysOnTopRef.current
       alwaysOnTopSuspendedRef.current = transition.suspended
+      if (!stateChanged) return
+      nativeAlwaysOnTopRef.current = transition.nativePinned
       await windowHandle.setAlwaysOnTop(transition.nativePinned)
     }
     void synchronize()
@@ -168,7 +191,7 @@ function DocumentApp() {
       disposed = true
       unlisten?.()
     }
-  }, [])
+  }, [alwaysOnTop])
   useEffect(() => {
     if (!isTauri()) return
     void refreshMenu({
@@ -197,60 +220,85 @@ function DocumentApp() {
     void discoverApplications().then(setApplications)
   }, [])
   useEffect(() => {
-    const id = ++renderSequence.current
-    if (typeof Worker === 'undefined') {
-      let cancelled = false
+    if (!isTauri()) return
+    let disposed = false
+    const openUrls = (urls: string[]) => {
+      for (const url of urls) {
+        const path = parseTextmarkFileUrl(url)
+        if (path) void documents.openPath(path)
+      }
+    }
+    void getCurrentDeepLinks().then((urls) => {
+      if (!disposed && urls) openUrls(urls)
+    })
+    let unlisten: (() => void) | undefined
+    void onOpenUrl((urls) => openUrls(urls)).then((stop) => {
+      if (disposed) stop()
+      else unlisten = stop
+    })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [documents.openPath])
+  useEffect(() => {
+    if (typeof Worker === 'undefined') return
+    const worker = new Worker(new URL('./workers/render.worker.ts', import.meta.url), { type: 'module', name: 'textmark-renderer' })
+    renderWorkerRef.current = worker
+    const renderInMain = (id: number) => {
+      const request = renderRequestsRef.current.get(id)
+      if (!request) return
       void import('./lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
-        const result = await renderMarkdownEnhanced(deferredMarkdown, settings.locale)
+        const result = await renderMarkdownEnhanced(request.source, request.locale)
         await loadOptionalRendererStyles(result.optionalRenderers)
-        if (!cancelled && id === renderSequence.current) {
+        if (id === renderSequence.current) {
           document.documentElement.dataset.renderer = 'main'
           startTransition(() => setRendered(result))
         }
       })
-      return () => {
-        cancelled = true
-      }
     }
-    const worker = new Worker(new URL('./workers/render.worker.ts', import.meta.url), { type: 'module', name: 'textmark-renderer' })
-    worker.addEventListener('message', (event: MessageEvent<{ id: number; result?: RenderedMarkdown; error?: string }>) => {
-      if (event.data.id !== renderSequence.current) return
-      if (!event.data.result) {
-        void import('./lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
-          const result = await renderMarkdownEnhanced(deferredMarkdown, settings.locale)
-          await loadOptionalRendererStyles(result.optionalRenderers)
-          if (event.data.id === renderSequence.current) {
-            document.documentElement.dataset.renderer = 'main'
-            startTransition(() => setRendered(result))
-          }
-        })
+    worker.addEventListener('message', (event: MessageEvent<{ id: number; result?: RenderedMarkdown }>) => {
+      const { id, result } = event.data
+      if (id !== renderSequence.current) return
+      if (!result) {
+        renderInMain(id)
         return
       }
-      void Promise.all([import('./lib/sanitize'), loadOptionalRendererStyles(event.data.result.optionalRenderers)]).then(
+      void Promise.all([import('./lib/sanitize'), loadOptionalRendererStyles(result.optionalRenderers)]).then(
         ([{ sanitizeRenderedMarkdown }]) => {
-          if (event.data.id === renderSequence.current) {
+          if (id === renderSequence.current) {
             document.documentElement.dataset.renderer = 'worker'
-            startTransition(() => setRendered(sanitizeRenderedMarkdown(event.data.result!)))
+            startTransition(() => setRendered(sanitizeRenderedMarkdown(result)))
           }
         },
       )
     })
-    worker.addEventListener(
-      'error',
-      () => {
-        void import('./lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
-          const result = await renderMarkdownEnhanced(deferredMarkdown, settings.locale)
-          await loadOptionalRendererStyles(result.optionalRenderers)
-          if (id === renderSequence.current) {
-            document.documentElement.dataset.renderer = 'main'
-            startTransition(() => setRendered(result))
-          }
-        })
-      },
-      { once: true },
-    )
-    worker.postMessage({ id, source: deferredMarkdown, locale: settings.locale })
-    return () => worker.terminate()
+    worker.addEventListener('error', () => {
+      renderWorkerRef.current = null
+      renderInMain(renderSequence.current)
+    })
+    return () => {
+      if (renderWorkerRef.current === worker) renderWorkerRef.current = null
+      worker.terminate()
+    }
+  }, [])
+  useEffect(() => {
+    const id = ++renderSequence.current
+    renderRequestsRef.current.set(id, { source: deferredMarkdown, locale: settings.locale })
+    for (const previousId of renderRequestsRef.current.keys()) if (previousId < id) renderRequestsRef.current.delete(previousId)
+    const renderInMain = () => {
+      void import('./lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
+        const result = await renderMarkdownEnhanced(deferredMarkdown, settings.locale)
+        await loadOptionalRendererStyles(result.optionalRenderers)
+        if (id === renderSequence.current) {
+          document.documentElement.dataset.renderer = 'main'
+          startTransition(() => setRendered(result))
+        }
+      })
+    }
+    const worker = renderWorkerRef.current
+    if (worker) worker.postMessage({ id, source: deferredMarkdown, locale: settings.locale })
+    else renderInMain()
   }, [deferredMarkdown, settings.locale])
   useEffect(() => {
     document.documentElement.dataset.platform = detectPlatform()
@@ -271,18 +319,7 @@ function DocumentApp() {
     window.setTimeout(() => setNotice(null), 1800)
   }
   const toggleAlwaysOnTop = () => {
-    const next = !alwaysOnTopRef.current
-    alwaysOnTopRef.current = next
-    alwaysOnTopSuspendedRef.current = false
-    setAlwaysOnTop(next)
-    if (isTauri())
-      void getCurrentWindow()
-        .isFullscreen()
-        .then((fullscreen) => {
-          const transition = resolveAlwaysOnTopTransition(next, fullscreen, false)
-          alwaysOnTopSuspendedRef.current = transition.suspended
-          return getCurrentWindow().setAlwaysOnTop(transition.nativePinned)
-        })
+    patch({ alwaysOnTop: !alwaysOnTopRef.current })
   }
   const previewFraction = () => {
     const pane = document.querySelector<HTMLElement>('.preview-pane')
@@ -507,7 +544,7 @@ function DocumentApp() {
       void documents.openFolder()
       setSidebarMode('files')
       setSidebarVisible(true)
-    } else if (command === 'new-tab') void documents.openFile()
+    } else if (command === 'new-tab') void documents.openFile(true)
     else if (command === 'new-document') documents.newDocument()
     else if (command === 'close-tab') documents.closeSession(documents.activeId)
     else if (command === 'save') void documents.saveFile()
@@ -711,7 +748,7 @@ function DocumentApp() {
         setSidebarVisible((value) => !value)
       } else if (key === 't') {
         event.preventDefault()
-        void documents.openFile()
+        void documents.openFile(true)
       } else if (key === 'w') {
         event.preventDefault()
         documents.closeSession(documents.activeId)
@@ -907,6 +944,7 @@ function DocumentApp() {
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
                   onChange={documents.updateContents}
+                  onPasteImage={documents.pasteImage}
                   onCursorChange={(line, column) => setCursor({ line, column })}
                 />
               </Suspense>
@@ -931,6 +969,7 @@ function DocumentApp() {
                 onActiveHeading={setActiveHeading}
                 onZoomChange={setZoom}
                 onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())}
+                onRenameImage={(path) => void documents.renamePastedImage(path)}
                 onToggleTask={toggleTask}
                 onEditTable={(table, row, column, request) =>
                   documents.applyEdit(editMarkdownTable(documents.document.contents, table, row, column, request))
@@ -945,6 +984,8 @@ function DocumentApp() {
               document={documents.document}
               stats={stats}
               frontmatter={rendered.frontmatter}
+              onCopyPath={(path) => void navigator.clipboard.writeText(path)}
+              onRevealPath={(path) => void revealInFileManager(path)}
               onClose={() => setInspectorVisible(false)}
             />
           ) : null}
@@ -1005,6 +1046,12 @@ function DocumentApp() {
         theme={settings.theme}
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
+        documentFont={settings.documentFont}
+        themePreset={settings.themePreset}
+        themeColors={settings.themeColors}
+        autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
+        openDocumentsInTabs={settings.openDocumentsInTabs}
+        alwaysOnTop={settings.alwaysOnTop}
         zoom={settings.zoom}
         applications={applications}
         defaultOpenTarget={settings.defaultOpenTarget}
@@ -1015,6 +1062,17 @@ function DocumentApp() {
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
+        onDocumentFontChange={setDocumentFont}
+        onThemePresetChange={(themePreset) => {
+          const flavor = THEME_PRESETS[themePreset].flavor
+          patch({ themePreset, theme: flavor === 'system' ? 'system' : flavor, themeColors: {} })
+        }}
+        onThemeColorChange={(scheme, slot, color) =>
+          patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
+        }
+        onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
+        onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
+        onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
         onZoomChange={setZoom}
         onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
         onClose={() => {

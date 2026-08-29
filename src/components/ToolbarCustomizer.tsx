@@ -29,6 +29,7 @@ const AVAILABLE: ToolbarItem[] = [
   'openWith',
   'openInLlm',
   'zoom',
+  'documentActions',
   'inspector',
   'alwaysOnTop',
   'share',
@@ -49,6 +50,7 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   openWith: 'openWith',
   openInLlm: 'openInLlm',
   zoom: 'zoom',
+  documentActions: 'documentActions',
   inspector: 'inspector',
   alwaysOnTop: 'alwaysOnTop',
   share: 'share',
@@ -75,6 +77,8 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
       return <Sparkles />
     case 'zoom':
       return <ZoomIn />
+    case 'documentActions':
+      return <Info />
     case 'inspector':
       return <Info />
     case 'alwaysOnTop':

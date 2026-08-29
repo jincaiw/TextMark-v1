@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -7,6 +7,7 @@ import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
 import { editorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
+import { editableCodeFenceAtLine, rewriteCodeFenceLanguage, type EditableCodeFence } from '../lib/codeFenceEditing'
 import { clampScrollFraction } from '../lib/scrollFraction'
 import type { ContentWidth, FormatCommand } from '../types'
 
@@ -29,6 +30,8 @@ interface EditorPaneProps {
   initialFormat?: FormatCommand | null
   onInitialFormatApplied?: () => void
   onChange: (value: string) => void
+  /** Returns Markdown to insert after a clipboard image has been saved safely. */
+  onPasteImage?: (file: File) => Promise<string | null>
   onCursorChange: (line: number, column: number) => void
 }
 
@@ -107,7 +110,37 @@ function applyFormat(view: EditorView, command: FormatCommand) {
 
 export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane(props, forwardedRef) {
   const viewRef = useRef<EditorView | null>(null)
+  const pasteImageRef = useRef(props.onPasteImage)
+  pasteImageRef.current = props.onPasteImage
   const [ready, setReady] = useState(false)
+  const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
+  const imagePasteExtension = useMemo(
+    () =>
+      EditorView.domEventHandlers({
+        paste(event, view) {
+          const clipboard = event.clipboardData
+          const fileFromList = Array.from(clipboard?.files ?? []).find((file) => file.type.startsWith('image/'))
+          const fileFromItem = Array.from(clipboard?.items ?? [])
+            .find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            ?.getAsFile()
+          const image = fileFromList ?? fileFromItem
+          const saveImage = pasteImageRef.current
+          if (!image || !saveImage) return false
+          event.preventDefault()
+          const selection = view.state.selection.main
+          void saveImage(image).then((markdown) => {
+            if (!markdown) return
+            view.dispatch({
+              changes: { from: selection.from, to: selection.to, insert: markdown },
+              selection: { anchor: selection.from + markdown.length },
+            })
+            view.focus()
+          })
+          return true
+        },
+      }),
+    [],
+  )
 
   useImperativeHandle(
     forwardedRef,
@@ -145,6 +178,23 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   return (
     <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
       <div className="editor-page">
+        {activeFence ? (
+          <label className="code-fence-language-control">
+            <span>Code language</span>
+            <input
+              aria-label="Code fence language"
+              value={activeFence.language}
+              placeholder="auto"
+              onChange={(event) => {
+                const view = viewRef.current
+                if (!view) return
+                const fence = editableCodeFenceAtLine(view.state.doc, activeFence.lineNumber)
+                if (!fence) return
+                view.dispatch({ changes: rewriteCodeFenceLanguage(fence, event.target.value) })
+              }}
+            />
+          </label>
+        ) : null}
         <CodeMirror
           value={props.value}
           height="100%"
@@ -153,6 +203,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             markdown(),
             editorHeadings,
             editorMarkdownDecorations,
+            imagePasteExtension,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
@@ -162,6 +213,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           ]}
           onCreateEditor={(view) => {
             viewRef.current = view
+            const head = view.state.selection.main.head
+            const line = view.state.doc.lineAt(head)
+            setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
+            props.onCursorChange(line.number, head - line.from + 1)
             setReady(true)
           }}
           onChange={props.onChange}
@@ -169,6 +224,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             if (!update.selectionSet && !update.docChanged) return
             const head = update.state.selection.main.head
             const line = update.state.doc.lineAt(head)
+            setActiveFence(editableCodeFenceAtLine(update.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
           }}
           basicSetup={{
