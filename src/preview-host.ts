@@ -1,10 +1,10 @@
-import DOMPurify from 'dompurify'
 import './preview-host.css'
 import { renderMarkdownEnhanced } from './lib/markdown'
 import type { DocumentFont, Locale, ThemeColors, ThemeMode, ThemePreset } from './types'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { loadOptionalRendererStyles } from './lib/optionalStyles'
 import { applyThemeColors } from './lib/theme'
+import { sanitizeMermaidSvg } from './lib/sanitize'
 
 export interface PreviewRequest {
   source: string
@@ -28,13 +28,14 @@ async function hydrateMermaid() {
     securityLevel: 'strict',
     theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'neutral',
     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+    flowchart: { htmlLabels: true },
   })
   await Promise.all(
     nodes.map(async (node, index) => {
       try {
         const source = decodeURIComponent(node.dataset.mermaidSource ?? '')
         const { svg } = await mermaid.render(`textmark-system-preview-${index}`, source)
-        node.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+        node.innerHTML = sanitizeMermaidSvg(svg)
       } catch {
         node.textContent = document.documentElement.lang === 'zh-CN' ? '无法渲染 Mermaid 图表。' : 'Unable to render Mermaid diagram.'
       }

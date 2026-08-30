@@ -150,12 +150,24 @@ let lastRenderSource: string | undefined
 let lastRenderLocale: 'zh-CN' | 'en' | undefined
 let lastRenderResult: RenderedMarkdown | undefined
 
+function looksLikeDelimitedMath(body: string) {
+  const trimmed = body.trim()
+  if (!trimmed) return false
+  // CommonMark uses the same backslashes to escape literal brackets and
+  // parentheses. Preserve prose such as \[draft\] or \(圆括号\), while still
+  // accepting canonical LaTeX expressions and single-letter variables.
+  const withoutTextCommands = trimmed.replace(/\\(?:text|mathrm|mathbf|operatorname)\{[^}]*\}/g, '')
+  if (/[^\x00-\x7f]/.test(withoutTextCommands)) return false
+  return /\\[A-Za-z]+|[_^=+*/<>]|(?:^|\s)-(?:\s|\d|[A-Za-z])|^[A-Za-z]$/.test(trimmed)
+}
+
 function containsMath(source: string) {
   // Escaped brackets in Markdown link labels are ordinary text. Removing
   // complete links here keeps the optional KaTeX chunk aligned with the
   // protected-link path in normalizeMath.
   const withoutLinks = source.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, '')
-  return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(withoutLinks)
+  if (/\$[^$\n]+\$|\$\$[\s\S]+?\$\$|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(withoutLinks)) return true
+  return [...withoutLinks.matchAll(/\\(?:\[|\()([\s\S]*?)\\(?:\]|\))/g)].some((match) => looksLikeDelimitedMath(match[1]))
 }
 
 function readingDirection(source: string): 'rtl' | 'auto' {
@@ -185,18 +197,22 @@ function normalizeMath(source: string) {
   // reference links such as [\[4\]][source] retain their Markdown meaning.
   normalized = normalized.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, protect)
   normalized = normalized
-    .replace(/(?<!\\)\\\\\[([\s\S]*?)\\\\\]/g, (_match, body: string) => `$$${body}$$`)
-    .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (_match, body: string) => `$$${body}$$`)
-    .replace(/(?<!\\)\\\\\(([^\n]*?)\\\\\)/g, (_match, body: string) => `$${body}$`)
-    .replace(/(?<!\\)\\\(([^\n]*?)\\\)/g, (_match, body: string) => `$${body}$`)
+    .replace(/(?<!\\)\\\\\[([\s\S]*?)\\\\\]/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$$${body}$$` : match))
+    .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$$${body}$$` : match))
+    .replace(/(?<!\\)\\\\\(([^\n]*?)\\\\\)/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$${body}$` : match))
+    .replace(/(?<!\\)\\\(([^\n]*?)\\\)/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$${body}$` : match))
   normalized = normalized
-    .replace(/^\s*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$\s*$/gm, (_match, body: string) => placeholder(body, true))
+    .replace(/^[ \t]*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$[ \t]*$/gm, (_match, body: string) => placeholder(body, true))
     .replace(/\$\$([^\n]+?)\$\$/g, (_match, body: string) => placeholder(body, true))
     .replace(/(^|[^\\$])\$([^\n$]+?)\$(?!\$)/g, (match, prefix: string, body: string) => {
       if (!body.trim() || body !== body.trim()) return match
       return `${prefix}${placeholder(body, false)}`
     })
-  return normalized.replace(/TEXTMARKPROTECTED(\d+)TOKEN/g, (_match, index: string) => protectedBlocks[Number(index)] ?? '')
+  // A protected link can itself contain a protected inline-code token. Restore
+  // from the outside in until nested placeholders are exhausted.
+  for (let pass = 0; pass <= protectedBlocks.length && /TEXTMARKPROTECTED\d+TOKEN/.test(normalized); pass += 1)
+    normalized = normalized.replace(/TEXTMARKPROTECTED(\d+)TOKEN/g, (_match, index: string) => protectedBlocks[Number(index)] ?? '')
+  return normalized
 }
 
 function buildSourceMaps(source: string) {

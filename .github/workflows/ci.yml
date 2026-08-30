@@ -66,11 +66,12 @@ jobs:
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-customizer.png 1440 900 customizer
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-dark.png 1440 900 dark
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-narrow.png 760 760 preview
+          TEXTMARK_EXPORT_EXPECT_FULL=1 node scripts/verify-exports.mjs e2e/fixtures/export-regression.md artifacts/export-qa
       - uses: actions/upload-artifact@v6
         if: runner.os == 'Linux'
         with:
           name: visual-qa-screenshots
-          path: artifacts/*.png
+          path: artifacts/**
           if-no-files-found: error
 
   native-macos-quicklook:

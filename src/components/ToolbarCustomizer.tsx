@@ -157,69 +157,71 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
             <X />
           </button>
         </header>
-        <h3 className="tc-section">{t(locale, 'availableItems')}</h3>
-        <div className="tc-palette">
-          {AVAILABLE.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className="tc-card"
-              draggable
-              onDragStart={(event) => event.dataTransfer.setData('text/plain', `add:${item}`)}
-              onClick={() => insert(item)}
-            >
-              <span className="tc-card-icon">{itemIcon(item)}</span>
-              <span className="tc-card-label">{t(locale, label[item])}</span>
-            </button>
-          ))}
-        </div>
-        <h3 className="tc-section">{t(locale, 'currentToolbar')}</h3>
-        <div
-          className="tc-current"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            const drop = readDrop(event)
-            if (drop?.kind === 'add') insert(drop.item)
-            setOverIndex(null)
-          }}
-        >
-          {items.map((item, index) => (
-            <div
-              key={`${item}-${index}`}
-              className={`tc-current-item ${overIndex === index ? 'drop-target' : ''}`}
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.setData('text/plain', `move:${index}`)
-                event.dataTransfer.effectAllowed = 'move'
-                setDraggingIndex(index)
-              }}
-              onDragOver={(event) => {
-                event.preventDefault()
-                setOverIndex(index)
-              }}
-              onDrop={(event) => {
-                event.stopPropagation()
-                const drop = readDrop(event)
-                if (drop?.kind === 'add') insert(drop.item, index)
-                else if (drop?.kind === 'move' && drop.from !== index) move(drop.from, index)
-                setOverIndex(null)
-              }}
-              onDragEnd={(event) => {
-                // Dragged out of the toolbar (no drop target) removes the item.
-                if (event.dataTransfer.dropEffect === 'none' && draggingIndex === index) remove(index)
-                setDraggingIndex(null)
-                setOverIndex(null)
-              }}
-            >
-              <GripVertical className="tc-grip" />
-              <span className="tc-card-icon">{itemIcon(item)}</span>
-              <span className="tc-card-label">{t(locale, label[item])}</span>
-              <button type="button" className="tc-remove" aria-label={t(locale, 'close')} onClick={() => remove(index)}>
-                <X />
+        <div className="tc-scroll-body">
+          <h3 className="tc-section">{t(locale, 'availableItems')}</h3>
+          <div className="tc-palette">
+            {AVAILABLE.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className="tc-card"
+                draggable
+                onDragStart={(event) => event.dataTransfer.setData('text/plain', `add:${item}`)}
+                onClick={() => insert(item)}
+              >
+                <span className="tc-card-icon">{itemIcon(item)}</span>
+                <span className="tc-card-label">{t(locale, label[item])}</span>
               </button>
-            </div>
-          ))}
-          {items.length === 0 ? <p className="tc-empty">{t(locale, 'dragToToolbar')}</p> : null}
+            ))}
+          </div>
+          <h3 className="tc-section">{t(locale, 'currentToolbar')}</h3>
+          <div
+            className="tc-current"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              const drop = readDrop(event)
+              if (drop?.kind === 'add') insert(drop.item)
+              setOverIndex(null)
+            }}
+          >
+            {items.map((item, index) => (
+              <div
+                key={`${item}-${index}`}
+                className={`tc-current-item ${overIndex === index ? 'drop-target' : ''}`}
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.setData('text/plain', `move:${index}`)
+                  event.dataTransfer.effectAllowed = 'move'
+                  setDraggingIndex(index)
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  setOverIndex(index)
+                }}
+                onDrop={(event) => {
+                  event.stopPropagation()
+                  const drop = readDrop(event)
+                  if (drop?.kind === 'add') insert(drop.item, index)
+                  else if (drop?.kind === 'move' && drop.from !== index) move(drop.from, index)
+                  setOverIndex(null)
+                }}
+                onDragEnd={(event) => {
+                  // Dragged out of the toolbar (no drop target) removes the item.
+                  if (event.dataTransfer.dropEffect === 'none' && draggingIndex === index) remove(index)
+                  setDraggingIndex(null)
+                  setOverIndex(null)
+                }}
+              >
+                <GripVertical className="tc-grip" />
+                <span className="tc-card-icon">{itemIcon(item)}</span>
+                <span className="tc-card-label">{t(locale, label[item])}</span>
+                <button type="button" className="tc-remove" aria-label={t(locale, 'close')} onClick={() => remove(index)}>
+                  <X />
+                </button>
+              </div>
+            ))}
+            {items.length === 0 ? <p className="tc-empty">{t(locale, 'dragToToolbar')}</p> : null}
+          </div>
         </div>
         <footer>
           <button type="button" className="tc-reset" onClick={() => onChange(DEFAULT_TOOLBAR)}>

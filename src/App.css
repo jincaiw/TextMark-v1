@@ -1432,6 +1432,29 @@ select:focus-visible {
   border-collapse: collapse;
   font-size: 0.92em;
 }
+.markdown-body.textmark-exporting {
+  margin: 0;
+}
+.markdown-body.textmark-exporting table {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  overflow: visible;
+}
+.markdown-body.textmark-exporting th,
+.markdown-body.textmark-exporting td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.markdown-body.textmark-exporting pre {
+  overflow: visible;
+  white-space: pre-wrap;
+}
+.markdown-body.textmark-exporting pre code {
+  width: auto;
+  min-width: 0;
+  white-space: inherit;
+}
 .markdown-body th,
 .markdown-body td {
   padding: 9px 10px;
@@ -1952,6 +1975,9 @@ mark.search-match.active {
 }
 .settings-dialog {
   width: min(680px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 0 var(--space-6) var(--space-6);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -1984,10 +2010,12 @@ mark.search-match.active {
   width: 16px;
 }
 .settings-layout {
+  min-height: 0;
   display: grid;
   grid-template-columns: 148px minmax(0, 1fr);
   gap: 22px;
   padding-top: 18px;
+  overflow: hidden;
 }
 .settings-nav {
   display: grid;
@@ -2018,7 +2046,11 @@ mark.search-match.active {
   height: 16px;
 }
 .settings-pane {
+  min-width: 0;
   min-height: 330px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
 }
 .settings-dialog label {
   min-height: 58px;
@@ -2040,15 +2072,18 @@ mark.search-match.active {
   font-size: var(--text-xs);
 }
 .settings-text-size {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .settings-text-size button {
+  min-width: 0;
   height: var(--control-h-lg);
-  padding: 0 12px;
+  padding: 0 6px;
   display: inline-flex;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -2252,6 +2287,7 @@ mark.search-match.active {
 .settings-window-shell .settings-dialog {
   width: min(680px, 100vw);
   height: 100vh;
+  max-height: none;
   padding-inline: 22px;
   border: 0;
   border-radius: 0;
@@ -2259,6 +2295,9 @@ mark.search-match.active {
 }
 .settings-window-shell .settings-dialog header {
   height: 54px;
+}
+.settings-window-shell .settings-layout {
+  padding-bottom: 22px;
 }
 .setting-toggle {
   display: flex;
@@ -2370,8 +2409,10 @@ mark.search-match.active {
 .toolbar-customizer {
   width: min(620px, calc(100vw - 40px));
   max-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 0 var(--space-6) var(--space-5);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--window);
@@ -2407,6 +2448,12 @@ mark.search-match.active {
 }
 .toolbar-customizer header svg {
   width: 16px;
+}
+.tc-scroll-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
 }
 .tc-section {
   margin: 18px 0 10px;
@@ -2541,7 +2588,9 @@ mark.search-match.active {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 18px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .toolbar-customizer footer button {
   display: flex;

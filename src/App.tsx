@@ -43,6 +43,7 @@ import {
   refreshMenu,
   saveExportFile,
   setDefaultHandler,
+  shareSourceNatively,
   tempExportPath,
   writeExportBytes,
 } from './lib/platform'
@@ -51,6 +52,7 @@ import { setTaskChecked } from './lib/task'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
+import { shareMarkdownSource } from './lib/share'
 import type { ExternalApplication, FormatCommand, SearchMode, SidebarMode, ViewMode } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
@@ -298,17 +300,14 @@ function DocumentApp() {
     flash(t(settings.locale, 'copied'))
   }
   const shareSource = async () => {
-    if (!navigator.share) return copySource()
-    const file = new File([documents.document.contents], documents.document.name, { type: 'text/markdown;charset=utf-8' })
-    const withFile = { title: documents.document.name, files: [file] }
-    try {
-      await navigator.share(
-        navigator.canShare?.(withFile) ? withFile : { title: documents.document.name, text: documents.document.contents },
-      )
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
-      await copySource()
-    }
+    const outcome = await shareMarkdownSource({
+      source: documents.document.contents,
+      name: documents.document.name,
+      environment: navigator,
+      nativeShare:
+        isTauri() && isMacos() && !import.meta.env.VITE_WDIO ? () => shareSourceNatively(documents.document.contents) : undefined,
+    })
+    if (outcome === 'copied') flash(t(settings.locale, 'copied'))
   }
   const openWith = async (application = 'system') => {
     if (!documents.document.path || !isTauri()) {

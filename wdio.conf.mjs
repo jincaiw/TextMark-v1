@@ -6,6 +6,7 @@ const binaryName = process.platform === 'win32' ? 'textmark.exe' : 'textmark'
 const generatedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
 const movedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e-renamed.md')
 const configPath = path.join(os.tmpdir(), 'textmark-v030-e2e-config')
+const pastedImageDirectory = path.join(os.tmpdir(), 'Pictures', 'textmark-v030-e2e')
 const syntaxFixturePath = process.env.TEXTMARK_SYNTAX_FIXTURE
 if (syntaxFixturePath && !existsSync(syntaxFixturePath)) throw new Error(`TEXTMARK_SYNTAX_FIXTURE does not exist: ${syntaxFixturePath}`)
 const fixturePath = syntaxFixturePath || generatedFixturePath
@@ -13,6 +14,7 @@ const usesExternalFixture = Boolean(syntaxFixturePath)
 rmSync(generatedFixturePath, { force: true })
 rmSync(movedFixturePath, { force: true })
 rmSync(configPath, { recursive: true, force: true })
+rmSync(pastedImageDirectory, { recursive: true, force: true })
 mkdirSync(configPath, { recursive: true })
 if (!usesExternalFixture)
   writeFileSync(
@@ -68,5 +70,6 @@ export const config = {
     if (!usesExternalFixture) rmSync(generatedFixturePath, { force: true })
     rmSync(movedFixturePath, { force: true })
     rmSync(configPath, { recursive: true, force: true })
+    rmSync(pastedImageDirectory, { recursive: true, force: true })
   },
 }

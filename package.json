@@ -1,7 +1,7 @@
 {
   "name": "textmark",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "wdio run wdio.conf.mjs",
+    "test:exports": "cross-env TEXTMARK_EXPORT_EXPECT_FULL=1 node scripts/verify-exports.mjs e2e/fixtures/export-regression.md",
     "build:e2e": "cross-env VITE_WDIO=1 tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
     "preview": "vite preview",
     "tauri": "tauri",

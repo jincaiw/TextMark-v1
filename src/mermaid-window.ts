@@ -1,6 +1,6 @@
-import DOMPurify from 'dompurify'
 import './mermaid-window.css'
 import { attachDiagramInteractions } from './lib/diagramInteractions'
+import { sanitizeMermaidSvg } from './lib/sanitize'
 
 const parameters = new URLSearchParams(location.search)
 const id = parameters.get('id') ?? ''
@@ -21,9 +21,14 @@ async function render() {
   }
   const { default: mermaid } = await import('mermaid')
   const dark = matchMedia('(prefers-color-scheme: dark)').matches
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'neutral' })
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: dark ? 'dark' : 'neutral',
+    flowchart: { htmlLabels: true },
+  })
   const { svg } = await mermaid.render(`textmark-window-${Date.now()}`, source)
-  stage.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+  stage.innerHTML = sanitizeMermaidSvg(svg)
   return attachDiagramInteractions(canvas, stage, {
     minimumZoom: 25,
     maximumZoom: 400,

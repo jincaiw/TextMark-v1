@@ -160,6 +160,11 @@ export async function discoverApplications(): Promise<ExternalApplication[]> {
   return invoke<ExternalApplication[]>('discover_applications')
 }
 
+export async function shareSourceNatively(source: string): Promise<void> {
+  if (!isTauri()) throw new Error('Native sharing is unavailable')
+  await invoke('share_source', { source })
+}
+
 export async function loadNativeSettings(): Promise<unknown | null> {
   if (!isTauri()) return null
   return invoke<unknown | null>('load_settings')

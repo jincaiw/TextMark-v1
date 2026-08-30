@@ -79,13 +79,16 @@ const SIMPLE_ACTIONS: Partial<
   inspector: { title: 'getInfo', icon: <Info />, action: (p) => p.onToggleInspector() },
   alwaysOnTop: { title: 'alwaysOnTop', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
   share: { title: 'shareSource', icon: <Share />, action: (p) => p.onShare() },
-  edit: { title: 'toggleEdit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
+  edit: { title: 'edit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
   print: { title: 'printItem', icon: <Printer />, action: (p) => p.onPrint() },
   copy: { title: 'copyItem', icon: <Clipboard />, action: (p) => p.onCopy() },
   export: { title: 'exportItem', icon: <FileDown />, action: (p) => p.onExport() },
   exportPdf: { title: 'exportPdf', icon: <FileDown />, action: (p) => p.onExportPdf() },
   search: { title: 'searchItem', icon: <Search />, action: (p) => p.onSearchOpen() },
 }
+
+const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>
+  item === 'edit' && props.viewMode === 'edit' ? ('stopEditing' as const) : fallback
 
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key)
@@ -284,29 +287,32 @@ export function Toolbar(props: ToolbarProps) {
         </div>,
       )
     if (item === 'documentActions')
-      return slot(
-        <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
-          <button
-            className={props.inspectorVisible ? 'selected' : ''}
-            title={tx('getInfo')}
-            aria-label={tx('getInfo')}
-            onClick={props.onToggleInspector}
-          >
-            {withLabel(<Info />, 'getInfo')}
-          </button>
-          <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
-            {withLabel(<Share />, 'shareSource')}
-          </button>
-          <button
-            className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
-            title={tx('toggleEdit')}
-            aria-label={tx('toggleEdit')}
-            onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
-          >
-            {withLabel(<FilePenLine />, 'toggleEdit')}
-          </button>
-        </div>,
-      )
+      return (() => {
+        const editTitle = props.viewMode === 'edit' ? 'stopEditing' : 'edit'
+        return slot(
+          <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
+            <button
+              className={props.inspectorVisible ? 'selected' : ''}
+              title={tx('getInfo')}
+              aria-label={tx('getInfo')}
+              onClick={props.onToggleInspector}
+            >
+              {withLabel(<Info />, 'getInfo')}
+            </button>
+            <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
+              {withLabel(<Share />, 'shareSource')}
+            </button>
+            <button
+              className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
+              title={tx(editTitle)}
+              aria-label={tx(editTitle)}
+              onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
+            >
+              {withLabel(<FilePenLine />, editTitle)}
+            </button>
+          </div>,
+        )
+      })()
     if (item === 'search')
       return slot(
         <label className="document-search" onClick={props.onSearchOpen}>
@@ -321,6 +327,7 @@ export function Toolbar(props: ToolbarProps) {
       )
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
+      const title = actionTitle(item, props, simple.title)
       const active =
         (item === 'inspector' && props.inspectorVisible) ||
         (item === 'edit' && props.viewMode === 'edit') ||
@@ -328,8 +335,8 @@ export function Toolbar(props: ToolbarProps) {
       return slot(
         <button
           className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''} ${item === 'edit' && active ? 'edit-active' : ''}`}
-          title={tx(simple.title)}
-          aria-label={tx(simple.title)}
+          title={tx(title)}
+          aria-label={tx(title)}
           onClick={() => {
             if (item === 'copy') {
               props.onCopy()
@@ -338,7 +345,7 @@ export function Toolbar(props: ToolbarProps) {
             } else simple.action(props)
           }}
         >
-          {withLabel(item === 'copy' && copiedFlash ? <Check /> : simple.icon, simple.title)}
+          {withLabel(item === 'copy' && copiedFlash ? <Check /> : simple.icon, title)}
         </button>,
       )
     }
@@ -372,10 +379,11 @@ export function Toolbar(props: ToolbarProps) {
           <div className="menu-popover align-right">
             {overflowItems.map((item) => {
               const meta = SIMPLE_ACTIONS[item]!
+              const title = actionTitle(item, props, meta.title)
               return (
                 <button key={`overflow-${item}`} onClick={() => meta.action(props)}>
                   {meta.icon}
-                  {tx(meta.title)}
+                  {tx(title)}
                 </button>
               )
             })}

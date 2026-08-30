@@ -6,6 +6,7 @@ import { ConflictDialog } from './ConflictDialog'
 import { DocumentTabs } from './DocumentTabs'
 import { FindBar } from './FindBar'
 import { ToolbarCustomizer } from './ToolbarCustomizer'
+import { SettingsDialog } from './SettingsDialog'
 import { PreviewPane } from './PreviewPane'
 import type { DocumentSession, RenderedMarkdown } from '../types'
 
@@ -100,6 +101,94 @@ describe('localized desktop components', () => {
     expect(html).toContain('自定义工具栏')
     expect(html).toContain('可用项目')
     expect(html).toContain('当前工具栏')
+  })
+  it('adds, removes, resets and changes the custom toolbar display mode', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onChange = vi.fn()
+    const onDisplayModeChange = vi.fn()
+    await act(async () =>
+      root.render(
+        <ToolbarCustomizer
+          open
+          locale="zh-CN"
+          items={['sidebar', 'search']}
+          displayMode="iconOnly"
+          onChange={onChange}
+          onDisplayModeChange={onDisplayModeChange}
+          onClose={vi.fn()}
+        />,
+      ),
+    )
+
+    const print = Array.from(host.querySelectorAll<HTMLButtonElement>('.tc-card')).find((button) => button.textContent === '打印')!
+    await act(async () => print.click())
+    expect(onChange).toHaveBeenLastCalledWith(['sidebar', 'search', 'print'])
+    await act(async () => host.querySelector<HTMLButtonElement>('.tc-remove')!.click())
+    expect(onChange).toHaveBeenLastCalledWith(['search'])
+    await act(async () => host.querySelector<HTMLButtonElement>('.tc-reset')!.click())
+    expect(onChange).toHaveBeenLastCalledWith(expect.arrayContaining(['navigation', 'documentActions', 'search']))
+    const display = host.querySelector<HTMLSelectElement>('.tc-display select')!
+    display.value = 'iconAndLabel'
+    await act(async () => display.dispatchEvent(new Event('change', { bubbles: true })))
+    expect(onDisplayModeChange).toHaveBeenCalledWith('iconAndLabel')
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+  it('keeps LLM applications out of the default editor target preference', () => {
+    const html = renderToStaticMarkup(
+      <SettingsDialog
+        open
+        theme="system"
+        contentWidth="normal"
+        editorFontSize={15}
+        documentFont="system"
+        themePreset="normal"
+        themeColors={{}}
+        autoSaveIntervalMinutes={0}
+        openDocumentsInTabs={false}
+        alwaysOnTop={false}
+        zoom={100}
+        applications={[
+          { id: 'system', name: 'System', kind: 'system', available: true },
+          { id: 'vscode', name: 'Visual Studio Code', kind: 'editor', available: true },
+          { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
+          { id: 'missing', name: 'Missing Editor', kind: 'editor', available: false },
+        ]}
+        defaultOpenTarget="system"
+        locale="en"
+        crashReports={false}
+        crashReportsAvailable={false}
+        updateChannel="stable"
+        autoCheckUpdates
+        lastUpdateCheckAt={null}
+        updateStatus={{ state: 'idle' }}
+        onLocaleChange={vi.fn()}
+        onCrashReportsChange={vi.fn()}
+        onUpdateChannelChange={vi.fn()}
+        onAutoCheckUpdatesChange={vi.fn()}
+        onCheckUpdate={vi.fn()}
+        onInstallUpdate={vi.fn()}
+        onThemeChange={vi.fn()}
+        onContentWidthChange={vi.fn()}
+        onEditorFontSizeChange={vi.fn()}
+        onDocumentFontChange={vi.fn()}
+        onThemePresetChange={vi.fn()}
+        onThemeColorChange={vi.fn()}
+        onThemeColorsReset={vi.fn()}
+        onAutoSaveIntervalChange={vi.fn()}
+        onOpenDocumentsInTabsChange={vi.fn()}
+        onAlwaysOnTopChange={vi.fn()}
+        onZoomChange={vi.fn()}
+        onDefaultOpenTargetChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(html).toContain('Visual Studio Code')
+    expect(html).not.toContain('ChatGPT')
+    expect(html).not.toContain('Missing Editor')
   })
   it('preserves an open disclosure while incremental search marks are applied', async () => {
     const host = document.createElement('div')

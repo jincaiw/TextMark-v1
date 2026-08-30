@@ -144,7 +144,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   <select value={props.defaultOpenTarget} onChange={(event) => props.onDefaultOpenTargetChange(event.target.value)}>
                     <option value="system">{t(props.locale, 'systemDefault')}</option>
                     {props.applications
-                      .filter((application) => application.available && application.id !== 'system')
+                      .filter((application) => application.available && application.id !== 'system' && application.kind !== 'llm')
                       .map((application) => (
                         <option key={application.id} value={application.id}>
                           {application.name}

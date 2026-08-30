@@ -4520,18 +4520,21 @@ dependencies = [
 
 [[package]]
 name = "textmark"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "atomic-write-file",
  "base64 0.22.1",
+ "core-foundation",
  "dirs",
  "font8x8",
  "image",
  "mime_guess",
  "notify",
+ "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "percent-encoding",
+ "plist",
  "serde",
  "serde_json",
  "tauri",

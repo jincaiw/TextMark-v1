@@ -4,6 +4,8 @@ import path from 'node:path'
 
 const fixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
 const movedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e-renamed.md')
+const configPath = path.join(os.tmpdir(), 'textmark-v030-e2e-config', 'settings-v3.json')
+const pastedImagePath = path.join(os.tmpdir(), 'Pictures', 'textmark-v030-e2e', '1.png')
 
 before(async () => {
   // The document title intentionally replaces "TextMark" once a file opens.
@@ -54,6 +56,56 @@ describe('TextMark desktop shell', () => {
     await $('.toolbar-customizer footer button.primary').click()
   })
 
+  it('persists auto-save, document-tab and always-on-top preferences', async () => {
+    await browser.keys([process.platform === 'darwin' ? 'Meta' : 'Control', ','])
+    await expect(await $('.settings-dialog')).toBeDisplayed()
+    await browser.execute(() => {
+      const control = (label, selector) =>
+        [...document.querySelectorAll('.settings-pane label')]
+          .find((element) => element.querySelector('span')?.textContent?.trim() === label)
+          ?.querySelector(selector)
+      const autoSave = control('自动存储', 'select')
+      const tabs = control('打开文稿时加入标签页', 'input')
+      const alwaysOnTop = control('窗口置顶', 'input')
+      autoSave.value = '5'
+      autoSave.dispatchEvent(new Event('change', { bubbles: true }))
+      for (const checkbox of [tabs, alwaysOnTop]) {
+        if (!checkbox.checked) checkbox.click()
+      }
+    })
+    await browser.waitUntil(() => {
+      if (!existsSync(configPath)) return false
+      const settings = JSON.parse(readFileSync(configPath, 'utf8'))
+      return settings.autoSaveIntervalMinutes === 5 && settings.openDocumentsInTabs === true && settings.alwaysOnTop === true
+    })
+    await $(".settings-dialog button[aria-label='关闭']").click()
+
+    await browser.keys([process.platform === 'darwin' ? 'Meta' : 'Control', ','])
+    const persisted = await browser.execute(() => {
+      const labels = [...document.querySelectorAll('.settings-pane label')]
+      const control = (label, selector) =>
+        labels.find((element) => element.querySelector('span')?.textContent?.trim() === label)?.querySelector(selector)
+      return {
+        autoSave: control('自动存储', 'select')?.value,
+        tabs: control('打开文稿时加入标签页', 'input')?.checked,
+        alwaysOnTop: control('窗口置顶', 'input')?.checked,
+      }
+    })
+    expect(persisted).toEqual({ autoSave: '5', tabs: true, alwaysOnTop: true })
+    await browser.execute(() => {
+      const labels = [...document.querySelectorAll('.settings-pane label')]
+      const control = (label, selector) =>
+        labels.find((element) => element.querySelector('span')?.textContent?.trim() === label)?.querySelector(selector)
+      const autoSave = control('自动存储', 'select')
+      autoSave.value = '0'
+      autoSave.dispatchEvent(new Event('change', { bubbles: true }))
+      for (const checkbox of [control('打开文稿时加入标签页', 'input'), control('窗口置顶', 'input')]) {
+        if (checkbox.checked) checkbox.click()
+      }
+    })
+    await $(".settings-dialog button[aria-label='关闭']").click()
+  })
+
   it('supports native preview interactions, search, inspector and source-aware tables', async () => {
     await $('.markdown-body details summary').click()
     expect(await $('.markdown-body details').getAttribute('open')).not.toBeNull()
@@ -96,23 +148,57 @@ describe('TextMark desktop shell', () => {
     expect(await browser.getTitle()).toContain('已编辑')
   })
 
+  it('persists a pasted clipboard image and inserts a relative Markdown reference', async () => {
+    await $("button[aria-label='编辑']").click()
+    const editor = await $('.cm-content')
+    await editor.waitForDisplayed()
+    await editor.click()
+    const pasteDispatch = await browser.execute(async () => {
+      const encoded =
+        'iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAACsElEQVR42sWXu28TMRjAP/tOiCXRJQp0KCnQgAgLihjajmVoF1hY+BdAIGg7dgeBYACGUmBpYEFsGSuoeEgVREJiQIKCQNBHOqA2TwKpRHLGn3N1Hj6bZw/rbH1nf3e/s7+HfTa0lX3J1DAjbAxcNswAHAAmLiysJbTuWo0nMvku5skESIm/M0MJ3Fn88PbJ5jiR0IOpq4y54y3W30Pl094tIXBt+eO7CZQtbBLJ1AyAe2oroZ7mUNiJRSql/CwRywvu4wCg3j021hErGuuZ4fKe4KDCvoQkDhxiQUK9h0t20FDvjY5tgg7EQx3Q7MoXI3QwHu6APl+q+EFFsU0zvXeivz3M4WTmEzx4X/KFju534PbxRId+36UXvlD8eGpaXlZvdNTLI72wK7xNgfbyviujcUVfB8U7arIpazQ6aogbZvpoXLHprWO7xVi3vg6KhZocyW3UlZqM2nBuICahY4M7RJ+frg6Ksm3yXrlcXeXs4Qhkc1+lrNPTQZvOZQgZsVyacmOkp6nb+H2oZ2N9nDJcrraaflWUcshyRW2NFRR9HRRbakoOLp9Ne72QLcCbtQ2lH/vOP8sr/TooXtSUkfzC48yjdajU6rIP5dNza8Jg/uGkQqVX69KgEh5cc7Vah8n5ouybnC9ArvrdX18DxY+0TblX2En1FZjL1eDugtjK4eFKzazvtxcwkTINCb/LY9sT/sWXVTVOu/U1UC+c9LuMq8QnM6ZBX30fKAq2aWubXtiALp83psGp199+CYoi6etPsj/YT43J4WfQpo3/A1QkEH7+KQcN5SeuMmUEMoFCmz6VoXzK6WChPGtRmrZKhfVFJxqL4GE7CCihcP3z6tJNkX7KxfwsnvD50NDWQ5fH5S8MFvytCDs7nxLxn8X28q7t/8qReHufWnQCZ7o5mR9tjLeJh0bUcgAAAABJRU5ErkJggg=='
+      const bytes = Uint8Array.from(window.atob(encoded), (character) => character.charCodeAt(0))
+      const file = new window.File([bytes], 'pixel.png', { type: 'image/png' })
+      const event = new Event('paste', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'clipboardData', {
+        value: {
+          files: [file],
+          items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+        },
+      })
+      document.querySelector('.cm-content').dispatchEvent(event)
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
+      return {
+        prevented: event.defaultPrevented,
+        editor: document.querySelector('.cm-content')?.textContent,
+        notice: document.querySelector('.toast, .notice, [role="status"]')?.textContent,
+      }
+    })
+    expect(pasteDispatch.prevented).toBe(true)
+    await browser.waitUntil(async () => (await editor.getText()).includes('![pixel](Pictures/textmark-v030-e2e/1.png)'), {
+      timeoutMsg: `paste did not insert Markdown: ${JSON.stringify(pasteDispatch)}`,
+    })
+    expect(existsSync(pastedImagePath)).toBe(true)
+    await $("button[aria-label='停止编辑并返回预览']").click()
+    await browser.waitUntil(async () => (await $$('.markdown-body img')).length > 0)
+  })
+
   it('saves through Rust and safely resolves an external write conflict', async () => {
     await $('.more-menu summary').click()
     await $('button=存储').click()
     await browser.waitUntil(() => (readFileSync(fixturePath, 'utf8').match(/\| Preview \|/g) ?? []).length === 2)
 
-    await $("button[aria-label='切换编辑模式']").click()
+    await $("button[aria-label='编辑']").click()
     const editor = await $('.cm-content')
     await editor.waitForDisplayed()
     await editor.click()
     await editor.addValue('\n\nE2E local draft')
-    expect(await browser.getTitle()).toContain('已编辑')
+    await browser.waitUntil(async () => (await browser.getTitle()).includes('已编辑'))
 
     writeFileSync(fixturePath, '# External Disk Version\n\nTextMark external reload.\n', 'utf8')
     await expect(await $('.conflict-dialog')).toBeDisplayed()
     await $("//section[contains(@class,'conflict-dialog')]//button[normalize-space()='从磁盘重新载入']").click()
     await expect(editor).toHaveText(expect.stringContaining('External Disk Version'))
-    await $("button[aria-label='切换编辑模式']").click()
+    await $("button[aria-label='停止编辑并返回预览']").click()
     await expect(await $('.markdown-body h1')).toHaveText('External Disk Version')
   })
 
@@ -220,7 +306,7 @@ describe('TextMark toolbar click matrix', () => {
   })
 
   it('edit mode toggles on and off from the toolbar', async () => {
-    const edit = await $('button[aria-label="切换编辑模式"]')
+    const edit = await $('button[aria-label="编辑"], button[aria-label="停止编辑并返回预览"]')
     if ((await $('.app-shell').getAttribute('class')).includes('mode-edit')) await edit.click()
     await expect(await $('.app-shell')).not.toHaveClassContaining('mode-edit')
     await edit.click()
@@ -271,6 +357,20 @@ describe('TextMark toolbar click matrix', () => {
     await $('.more-menu summary[title="更多"]').click()
     await $("//details[contains(@class,'more-menu')]//button[normalize-space()='自定义工具栏…']").click()
     await expect(await $('.toolbar-customizer')).toBeDisplayed()
+    const originalToolbar = await $$('.tc-current-item .tc-card-label').map((item) => item.getText())
+    expect(originalToolbar.length).toBeGreaterThan(2)
+    await browser.execute(() => {
+      const items = [...document.querySelectorAll('.tc-current-item')]
+      const transfer = new window.DataTransfer()
+      items[0].dispatchEvent(new window.DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }))
+      items[2].dispatchEvent(new window.DragEvent('dragover', { bubbles: true, dataTransfer: transfer }))
+      items[2].dispatchEvent(new window.DragEvent('drop', { bubbles: true, dataTransfer: transfer }))
+    })
+    await browser.waitUntil(async () => {
+      const reordered = await $$('.tc-current-item .tc-card-label').map((item) => item.getText())
+      return reordered[2] === originalToolbar[0]
+    })
+    await $('.toolbar-customizer .tc-reset').click()
     await $('.toolbar-customizer footer button.primary').click()
     await $('.more-menu summary[title="更多"]').click()
     await $("//details[contains(@class,'more-menu')]//button[normalize-space()='偏好设置…']").click()

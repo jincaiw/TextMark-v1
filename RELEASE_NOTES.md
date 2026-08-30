@@ -1,3 +1,22 @@
+# TextMark v0.9.1
+
+TextMark 0.9.1 completes the follow-up verification pass against Markdown Preview v0.0.51 and fixes export, formula, Mermaid, sharing and macOS editor-integration edge cases. KaTeX selections now copy as usable Markdown source, Mermaid node labels remain visible in secure HTML/PDF/PNG output, and block equations no longer consume the following heading. macOS now uses the native sharing panel and filters Open With choices through the system editor role. The release also adds end-to-end coverage for preferences persistence, toolbar customization, image paste, export output and large documents.
+
+TextMark 0.9.1 完成针对 Markdown Preview v0.0.51 的后续验收，并修复导出、公式、Mermaid、分享及 macOS 编辑器集成边界问题。KaTeX 选区复制现在会生成可直接使用的 Markdown 源码；Mermaid 节点标签在安全的 HTML/PDF/PNG 输出中保持可见；块级公式不会再吞掉后续标题。macOS 现使用原生系统分享面板，并通过系统编辑器角色筛选“打开方式”应用。本版本还新增偏好设置持久化、工具栏自定、图片粘贴、导出结果及大文档的端到端覆盖。
+
+## Highlights / 主要更新
+
+- 公式与图表：KaTeX 复制保留 `$…$` / `$$…$$`；安全转换 Mermaid `foreignObject` 标签为 SVG 文本，移除脚本和事件属性，同时保证标签可读。
+- 导出可靠性：修复 PDF 中 Alert 图标异常放大与块级公式后的标题解析；HTML、PNG、PDF 导出增加 CSP、资源、主题恢复、签名、尺寸与视觉回归检查。
+- macOS 工作流：Share 调用原生系统分享面板；Open With 依据 LaunchServices 编辑器角色筛选已安装应用，跨平台继续安全回退。
+- 回归保障：280 项前端测试、13 项 Rust 测试、21 项桌面端流程、完整 Markdown 语法文档及浏览器视觉验收均通过；构建、静态检查、包体积预算与安全审计通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.0. 同 v0.9.0。
+
+---
+
 # TextMark v0.9.0
 
 TextMark 0.9.0 completes another deep parity pass against the latest Markdown Preview while making editing and desktop workflows substantially more robust. The editor now loads language support for fenced code blocks on demand, renders pasted local images inline, and renames pasted-image files transactionally when their Markdown paths change. New-document and folder deep-link flows are safer, dirty tabs are never silently replaced, seven built-in appearance themes are available from a dedicated settings pane, and the renderer and deep-link lifecycle have been split into focused modules for easier maintenance. Default Chinese and full Windows, Linux, and macOS support remain unchanged.

@@ -988,6 +988,67 @@ fn application_available(commands: &[&str], mac_app: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(target_os = "macos")]
+fn mac_application_path(app: &str) -> Option<PathBuf> {
+    let mut roots = vec![PathBuf::from("/Applications"), PathBuf::from("/System/Applications")];
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home.join("Applications"));
+    }
+    roots.into_iter().map(|root| root.join(app)).find(|path| path.is_dir())
+}
+
+#[cfg(target_os = "macos")]
+fn mac_editor_role_handlers() -> HashSet<String> {
+    use core_foundation::{
+        array::{CFArray, CFArrayRef},
+        base::TCFType,
+        string::{CFString, CFStringRef},
+    };
+
+    #[link(name = "CoreServices", kind = "framework")]
+    unsafe extern "C" {
+        fn LSCopyAllRoleHandlersForContentType(content_type: CFStringRef, roles: u32) -> CFArrayRef;
+    }
+
+    const LS_ROLES_EDITOR: u32 = 0x0000_0004;
+    let mut handlers = HashSet::new();
+    for content_type in ["net.daringfireball.markdown", "public.plain-text"] {
+        let content_type = CFString::new(content_type);
+        // SAFETY: LaunchServices returns a retained CFArray of CFString bundle
+        // identifiers for the supplied, valid content type and roles mask.
+        let raw = unsafe { LSCopyAllRoleHandlersForContentType(content_type.as_concrete_TypeRef(), LS_ROLES_EDITOR) };
+        if raw.is_null() {
+            continue;
+        }
+        // SAFETY: `LSCopy...` follows the Create Rule and the values are CFString.
+        let values = unsafe { CFArray::<CFString>::wrap_under_create_rule(raw) };
+        handlers.extend(values.iter().map(|value| value.to_string()));
+    }
+    handlers
+}
+
+#[cfg(target_os = "macos")]
+fn mac_editor_available(commands: &[&str], mac_app: Option<&str>) -> bool {
+    static EDITOR_HANDLERS: LazyLock<HashSet<String>> = LazyLock::new(mac_editor_role_handlers);
+    let Some(app_path) = mac_app.and_then(mac_application_path) else {
+        return application_available(commands, None);
+    };
+    // If LaunchServices is unavailable, retain the established existence
+    // fallback rather than hiding every editor from the UI.
+    if EDITOR_HANDLERS.is_empty() {
+        return true;
+    }
+    let bundle_id = plist::Value::from_file(app_path.join("Contents/Info.plist"))
+        .ok()
+        .and_then(|value| value.as_dictionary()?.get("CFBundleIdentifier")?.as_string().map(str::to_owned));
+    bundle_id.is_some_and(|bundle_id| EDITOR_HANDLERS.contains(&bundle_id))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn mac_editor_available(commands: &[&str], mac_app: Option<&str>) -> bool {
+    application_available(commands, mac_app)
+}
+
 #[tauri::command]
 fn discover_applications() -> Vec<ExternalApplication> {
     [
@@ -1097,7 +1158,12 @@ fn discover_applications() -> Vec<ExternalApplication> {
             id,
             name,
             kind,
-            available: always || application_available(commands, mac_app),
+            available: always
+                || if kind == "editor" {
+                    mac_editor_available(commands, mac_app)
+                } else {
+                    application_available(commands, mac_app)
+                },
         },
     )
     .collect()
@@ -1686,6 +1752,43 @@ fn restore_macos_window_chrome() {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn show_macos_share_picker(window_pointer: usize, source: &str) {
+    use objc2::{AnyThread, rc::Retained, runtime::AnyObject};
+    use objc2_app_kit::{NSSharingServicePicker, NSWindow};
+    use objc2_foundation::{NSArray, NSRectEdge, NSString};
+
+    // SAFETY: Tauri supplies the NSWindow pointer for this live WebviewWindow,
+    // and this helper is invoked on AppKit's main thread.
+    let window = unsafe { &*(window_pointer as *const NSWindow) };
+    let Some(view) = window.contentView() else {
+        return;
+    };
+    let source: Retained<AnyObject> = NSString::from_str(source).into();
+    let items = NSArray::from_retained_slice(&[source]);
+    // SAFETY: NSString conforms to NSPasteboardWriting, as required by the
+    // picker. AppKit owns the visible picker after it is shown.
+    let picker = unsafe { NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), &items) };
+    picker.showRelativeToRect_ofView_preferredEdge(view.bounds(), &view, NSRectEdge::MaxY);
+}
+
+#[tauri::command]
+fn share_source(window: tauri::WebviewWindow, source: String) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let pointer = window.ns_window().map_err(io_error)? as usize;
+        window
+            .run_on_main_thread(move || show_macos_share_picker(pointer, &source))
+            .map_err(io_error)?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (window, source);
+        Err(AppError { code: "unsupported" })
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1779,6 +1882,7 @@ pub fn run() {
             record_recent_file,
             clear_recent_files,
             discover_applications,
+            share_source,
             load_settings,
             save_settings,
             watch_paths,

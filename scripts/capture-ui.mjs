@@ -99,7 +99,9 @@ for (let attempt = 0; attempt < 120; attempt += 1) {
 if (scenario === 'edit') {
   await send('Runtime.evaluate', {
     expression: `(() => {
-    const button = document.querySelector('[aria-label="切换编辑模式"], [aria-label="Toggle Edit Mode"]');
+    const button = document.querySelector(
+      '[aria-label="编辑"], [aria-label="Edit"], [aria-label="停止编辑并返回预览"], [aria-label="Stop editing and return to preview"]',
+    );
     button?.click();
     return Boolean(button);
   })()`,
