@@ -155,6 +155,8 @@ export async function discoverApplications(): Promise<ExternalApplication[]> {
   if (!isTauri())
     return [
       { id: 'system', name: 'System Default', kind: 'system', available: true },
+      { id: 'codex', name: 'Codex', kind: 'llm', available: true },
+      { id: 'claude', name: 'Claude', kind: 'llm', available: true },
       { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
     ]
   return invoke<ExternalApplication[]>('discover_applications')

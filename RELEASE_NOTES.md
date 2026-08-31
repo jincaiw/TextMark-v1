@@ -1,3 +1,22 @@
+# TextMark v0.9.5
+
+TextMark 0.9.5 makes external editing and AI handoffs dependable. The configurable default external editor is now preserved until changed in Settings, and a direct “Open in Default Editor” action works consistently from the toolbar. System-default opening remains safe for saved documents, while unsaved drafts explain that they must be saved first. Codex, Claude and ChatGPT are available in both native and browser surfaces, and the native application catalog now recognises popular editors including Windsurf, Trae, Obsidian, Typora and Notepad++.
+
+TextMark 0.9.5 改善外部编辑与 AI 交接体验。可配置的默认外部编辑器现在只会在设置中被修改，工具栏新增稳定的“使用默认编辑器打开”入口。系统默认方式仅用于已保存文档；未保存草稿会明确提示先保存。Codex、Claude 和 ChatGPT 在原生与浏览器界面均可使用，原生应用目录还新增识别 Windsurf、Trae、Obsidian、Typora、Notepad++ 等常用编辑器。
+
+## Highlights / 主要更新
+
+- 默认外部编辑器：设置项更名为“默认外部编辑器”；手动选择其他打开方式不再改写该偏好，工具栏和文件夹菜单都遵循它。
+- 系统默认打开：已保存 Markdown 通过操作系统默认关联打开；未保存文档会显示清晰提示。Linux 默认关联仅覆盖 Markdown MIME 类型，不再影响纯文本文件。
+- AI 与编辑器：Codex、Claude、ChatGPT 可直接交接或安全回退到复制；新增 Windsurf、Trae、Notepad++、Obsidian、Typora 的发现与启动支持。
+- 回归保障：前端交互、原生应用目录、Markdown 与设置测试，生产构建及静态检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.4. 同 v0.9.4。
+
+---
+
 # TextMark v0.9.4
 
 TextMark 0.9.4 makes installation choices clearer and restores complete table grids. Every release now ships a dedicated, bilingual installation guide that recommends the right package for each operating system and architecture, explains checksum verification, first launch, updates and uninstall, and makes the portable-versus-integrated trade-off explicit. Markdown tables now draw vertical as well as horizontal grid lines in preview and export layouts.

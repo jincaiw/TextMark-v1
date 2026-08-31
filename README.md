@@ -37,7 +37,7 @@ textmark README.md docs/
 tm --new-window one.md two.md
 ```
 
-The v0.9.4 binaries are updater-signed but do not use Apple Developer ID notarization or Windows Authenticode. Review the release trust notice and verify `SHA256SUMS.txt` when installing.
+The v0.9.5 binaries are updater-signed but do not use Apple Developer ID notarization or Windows Authenticode. Review the release trust notice and verify `SHA256SUMS.txt` when installing.
 
 ## Development
 

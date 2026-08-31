@@ -293,7 +293,9 @@ function DocumentApp() {
     })
   }
   useEffect(() => {
-    if (isTauri() && !localStorage.getItem('textmark.defaultHandlerPrompted')) setDefaultHandlerPrompt(true)
+    // Windows and macOS require the user to choose a file handler in the OS
+    // settings. Only Linux can safely set the MIME default directly.
+    if (isTauri() && detectPlatform() === 'linux' && !localStorage.getItem('textmark.defaultHandlerPrompted')) setDefaultHandlerPrompt(true)
   }, [])
   const copySource = async () => {
     await navigator.clipboard.writeText(documents.document.contents)
@@ -317,7 +319,6 @@ function DocumentApp() {
     try {
       if (application === 'system') await openExternalPath(documents.document.path)
       else await openInApplication(documents.document.path, application)
-      patch({ defaultOpenTarget: application })
     } catch {
       flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.')
     }

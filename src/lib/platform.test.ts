@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { detectPlatform, detectRuntime, errorCode, isMacos, parentDirectory, resolveSiblingPath } from './platform'
+import { detectPlatform, detectRuntime, discoverApplications, errorCode, isMacos, parentDirectory, resolveSiblingPath } from './platform'
 
 const mockUserAgent = (agent: string, platform = '') => {
   Object.defineProperty(navigator, 'userAgent', { value: agent, configurable: true })
@@ -54,5 +54,14 @@ describe('platform paths', () => {
   it('extracts serialized error codes without exposing text', () => {
     expect(errorCode('{"code":"not_found","detail":"secret"}')).toBe('not_found')
     expect(errorCode('arbitrary platform error')).toBeNull()
+  })
+})
+
+describe('external application discovery', () => {
+  it('keeps all supported AI handoff targets available in browser mode', async () => {
+    const applications = await discoverApplications()
+    expect(
+      applications.filter((application) => application.kind === 'llm' && application.available).map((application) => application.id),
+    ).toEqual(['codex', 'claude', 'chatgpt'])
   })
 })

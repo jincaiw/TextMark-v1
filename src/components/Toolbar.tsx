@@ -111,6 +111,7 @@ export function Toolbar(props: ToolbarProps) {
     [props.applications],
   )
   const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
+  const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget) ?? editorApps[0]
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -125,6 +126,12 @@ export function Toolbar(props: ToolbarProps) {
       {application.id === props.defaultOpenTarget ? <Check className="check" /> : null}
     </button>
   ))
+  const defaultEditorButton = defaultEditor ? (
+    <button onClick={() => props.onOpenWith(defaultEditor.id)}>
+      <AppWindow />
+      <span>{tx('openWithDefault')}</span>
+    </button>
+  ) : null
   const llmButtons = llmApps.map((application) => (
     <button
       key={application.id}
@@ -243,6 +250,7 @@ export function Toolbar(props: ToolbarProps) {
               emptyAppItem()
             ) : (
               <>
+                {defaultEditorButton}
                 {llmApps.length > 0 && <b>{tx('aiApps')}</b>}
                 {llmButtons}
                 {llmApps.length > 0 && editorApps.length > 0 && <hr />}
@@ -260,7 +268,10 @@ export function Toolbar(props: ToolbarProps) {
             {withLabel(<AppWindow />, 'openWith')}
             <ChevronDown />
           </summary>
-          <div className="menu-popover">{editorApps.length ? editorButtons : emptyAppItem()}</div>
+          <div className="menu-popover">
+            {defaultEditorButton}
+            {editorApps.length ? editorButtons : emptyAppItem()}
+          </div>
         </details>,
       )
     if (item === 'openInLlm')
