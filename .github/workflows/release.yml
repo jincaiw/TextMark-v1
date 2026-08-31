@@ -197,7 +197,10 @@ jobs:
           for asset in "$bundle_dir"/msi/*.msi "$bundle_dir"/msi/*.sig "$bundle_dir"/nsis/*.exe "$bundle_dir"/nsis/*.sig; do
             [ -f "$asset" ] || continue
             for attempt in 1 2 3 4 5; do
-              if node scripts/upload-release-assets.mjs "$RELEASE_TAG" "$asset"; then break; fi
+              # Windows runners include the GitHub CLI. It streams release
+              # assets reliably here, avoiding stalled Node fetch uploads on
+              # the ARM64 runner while retaining bounded retry behaviour.
+              if gh release upload "$RELEASE_TAG" "$asset" --clobber; then break; fi
               [ "$attempt" = 5 ] && { echo "upload failed: $asset"; exit 1; }
               sleep 20
             done
