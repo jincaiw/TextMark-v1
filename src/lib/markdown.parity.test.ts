@@ -54,6 +54,11 @@ describe('upstream MarkdownHTML rendering parity', () => {
     expect((await renderMarkdownEnhanced('```sh\necho $HOME # comment\n```')).html).toContain('hljs-built_in'))
   it('normalizes console to bash highlighting', async () =>
     expect((await renderMarkdownEnhanced('```console\necho ok\n```')).html).toContain('hljs-built_in'))
+  it('highlights Python and its py alias', async () => {
+    const rendered = await renderMarkdownEnhanced('```py\ndef greet(name):\n  return f"Hello, {name}"\n```')
+    expect(rendered.html).toContain('language-python')
+    expect(rendered.html).toContain('hljs-keyword')
+  })
   it('highlights Terraform/HCL aliases', async () =>
     expect((await renderMarkdownEnhanced('```hcl\nresource "x" "y" { enabled = true }\n```')).html).toContain('hljs-keyword'))
   it('does not treat Mermaid as syntax highlighting', () =>

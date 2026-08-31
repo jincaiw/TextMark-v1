@@ -4,12 +4,38 @@ export interface CodeFenceInfo {
   highlightLanguage: string
 }
 
+const highlightAliases: Record<string, string> = {
+  'c++': 'cpp',
+  compose: 'yaml',
+  console: 'bash',
+  docker: 'dockerfile',
+  'docker-compose': 'yaml',
+  docker_compose: 'yaml',
+  html: 'xml',
+  js: 'javascript',
+  jsx: 'javascript',
+  node: 'javascript',
+  py: 'python',
+  ps: 'powershell',
+  ps1: 'powershell',
+  shell: 'bash',
+  sh: 'bash',
+  svg: 'xml',
+  terraform: 'hcl',
+  tf: 'hcl',
+  ts: 'typescript',
+  tsx: 'typescript',
+  xml: 'xml',
+  yml: 'yaml',
+  zsh: 'bash',
+}
+
 export function parseCodeFenceInfo(raw: string | null | undefined): CodeFenceInfo {
   const trimmed = raw?.trim() ?? ''
   const split = trimmed.search(/\s/u)
   const language = (split < 0 ? trimmed : trimmed.slice(0, split)).toLowerCase()
   const metadata = split < 0 ? '' : trimmed.slice(split).trim()
-  const highlightLanguage = ['shell', 'sh', 'zsh', 'console'].includes(language) ? 'bash' : language
+  const highlightLanguage = highlightAliases[language] ?? language
   return { language, metadata, highlightLanguage }
 }
 

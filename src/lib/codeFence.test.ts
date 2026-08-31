@@ -17,6 +17,10 @@ describe('upstream CodeFenceInfo parity', () => {
 
   it('normalizes every shell alias to the bash highlighter', () => {
     for (const alias of ['shell', 'sh', 'zsh', 'console', 'bash']) expect(parseCodeFenceInfo(alias).highlightLanguage).toBe('bash')
+    expect(parseCodeFenceInfo('docker-compose').highlightLanguage).toBe('yaml')
+    expect(parseCodeFenceInfo('yml').highlightLanguage).toBe('yaml')
+    expect(parseCodeFenceInfo('Dockerfile').highlightLanguage).toBe('dockerfile')
+    expect(parseCodeFenceInfo('ts').highlightLanguage).toBe('typescript')
     expect(parseCodeFenceInfo('swift').highlightLanguage).toBe('swift')
   })
 

@@ -1,3 +1,22 @@
+# TextMark v0.9.3
+
+TextMark 0.9.3 adds standard Emoji shortcode rendering and substantially broadens code-block highlighting. SQL, Docker Compose YAML, Dockerfile and a curated set of common programming and configuration languages render with syntax-aware colours on demand. Tables now use the full available document width and gain an isolated horizontal scroll surface when their content is wider than the page; print and export retain page-fitting layout. The release keeps the complete standard Emoji shortcode map, including `:smile:`, while preserving literal code and ordinary emoticon text.
+
+TextMark 0.9.3 新增标准 Emoji 短代码渲染，并大幅扩展代码块语法高亮。SQL、Docker Compose YAML、Dockerfile 以及一组常见编程与配置语言会按需加载并以语法颜色显示。表格现在占满文档可用宽度；内容超宽时仅表格区域横向滚动，打印和导出仍会自动适应页面。该版本保留完整的标准 Emoji 短代码表（包括 `:smile:`），同时保持代码中的字面文本和普通颜文字不被替换。
+
+## Highlights / 主要更新
+
+- Emoji：支持完整标准 `:shortcode:` 表，例如 `:smile:`、`:rocket:`；不支持自定义图片 Emoji，不替换 `:-)` 等普通文本。
+- 代码高亮：新增 SQL、Docker Compose、Dockerfile、Go、Java、Kotlin、C/C++、C#、PHP、Ruby、PowerShell、GraphQL、Nginx、Diff 等，并支持 `py`、`sh`、`zsh`、`yml` 等常见别名。
+- 表格：短表铺满正文区域；长表维持页面不横向溢出，并在表格内部提供横向滚动。PDF、PNG、HTML 导出使用一致的页面适配规则。
+- 回归保障：285 项前端测试、类型构建、静态检查、格式检查、包体预算、导出回归及桌面/窄屏视觉检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.2. 同 v0.9.2。
+
+---
+
 # TextMark v0.9.2
 
 TextMark 0.9.2 makes document exports more dependable and gives exported pages a cleaner, more consistent appearance. PNG export now captures through Blob output, adapts safely to browser canvas limits, and retries at a lower scale when needed. PDF export uses balanced A4 margins, crisp lossless page slices and page numbers; macOS continues to use the native vector-capable Save as PDF workflow. Markdown presentation now also covers keyboard shortcuts, disclosure blocks, footnotes, strong text and strikethrough, with a dedicated syntax regression suite for the supported CommonMark, GFM and TextMark extensions.

@@ -124,6 +124,29 @@ describe('renderMarkdown', () => {
     expect(rendered.html).toContain('hljs-attr')
   })
 
+  it('renders standard Emoji shortcodes without affecting literal code or text emoticons', () => {
+    const rendered = renderMarkdown(':smile: :rocket: :-)\n\n`:smile:`\n\n```text\n:smile:\n```')
+    expect(rendered.html).toContain('😄 🚀 :-')
+    expect(rendered.html).toContain('<code>:smile:</code>')
+    expect(rendered.html).toContain(':smile:')
+  })
+
+  it('wraps tables for full-width layout and narrow-screen scrolling', () => {
+    const rendered = renderMarkdown('| Name | Value |\n| --- | --- |\n| TextMark | Ready |')
+    expect(rendered.html).toContain('<div class="md-table-scroll"><table>')
+    expect(rendered.html).toContain('</table>\n</div>')
+  })
+
+  it('highlights SQL, Docker Compose YAML and expanded common languages', async () => {
+    const rendered = await renderMarkdownEnhanced(
+      '```sql\nSELECT id, title FROM documents WHERE published = true;\n```\n\n```docker-compose\nservices:\n  app:\n    image: textmark:latest\n```\n\n```go\npackage main\nfunc main() {}\n```',
+    )
+    expect(rendered.html).toContain('language-sql')
+    expect(rendered.html).toContain('language-yaml')
+    expect(rendered.html).toContain('language-go')
+    expect(rendered.html).toContain('hljs-keyword')
+  })
+
   it('highlights an unlabeled common-language code fence without changing explicit source syntax', async () => {
     const rendered = await renderMarkdownEnhanced('```\nconst title: string = "TextMark"\n```')
     expect(rendered.optionalRenderers).toContain('highlight')

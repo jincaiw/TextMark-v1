@@ -1,4 +1,5 @@
 import MarkdownIt, { type MarkdownIt as MarkdownItInstance, type RendererRule } from 'markdown-it'
+import { full as emoji } from 'markdown-it-emoji'
 import footnote from 'markdown-it-footnote'
 import taskLists from 'markdown-it-task-lists'
 import type { OutlineItem, RenderedMarkdown } from '../types'
@@ -51,6 +52,9 @@ function makeRenderer() {
     },
   })
 
+  // Only standard :shortcode: names are enabled. Do not replace plain-text emoticons
+  // and do not introduce any custom image-based emoji surface.
+  md.use(emoji, { shortcuts: {} })
   md.use(footnote)
   // The plugin's optional label wrapper reinjects raw source text. In a task
   // such as `- [ ] literal <script>`, that can turn escaped inline code back
@@ -74,6 +78,15 @@ function makeRenderer() {
     return defaultFence ? defaultFence(tokens, index, options, env, self) : self.renderToken(tokens, index, options)
   }
   md.renderer.rules.fence = fenceRule
+
+  const defaultTableOpen = md.renderer.rules.table_open
+  const tableOpenRule: RendererRule = (tokens, index, options, env, self) =>
+    `<div class="md-table-scroll">${defaultTableOpen ? defaultTableOpen(tokens, index, options, env, self) : self.renderToken(tokens, index, options)}`
+  md.renderer.rules.table_open = tableOpenRule
+  const defaultTableClose = md.renderer.rules.table_close
+  const tableCloseRule: RendererRule = (tokens, index, options, env, self) =>
+    `${defaultTableClose ? defaultTableClose(tokens, index, options, env, self) : self.renderToken(tokens, index, options)}</div>`
+  md.renderer.rules.table_close = tableCloseRule
 
   const defaultImage = md.renderer.rules.image
   const imageRule: RendererRule = (tokens, index, options, env, self) => {
@@ -390,7 +403,9 @@ export async function renderMarkdownEnhancedUnsafe(source: string, locale: 'zh-C
   const result = renderMarkdownUnsafe(source, locale)
   let html = result.html
   if (result.optionalRenderers.includes('highlight')) {
-    const { highlightCode } = await import('./syntaxHighlight')
+    const { highlightCode, prepareHighlightLanguages } = await import('./syntaxHighlight')
+    const codeBlocks = [...html.matchAll(/<code\s+data-highlight-language="([^"]+)"\s+data-highlight-source="([^"]*)">[\s\S]*?<\/code>/g)]
+    await prepareHighlightLanguages(codeBlocks.map((match) => match[1]))
     html = html.replace(
       /<code\s+data-highlight-language="([^"]+)"\s+data-highlight-source="([^"]*)">[\s\S]*?<\/code>/g,
       (_match, language: string, encoded: string) => {
