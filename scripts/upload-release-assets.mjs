@@ -32,12 +32,15 @@ if (!rawTag || !file) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// A release upload can otherwise wait forever on a stalled TLS connection.
+// Bound every request so the existing retry loop can recover from it.
+const requestTimeoutMs = 120_000
 
 async function fetchWithRetry(url, options) {
   let lastError
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      const response = await fetch(url, options)
+      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(requestTimeoutMs) })
       if (response.ok) return response
       if (response.status < 500 && response.status !== 429) {
         throw new Error(`HTTP ${response.status} ${response.statusText} for ${url}`)
@@ -58,6 +61,7 @@ async function releaseId(tag) {
       const response = await fetch('https://api.github.com/graphql', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(requestTimeoutMs),
         body: JSON.stringify({
           query:
             'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { releases(first: 50, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { databaseId tagName } } } }',
