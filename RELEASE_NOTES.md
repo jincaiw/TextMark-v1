@@ -1,3 +1,22 @@
+# TextMark v0.9.2
+
+TextMark 0.9.2 makes document exports more dependable and gives exported pages a cleaner, more consistent appearance. PNG export now captures through Blob output, adapts safely to browser canvas limits, and retries at a lower scale when needed. PDF export uses balanced A4 margins, crisp lossless page slices and page numbers; macOS continues to use the native vector-capable Save as PDF workflow. Markdown presentation now also covers keyboard shortcuts, disclosure blocks, footnotes, strong text and strikethrough, with a dedicated syntax regression suite for the supported CommonMark, GFM and TextMark extensions.
+
+TextMark 0.9.2 提升了文档导出的可靠性，并使导出页面拥有更干净、一致的版式。PNG 导出现在通过 Blob 生成，会安全适应浏览器画布限制，并在必要时以较低倍率重试。PDF 导出采用均衡的 A4 页边距、清晰的无损分页切片与页码；macOS 仍使用可保留矢量内容的原生“存储为 PDF”流程。Markdown 展示新增键盘快捷键、折叠块、脚注、加粗和删除线样式，并为已支持的 CommonMark、GFM 和 TextMark 扩展建立了专门的语法回归测试。
+
+## Highlights / 主要更新
+
+- PNG 导出：改用 Blob 输出并根据单边与总像素限制自适应缩放，避免超大文档在 WebKit 或 Chromium 中导出失败。
+- PDF 与打印：统一浅色打印色板、A4 页边距、分页规则、表头重复与页码，减少截断、色彩偏差和页面拥挤。
+- Markdown 展示：补齐 `kbd`、`details`、脚注、粗体与删除线的屏幕和打印样式；完整语法测试覆盖核心 Markdown、GFM、数学公式、Mermaid 与安全 HTML。
+- 回归保障：282 项前端测试、格式检查、静态检查、生产构建以及真实浏览器 PNG/PDF 导出与视觉检查均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.1. 同 v0.9.1。
+
+---
+
 # TextMark v0.9.1
 
 TextMark 0.9.1 completes the follow-up verification pass against Markdown Preview v0.0.51 and fixes export, formula, Mermaid, sharing and macOS editor-integration edge cases. KaTeX selections now copy as usable Markdown source, Mermaid node labels remain visible in secure HTML/PDF/PNG output, and block equations no longer consume the following heading. macOS now uses the native sharing panel and filters Open With choices through the system editor role. The release also adds end-to-end coverage for preferences persistence, toolbar customization, image paste, export output and large documents.

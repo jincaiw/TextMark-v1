@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { toPng } from 'html-to-image'
+import { toBlob } from 'html-to-image'
 import {
   alignedPdfSliceHeight,
   buildPngExport,
@@ -10,12 +10,12 @@ import {
   rasterPixelRatio,
 } from './export'
 
-vi.mock('html-to-image', () => ({ toPng: vi.fn() }))
+vi.mock('html-to-image', () => ({ toBlob: vi.fn() }))
 
-const mockedToPng = vi.mocked(toPng)
+const mockedToBlob = vi.mocked(toBlob)
 
 afterEach(() => {
-  mockedToPng.mockReset()
+  mockedToBlob.mockReset()
   document.body.replaceChildren()
   document.documentElement.removeAttribute('data-theme')
   document.documentElement.removeAttribute('style')
@@ -77,10 +77,12 @@ describe('PDF pagination', () => {
 })
 
 describe('raster dimensions', () => {
-  it('keeps ordinary documents at 2x and scales long documents below the canvas limit', () => {
+  it('keeps ordinary documents at 2x and scales long documents below dimension and area limits', () => {
     expect(rasterPixelRatio(820, 4000)).toBe(2)
     expect(rasterPixelRatio(820, 31_692)).toBeCloseTo(32_760 / 31_692)
     expect(rasterPixelRatio(820, 31_692, 2, 16_380)).toBeCloseTo(16_380 / 31_692)
+    expect(rasterPixelRatio(820, 10_000, 2, 16_380, 16_777_216)).toBeCloseTo(Math.sqrt(16_777_216 / (820 * 10_000)))
+    expect(rasterPixelRatio(820, 200_000, 2, 16_380, 16_777_216)).toBeCloseTo(16_380 / 200_000)
   })
 })
 
@@ -93,13 +95,13 @@ describe('raster export appearance', () => {
     html.style.setProperty('--window', '#101010')
     html.style.setProperty('--document-text', '#ffffff', 'important')
     html.style.setProperty('--unrelated-export-token', 'preserved')
-    mockedToPng.mockImplementation(async () => {
+    mockedToBlob.mockImplementation(async () => {
       expect(html.dataset.theme).toBe('light')
       expect(html.style.getPropertyValue('--window')).toBe('')
       expect(html.style.getPropertyValue('--document-text')).toBe('')
       expect(html.style.getPropertyValue('--unrelated-export-token')).toBe('preserved')
       expect(root.classList).toContain('textmark-exporting')
-      return 'data:image/png;base64,iVBORw=='
+      return new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
     })
 
     const result = await buildPngExport('dark.md', root)
@@ -112,7 +114,12 @@ describe('raster export appearance', () => {
     expect(html.style.getPropertyPriority('--document-text')).toBe('important')
     expect(html.style.getPropertyValue('--unrelated-export-token')).toBe('preserved')
     expect(root.classList).not.toContain('textmark-exporting')
-    expect(mockedToPng.mock.calls[0][1]).toMatchObject({ preferredFontFormat: 'woff2', skipAutoScale: true, style: { margin: '0' } })
+    expect(mockedToBlob.mock.calls[0][1]).toMatchObject({
+      imagePlaceholder: expect.stringMatching(/^data:image\/gif/),
+      preferredFontFormat: 'woff2',
+      skipAutoScale: true,
+      style: { margin: '0' },
+    })
   })
 
   it('restores an absent theme and all inline colors when capture fails', async () => {
@@ -120,11 +127,12 @@ describe('raster export appearance', () => {
     const root = document.createElement('article')
     document.body.append(root)
     html.style.setProperty('--accent', '#ff0000')
-    mockedToPng.mockRejectedValue(new Error('capture failed'))
+    mockedToBlob.mockRejectedValue(new Error('capture failed'))
 
     await expect(buildPngExport('failure.md', root)).rejects.toThrow('capture failed')
     expect(html.hasAttribute('data-theme')).toBe(false)
     expect(html.style.getPropertyValue('--accent')).toBe('#ff0000')
     expect(root.classList).not.toContain('textmark-exporting')
+    expect(mockedToBlob).toHaveBeenCalledTimes(3)
   })
 })

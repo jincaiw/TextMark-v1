@@ -74,6 +74,31 @@ body {
 .markdown-body p {
   margin: 0.72em 0;
 }
+.markdown-body strong {
+  font-weight: 650;
+}
+.markdown-body s,
+.markdown-body del {
+  color: var(--document-secondary);
+  text-decoration-thickness: 1.5px;
+}
+.markdown-body sub,
+.markdown-body sup {
+  line-height: 0;
+}
+.markdown-body kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.08em 0.42em;
+  border: 1px solid var(--document-grid);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--document-fill);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  text-align: center;
+}
 .markdown-body a {
   color: var(--document-link);
   text-decoration: none;
@@ -92,6 +117,20 @@ body {
   padding: 0.45em 1em;
   border-left: 3px solid var(--document-grid);
   color: var(--document-secondary);
+}
+.markdown-body details {
+  margin: 1.1em 0;
+  padding: 12px 14px;
+  border: 1px solid var(--document-grid);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--document-fill) 58%, transparent);
+}
+.markdown-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.markdown-body details[open] summary {
+  margin-bottom: 10px;
 }
 .markdown-body ul,
 .markdown-body ol {
@@ -225,6 +264,20 @@ body {
 .markdown-body li.task-list-item:has(input.task-list-item-checkbox:checked) {
   color: var(--document-secondary);
   text-decoration: line-through;
+}
+.markdown-body .footnotes {
+  margin-top: 2.35em;
+  padding-top: 1em;
+  border-top: 1px solid var(--document-grid);
+  font-size: 0.9em;
+}
+.markdown-body .footnotes ol {
+  padding-left: 1.45em;
+}
+.markdown-body .footnote-ref a,
+.markdown-body .footnote-backref {
+  font-weight: 650;
+  text-decoration: none;
 }
 .table-of-contents,
 .md-frontmatter {

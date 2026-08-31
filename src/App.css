@@ -1371,6 +1371,31 @@ select:focus-visible {
 .markdown-body p {
   margin: 12px 0 0;
 }
+.markdown-body strong {
+  font-weight: 650;
+}
+.markdown-body s,
+.markdown-body del {
+  color: var(--document-secondary);
+  text-decoration-thickness: 1.5px;
+}
+.markdown-body sub,
+.markdown-body sup {
+  line-height: 0;
+}
+.markdown-body kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.08em 0.42em;
+  border: 1px solid var(--document-grid);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--document-fill);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  text-align: center;
+}
 .markdown-body ul,
 .markdown-body ol {
   margin: 12px 0 0;
@@ -1421,6 +1446,23 @@ select:focus-visible {
   margin-top: 0;
 }
 .markdown-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+.markdown-body details {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--document-grid);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--document-fill) 58%, transparent);
+}
+.markdown-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.markdown-body details[open] summary {
+  margin-bottom: 10px;
+}
+.markdown-body details > :last-child {
   margin-bottom: 0;
 }
 .markdown-body table {
@@ -1633,6 +1675,14 @@ pre:hover .copy-code-button {
   padding-top: 1em;
   border-top: 1px solid var(--document-grid);
   font-size: 0.9em;
+}
+.markdown-body .footnotes ol {
+  padding-left: 1.45em;
+}
+.markdown-body .footnote-ref a,
+.markdown-body .footnote-backref {
+  font-weight: 650;
+  text-decoration: none;
 }
 .table-of-contents {
   margin: 1em 0 2em;
@@ -2802,6 +2852,25 @@ mark.search-match.active {
   }
 }
 @media print {
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm;
+  }
+  :root,
+  :root[data-theme='dark'] {
+    --window: #fff !important;
+    --chrome: #fff !important;
+    --sidebar: #fff !important;
+    --surface: #fff !important;
+    --text: #1d1d1f !important;
+    --document-text: #1d1d1f !important;
+    --document-secondary: #66666b !important;
+    --accent: #0066cc !important;
+    --document-link: #005eb8 !important;
+    --document-fill: #f5f5f7 !important;
+    --document-grid: #d2d2d7 !important;
+    color-scheme: light;
+  }
   .native-toolbar,
   .native-sidebar,
   .inspector-panel,
@@ -2821,6 +2890,11 @@ mark.search-match.active {
     overflow: visible;
     background: white;
   }
+  body {
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .app-shell,
   .document-shell {
     display: block;
@@ -2829,7 +2903,27 @@ mark.search-match.active {
     width: 100%;
     max-width: none;
     padding: 0;
-    color: black;
+    color: var(--document-text);
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    break-after: avoid-page;
+  }
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body blockquote,
+  .markdown-body .markdown-alert,
+  .markdown-body .diagram,
+  .markdown-body details,
+  .markdown-body img {
+    break-inside: avoid-page;
+  }
+  .markdown-body thead {
+    display: table-header-group;
   }
   html[data-export-pdf='1'] body,
   html[data-export-pdf='1'] #root,
@@ -2837,13 +2931,13 @@ mark.search-match.active {
   html[data-export-pdf='1'] .document-shell,
   html[data-export-pdf='1'] .document-workspace,
   html[data-export-pdf='1'] .preview-pane {
-    background: var(--surface);
+    background: white;
   }
   html[data-export-pdf='1'] .markdown-body {
-    width: 820px;
-    max-width: none;
+    width: 100%;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 40px 40px 48px;
+    padding: 0;
     color: var(--document-text);
   }
 }
