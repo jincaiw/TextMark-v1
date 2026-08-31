@@ -1,3 +1,21 @@
+# TextMark v0.9.4
+
+TextMark 0.9.4 makes installation choices clearer and restores complete table grids. Every release now ships a dedicated, bilingual installation guide that recommends the right package for each operating system and architecture, explains checksum verification, first launch, updates and uninstall, and makes the portable-versus-integrated trade-off explicit. Markdown tables now draw vertical as well as horizontal grid lines in preview and export layouts.
+
+TextMark 0.9.4 改善安装选择体验，并恢复完整表格网格线。每个发布版本现在都会附带独立的双语安装指南，按系统与架构推荐正确安装包，说明校验、首次启动、更新与卸载，并清晰标注便携版和系统集成版的差异。Markdown 表格现在在预览和导出布局中同时显示纵向与横向边框。
+
+## Highlights / 主要更新
+
+- 安装体验：新增 `INSTALL.md`，覆盖 Windows、macOS、Linux 的下载选择、SHA-256 校验、安装、更新与卸载；该指南会作为发布资产上传并纳入校验清单。
+- 表格：单元格使用完整边框，恢复列之间及表格外侧的纵向边线；桌面和窄屏布局一致。
+- 回归保障：安装发布流程测试、Markdown 表格测试、生产构建及桌面/窄屏视觉检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.3. 同 v0.9.3。
+
+---
+
 # TextMark v0.9.3
 
 TextMark 0.9.3 adds standard Emoji shortcode rendering and substantially broadens code-block highlighting. SQL, Docker Compose YAML, Dockerfile and a curated set of common programming and configuration languages render with syntax-aware colours on demand. Tables now use the full available document width and gain an isolated horizontal scroll surface when their content is wider than the page; print and export retain page-fitting layout. The release keeps the complete standard Emoji shortcode map, including `:smile:`, while preserving literal code and ordinary emoticon text.

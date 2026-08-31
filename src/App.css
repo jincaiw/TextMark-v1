@@ -1506,8 +1506,7 @@ select:focus-visible {
 .markdown-body th,
 .markdown-body td {
   padding: 9px 10px;
-  border-top: 1px solid var(--document-grid);
-  border-bottom: 1px solid var(--document-grid);
+  border: 1px solid var(--document-grid);
   text-align: start;
 }
 .markdown-body th {

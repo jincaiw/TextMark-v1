@@ -76,4 +76,9 @@ describe('native desktop package integration', () => {
     expect(releaseWorkflow).toContain('release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json')
     expect(releaseWorkflow).toContain('release-assets/*-sbom.cdx.json')
   })
+
+  it('ships a dedicated installation guide with each release', () => {
+    expect(releaseWorkflow).toContain('cp INSTALL.md RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/')
+    expect(releaseWorkflow).toContain('release-assets/INSTALL.md')
+  })
 })

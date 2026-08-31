@@ -28,7 +28,7 @@ Supported documents: `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdwn`, `.m
 
 ## Desktop and command line
 
-Download the installer or portable archive for your architecture from [GitHub Releases](https://github.com/jincaiw/TextMark-v1/releases). Windows installers register Explorer Preview and file associations; DEB/RPM install standard MIME and thumbnail integration; the macOS DMG includes Quick Look. AppImage and Windows portable ZIP remain self-contained.
+Download the installer or portable archive for your architecture from [GitHub Releases](https://github.com/jincaiw/TextMark-v1/releases). For a clear package recommendation, checksum verification, first launch and uninstall instructions, see [INSTALL.md](INSTALL.md). Windows installers register Explorer Preview and file associations; DEB/RPM install standard MIME and thumbnail integration; the macOS DMG includes Quick Look. AppImage and Windows portable ZIP remain self-contained.
 
 DEB/RPM expose `textmark`, `tm` and `text-mark` on `PATH`; the Windows portable archive and macOS app bundle include the same launchers beside the application. They accept files, folders and multiple paths; add `--new-window` when each requested document should open separately.
 
@@ -37,7 +37,7 @@ textmark README.md docs/
 tm --new-window one.md two.md
 ```
 
-The v0.9.3 binaries are updater-signed but do not use Apple Developer ID notarization or Windows Authenticode. Review the release trust notice and verify `SHA256SUMS.txt` when installing.
+The v0.9.4 binaries are updater-signed but do not use Apple Developer ID notarization or Windows Authenticode. Review the release trust notice and verify `SHA256SUMS.txt` when installing.
 
 ## Development
 

@@ -415,8 +415,8 @@ jobs:
           format: cyclonedx-json
           output-file: release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json
           upload-release-assets: false
-      - name: Add bilingual notes and third-party notices
-        run: cp RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
+      - name: Add installation guide, bilingual notes and third-party notices
+        run: cp INSTALL.md RELEASE_NOTES.md THIRD_PARTY_NOTICES.md release-assets/
       - name: Prepare current-release notes only
         run: |
           awk 'BEGIN { n = 0 } /^# TextMark v[0-9]/ { n++; if (n > 1) exit } { print }' RELEASE_NOTES.md | sed '/^---$/,$d' > current-release-notes.md
@@ -425,7 +425,7 @@ jobs:
         working-directory: release-assets
         run: find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
       - name: Upload release metadata
-        run: gh release upload "$RELEASE_TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json release-assets/RELEASE_NOTES.md release-assets/THIRD_PARTY_NOTICES.md --clobber
+        run: gh release upload "$RELEASE_TAG" release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json release-assets/INSTALL.md release-assets/RELEASE_NOTES.md release-assets/THIRD_PARTY_NOTICES.md --clobber
         env: { GH_TOKEN: '${{ github.token }}' }
       - name: Publish as a formal, non-prerelease release
         run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --notes-file current-release-notes.md --title "TextMark $RELEASE_TAG"
