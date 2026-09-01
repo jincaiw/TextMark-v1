@@ -887,19 +887,14 @@ fn build_menu(
     #[cfg(target_os = "macos")]
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" }).item(&help_item);
     #[cfg(not(target_os = "macos"))]
+    let about = item("about", "关于 TextMark", "About TextMark", None)?;
+    #[cfg(not(target_os = "macos"))]
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
         .item(&help_item)
         .separator()
         .items(&[&check_updates, &install_cli, &crash_reports])
         .separator()
-        .about_with_text(
-            if zh {
-                "关于 TextMark"
-            } else {
-                "About TextMark"
-            },
-            None,
-        );
+        .item(&about);
     let help = help_builder.build()?;
 
     #[cfg(target_os = "macos")]
@@ -1858,6 +1853,37 @@ fn install_cli_on_platform(exe: &Path, home: &str) -> IntegrationResult {
         let script = format!("@echo off\r\n\"{}\" %*\r\n", exe.display());
         if fs::write(&target, script).is_err() {
             ok = false;
+        }
+    }
+    // A command shim is only useful if future terminals can locate it. Keep
+    // this user-scoped: it does not require elevation and never changes PATH
+    // when installation itself failed. Existing terminals must be reopened.
+    if ok {
+        let path = std::env::var("PATH").unwrap_or_default();
+        let directory = dir.display().to_string();
+        if !path
+            .split(';')
+            .any(|entry| entry.eq_ignore_ascii_case(&directory))
+        {
+            ok = Command::new("reg.exe")
+                .args([
+                    "add",
+                    "HKCU\\Environment",
+                    "/v",
+                    "Path",
+                    "/t",
+                    "REG_EXPAND_SZ",
+                    "/d",
+                ])
+                .arg(if path.is_empty() {
+                    directory.clone()
+                } else {
+                    format!("{path};{directory}")
+                })
+                .arg("/f")
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false);
         }
     }
     IntegrationResult {

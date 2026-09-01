@@ -1,6 +1,6 @@
 [package]
 name = "textmark"
-version = "0.9.6"
+version = "0.9.7"
 description = "A fast, secure, cross-platform Markdown reader and editor"
 authors = ["TextMark contributors"]
 license = "MIT"

@@ -1,3 +1,11 @@
+# TextMark v0.9.7
+
+TextMark 0.9.7 repairs Windows Help menu actions. About TextMark now opens the in-app About page, Check for Updates opens Settings and starts a check, and Install CLI now adds its user-level command shims to PATH (new terminals pick them up automatically).
+
+TextMark 0.9.7 修复 Windows 帮助菜单功能：“关于 TextMark”现在打开应用内关于页，“检查更新”会打开设置并开始检查，“安装命令行工具”会将用户级命令脚本加入 PATH（重新打开终端后可直接使用）。
+
+---
+
 # TextMark v0.9.6
 
 TextMark 0.9.6 fixes a Windows WebView2 compatibility issue that could leave Settings blank. On Windows, Settings now opens reliably inside the already-loaded main window, so Settings and update-related menu actions do not depend on creating a second WebView. macOS and Linux continue to use their dedicated Settings window.

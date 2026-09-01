@@ -1,5 +1,5 @@
 import { Info, Palette, Settings2, ShieldCheck, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { t } from '../lib/i18n'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import { AppearanceSettings } from './AppearanceSettings'
@@ -19,6 +19,7 @@ import type { UpdateStatus } from '../hooks/useUpdater'
 
 interface SettingsDialogProps {
   open: boolean
+  initialPane?: 'general' | 'appearance' | 'privacy' | 'about'
   theme: ThemeMode
   contentWidth: ContentWidth
   editorFontSize: number
@@ -60,7 +61,10 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const [pane, setPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
+  const [pane, setPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>(props.initialPane ?? 'general')
+  useEffect(() => {
+    if (props.open) setPane(props.initialPane ?? 'general')
+  }, [props.initialPane, props.open])
   const close = () => {
     setPane('general')
     props.onClose()

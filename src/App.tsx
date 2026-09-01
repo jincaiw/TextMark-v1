@@ -72,6 +72,7 @@ function DocumentApp() {
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsPane, setSettingsPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const alwaysOnTop = settings.alwaysOnTop
   // Ref keeps the keydown/menu closures reading the live value without adding
@@ -267,7 +268,8 @@ function DocumentApp() {
       else flash(settings.locale === 'zh-CN' ? '安装命令行工具失败。' : 'Could not install the command-line tools.')
     })
   }
-  const openSettings = () => {
+  const openSettings = (pane: 'general' | 'appearance' | 'privacy' | 'about' = 'general') => {
+    setSettingsPane(pane)
     // Use the already-loaded document WebView on Windows. On some WebView2
     // runtimes a freshly-created secondary settings window can show only a
     // blank surface, making Settings and menu commands appear broken.
@@ -506,6 +508,7 @@ function DocumentApp() {
     else if (command === 'zoom-out') setZoom(nextZoom(settings.zoom, -1))
     else if (command === 'zoom-reset') setZoom(100)
     else if (command === 'preferences') openSettings()
+    else if (command === 'about') openSettings('about')
     else if (command === 'check-updates') {
       openSettings()
       void updater.checkNow()
@@ -967,6 +970,7 @@ function DocumentApp() {
       />
       <SettingsDialog
         open={settingsOpen}
+        initialPane={settingsPane}
         locale={settings.locale}
         crashReports={settings.crashReports}
         crashReportsAvailable={crashReportingAvailable}
