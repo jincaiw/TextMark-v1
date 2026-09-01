@@ -44,6 +44,7 @@ import {
   saveExportFile,
   setDefaultHandler,
   shareSourceNatively,
+  shouldUseDedicatedSettingsWindow,
   tempExportPath,
   writeExportBytes,
 } from './lib/platform'
@@ -267,10 +268,10 @@ function DocumentApp() {
     })
   }
   const openSettings = () => {
-    // The native WebDriver bridge drives one WebView at a time. Keep its
-    // regression suite in the document-hosted dialog; production retains the
-    // dedicated native Settings window.
-    if (isTauri() && !import.meta.env.VITE_WDIO) {
+    // Use the already-loaded document WebView on Windows. On some WebView2
+    // runtimes a freshly-created secondary settings window can show only a
+    // blank surface, making Settings and menu commands appear broken.
+    if (shouldUseDedicatedSettingsWindow()) {
       void openSettingsWindow().catch(() => setSettingsOpen(true))
       return
     }

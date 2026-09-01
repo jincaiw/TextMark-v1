@@ -36,6 +36,20 @@ export function detectRuntime(): 'tauri' | 'browser' {
   return isTauri() ? 'tauri' : 'browser'
 }
 
+/**
+ * WebView2 can create the secondary Settings WebView before its app asset is
+ * ready on some Windows installations. Keep Settings in the already-loaded
+ * document WebView there, which also means native menu commands never depend
+ * on creating another window. macOS and Linux retain the dedicated window.
+ */
+export function shouldUseDedicatedSettingsWindow(
+  platform: Platform = detectPlatform(),
+  native = isTauri(),
+  webdriver = Boolean(import.meta.env.VITE_WDIO),
+): boolean {
+  return native && platform !== 'windows' && !webdriver
+}
+
 export async function tempExportPath(extension: string): Promise<string> {
   if (!isTauri()) return ''
   return invoke<string>('temp_export_path', { extension })

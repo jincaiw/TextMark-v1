@@ -1,3 +1,20 @@
+# TextMark v0.9.6
+
+TextMark 0.9.6 fixes a Windows WebView2 compatibility issue that could leave Settings blank. On Windows, Settings now opens reliably inside the already-loaded main window, so Settings and update-related menu actions do not depend on creating a second WebView. macOS and Linux continue to use their dedicated Settings window.
+
+TextMark 0.9.6 修复 Windows WebView2 兼容性问题：部分环境中设置窗口可能显示为空白。Windows 现改为在已经加载的主窗口内稳定打开设置，因此“设置”和更新相关菜单不会再依赖创建第二个 WebView。macOS 与 Linux 保持独立设置窗口。
+
+## Highlights / 主要更新
+
+- Windows 菜单稳定性：设置、检查更新等入口使用主窗口内面板，避免二级 WebView 资源尚未就绪导致的空白窗口。
+- 回归保障：新增 Windows 设置窗口策略测试；前端 289 项测试、Rust 原生测试、生产构建、静态检查、格式检查和包体预算通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.5. 同 v0.9.5。
+
+---
+
 # TextMark v0.9.5
 
 TextMark 0.9.5 makes external editing and AI handoffs dependable. The configurable default external editor is now preserved until changed in Settings, and a direct “Open in Default Editor” action works consistently from the toolbar. System-default opening remains safe for saved documents, while unsaved drafts explain that they must be saved first. Codex, Claude and ChatGPT are available in both native and browser surfaces, and the native application catalog now recognises popular editors including Windsurf, Trae, Obsidian, Typora and Notepad++.
