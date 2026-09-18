@@ -23,7 +23,11 @@ const files = readdirSync(root)
   .sort()
 
 const find = (pattern) => files.find((name) => pattern.test(name))
-const signatureOf = (name) => (files.includes(`${name}.sig`) ? readFileSync(resolve(root, `${name}.sig`), 'utf8').trim() : null)
+const signatureOf = (name) => {
+  const signatureName = `${name}.sig`
+  if (files.includes(signatureName)) return readFileSync(resolve(root, signatureName), 'utf8').trim()
+  return null
+}
 const urlFor = (name) =>
   `https://github.com/${process.env.GITHUB_REPOSITORY || 'jincaiw/TextMark-v1'}/releases/download/${rawTag}/${encodeURIComponent(name)}`
 
@@ -32,7 +36,14 @@ const asset = (pattern) => {
   if (!name) return null
   const signature = signatureOf(name)
   if (!signature) throw new Error(`Missing updater signature for ${name}`)
+  assertSignature(name, signature)
   return { signature, url: urlFor(name) }
+}
+
+const assertSignature = (name, signature) => {
+  if (!signature || !/^[A-Za-z0-9+/=\r\n ]+$/.test(signature)) {
+    throw new Error(`Invalid updater signature for ${name}`)
+  }
 }
 
 const platforms = {}

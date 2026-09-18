@@ -86,7 +86,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           : props.updateStatus.state === 'downloading'
             ? t(props.locale, 'downloadingUpdate', { progress: props.updateStatus.progress ?? 0 })
             : props.updateStatus.state === 'error'
-              ? t(props.locale, 'updateError')
+              ? t(props.locale, props.updateStatus.errorCode === 'update_install' ? 'updateInstallError' : 'updateError')
               : ''
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={close} ref={backdropRef}>

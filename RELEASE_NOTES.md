@@ -1,8 +1,23 @@
+# TextMark v0.9.9
+
+TextMark 0.9.9 adds signed in-app updates with stable and beta channels, real download progress, guarded installation and automatic relaunch, while preserving the v0.9.8 desktop parity improvements.
+
+TextMark 0.9.9 增加带签名的软件内更新能力，支持稳定版与测试版通道、真实下载进度、受保护的安装流程和自动重启，并保留 v0.9.8 的桌面对标改进。
+
+## Highlights / 主要更新
+
+- 自动更新：设置中可选择稳定版或测试版通道，可开启启动后自动检查更新。
+- 下载体验：安装更新时显示真实下载进度，检查、下载和安装失败分别反馈；防止重复检查和重复安装。
+- 安全校验：更新通道白名单、公钥签名资产校验、`latest.json` 与 `.sig` 内容一致性验证。
+- 发布流程：正式 Release 与 beta 通道均刷新 `latest.json`；更新私钥只使用 CI Secret，不进入仓库。
+
+---
+
 # TextMark v0.9.8
 
 TextMark 0.9.8 completes the next desktop parity pass against Markdown Preview: it adds `.mdx` document recognition and upstream-style `==highlight==` rendering, strengthens atomic-save file watching across windows, preserves reading position and cursor state across edit/preview transitions, and adds three-choice protection for dirty-tab closing and history navigation.
 
-TextMark 0.9.8 完成本轮对 Markdown Preview 的桌面对标：新增 `.mdx` 文档识别与上游风格的 `==高亮==` 渲染，强化多窗口原子保存文件监听，完善编辑/阅读切换时的阅读位置与光标交接，并为脏标签关闭和历史导航增加三选项保护。
+TextMark 0.9.8 完成本轮对 Markdown Preview 的桌面对标：新增 `.mdx` 文档识别与上游风格的 `==高亮==` 渲染，强化多窗口原子保存文件监听，完善编辑/阅读切换时的阅读位置与光标交接，并为脏文档关闭和历史导航增加三选项保护。
 
 ## Highlights / 主要更新
 

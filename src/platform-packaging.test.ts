@@ -71,6 +71,12 @@ describe('native desktop package integration', () => {
     expect(releaseInventory).toContain('latest.json references an unsigned asset for ${platform}')
   })
 
+  it('keeps updater artifacts signed, channel-aware, and published with latest.json', () => {
+    expect(releaseWorkflow).toContain('release-assets/latest.json')
+    expect(releaseWorkflow).toContain('Refresh opt-in beta update channel')
+    expect(releaseInventory).toContain('latest.json signature does not match ${updaterAsset}')
+  })
+
   it('uploads the checksummed SBOM only once', () => {
     expect(releaseWorkflow).toContain('upload-release-assets: false')
     expect(releaseWorkflow).toContain('release-assets/TextMark-${{ env.RELEASE_TAG }}-sbom.cdx.json')

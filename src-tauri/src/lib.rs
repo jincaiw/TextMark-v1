@@ -181,8 +181,21 @@ struct MenuUiState {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UpdateCheck {
     version: String,
+    date: Option<String>,
+    notes: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateDownloadProgress {
+    channel: String,
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
+    progress: Option<u8>,
+    finished: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1677,12 +1690,29 @@ fn read_local_asset(
 }
 
 fn updater_endpoint(channel: &str) -> AppResult<tauri::Url> {
-    let endpoint = if channel == "beta" {
-        "https://github.com/jincaiw/TextMark-v1/releases/download/textmark-beta/latest.json"
-    } else {
-        "https://github.com/jincaiw/TextMark-v1/releases/latest/download/latest.json"
+    let endpoint = match channel {
+        "stable" => "https://github.com/jincaiw/TextMark-v1/releases/latest/download/latest.json",
+        "beta" => {
+            "https://github.com/jincaiw/TextMark-v1/releases/download/textmark-beta/latest.json"
+        }
+        _ => {
+            return Err(AppError {
+                code: "invalid_update_channel",
+            });
+        }
     };
     tauri::Url::parse(endpoint).map_err(|_| AppError { code: "io" })
+}
+
+fn build_updater(
+    app: &tauri::AppHandle,
+    channel: &str,
+) -> AppResult<tauri_plugin_updater::Updater> {
+    app.updater_builder()
+        .endpoints(vec![updater_endpoint(channel)?])
+        .map_err(|_| AppError { code: "io" })?
+        .build()
+        .map_err(|_| AppError { code: "io" })
 }
 
 #[tauri::command]
@@ -1690,31 +1720,67 @@ async fn check_update_channel(
     app: tauri::AppHandle,
     channel: String,
 ) -> AppResult<Option<UpdateCheck>> {
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![updater_endpoint(&channel)?])
-        .map_err(|_| AppError { code: "io" })?
-        .build()
-        .map_err(|_| AppError { code: "io" })?;
-    let update = updater.check().await.map_err(|_| AppError { code: "io" })?;
+    let updater = build_updater(&app, &channel)?;
+    let update = updater.check().await.map_err(|_| AppError {
+        code: "update_check",
+    })?;
     Ok(update.map(|value| UpdateCheck {
         version: value.version.clone(),
+        date: value.date.map(|date| date.to_string()),
+        notes: value.body.clone(),
     }))
 }
 
 #[tauri::command]
 async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppResult<()> {
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![updater_endpoint(&channel)?])
-        .map_err(|_| AppError { code: "io" })?
-        .build()
-        .map_err(|_| AppError { code: "io" })?;
-    if let Some(update) = updater.check().await.map_err(|_| AppError { code: "io" })? {
+    let updater = build_updater(&app, &channel)?;
+    if let Some(update) = updater.check().await.map_err(|_| AppError {
+        code: "update_check",
+    })? {
+        let event_name = "update-download-progress";
+        let progress_channel = channel.clone();
+        let progress_bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let progress_app = app.clone();
+        let finish_app = app.clone();
+        let finish_channel = progress_channel.clone();
+        let finish_bytes = progress_bytes.clone();
         update
-            .download_and_install(|_, _| {}, || {})
+            .download_and_install(
+                move |chunk_length, total_bytes| {
+                    let downloaded_bytes = progress_bytes
+                        .fetch_add(chunk_length as u64, Ordering::Relaxed)
+                        + chunk_length as u64;
+                    let progress = total_bytes.map(|total| {
+                        ((downloaded_bytes.saturating_mul(100) / total.max(1)).min(100)) as u8
+                    });
+                    let _ = progress_app.emit(
+                        event_name,
+                        UpdateDownloadProgress {
+                            channel: progress_channel.clone(),
+                            downloaded_bytes,
+                            total_bytes,
+                            progress,
+                            finished: false,
+                        },
+                    );
+                },
+                move || {
+                    let _ = finish_app.emit(
+                        event_name,
+                        UpdateDownloadProgress {
+                            channel: finish_channel,
+                            downloaded_bytes: finish_bytes.load(Ordering::Relaxed),
+                            total_bytes: None,
+                            progress: Some(100),
+                            finished: true,
+                        },
+                    );
+                },
+            )
             .await
-            .map_err(|_| AppError { code: "io" })?;
+            .map_err(|_| AppError {
+                code: "update_install",
+            })?;
     }
     Ok(())
 }
@@ -2151,6 +2217,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updater_accepts_only_stable_and_beta_channels() {
+        assert_eq!(
+            updater_endpoint("stable").unwrap().as_str(),
+            "https://github.com/jincaiw/TextMark-v1/releases/latest/download/latest.json"
+        );
+        assert_eq!(
+            updater_endpoint("beta").unwrap().as_str(),
+            "https://github.com/jincaiw/TextMark-v1/releases/download/textmark-beta/latest.json"
+        );
+        assert_eq!(
+            updater_endpoint("nightly").unwrap_err().code,
+            "invalid_update_channel"
+        );
+    }
 
     #[test]
     fn accepts_supported_document_extensions_case_insensitively() {
