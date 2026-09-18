@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   eventAffectsPath,
+  eventMayAffectDocument,
   renamedDestinationInDirectory,
   renamedDocumentCandidate,
   resolveChangedDocumentPath,
@@ -16,6 +17,12 @@ describe('native disk change classification', () => {
     const event = { kind: 'rename' as const, paths: ['/docs/old.md', '/docs/new.markdown'] }
     expect(eventAffectsPath(event, '/docs/old.md')).toBe(true)
     expect(renamedDocumentCandidate(event, '/docs/old.md')).toBe('/docs/new.markdown')
+  })
+
+  it('treats same-directory atomic-save events as a reload hint', () => {
+    expect(eventMayAffectDocument({ kind: 'create', paths: ['/docs/.README.md.tmp'] }, '/docs/README.md')).toBe(true)
+    expect(eventMayAffectDocument({ kind: 'modify', paths: ['/docs/README.md'] }, '/docs/README.md')).toBe(true)
+    expect(eventMayAffectDocument({ kind: 'modify', paths: ['/other/README.md'] }, '/docs/README.md')).toBe(false)
   })
 
   it('pairs split Windows rename-from and rename-to watcher events', () => {

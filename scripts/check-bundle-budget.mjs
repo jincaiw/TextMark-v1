@@ -1,7 +1,10 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
-const maximum = 300 * 1024
+// Standard Emoji shortcodes are parsed in the render worker so preview, HTML,
+// PDF and PNG exports stay identical. Keep room for that complete built-in map
+// while retaining a tight budget for first-screen application code.
+const maximum = 320 * 1024
 const assetDirectory = new URL('../dist/assets/', import.meta.url)
 
 function linkedJavaScript(page) {

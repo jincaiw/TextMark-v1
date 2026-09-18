@@ -1,3 +1,199 @@
+# TextMark v0.9.8
+
+TextMark 0.9.8 completes the next desktop parity pass against Markdown Preview: it adds `.mdx` document recognition and upstream-style `==highlight==` rendering, strengthens atomic-save file watching across windows, preserves reading position and cursor state across edit/preview transitions, and adds three-choice protection for dirty-tab closing and history navigation.
+
+TextMark 0.9.8 完成本轮对 Markdown Preview 的桌面对标：新增 `.mdx` 文档识别与上游风格的 `==高亮==` 渲染，强化多窗口原子保存文件监听，完善编辑/阅读切换时的阅读位置与光标交接，并为脏标签关闭和历史导航增加三选项保护。
+
+## Highlights / 主要更新
+
+- 桌面布局：侧栏与 Inspector 支持拖动调宽并持久化，大纲支持折叠、源码行跳转，标签页支持键盘导航。
+- 编辑体验：查找、替换、全部替换统一编辑态与阅读态语义；全部替换使用单次撤销；编辑器标题样式与预览对齐。
+- 可靠性：导出与打印等待预览水合并恢复原模式、滚动和光标；watcher 按窗口隔离并兼容原子保存替换；脏文档关闭、标签关闭与历史导航均支持存储并执行／放弃／取消。
+- Markdown：支持 `.mdx` 作为纯 Markdown 文档打开；支持 `==highlight==` 行内高亮，代码和未闭合标记保持字面量。
+- 回归保障：39 个前端测试文件、333 项 Vitest 测试与 14 项 Rust 测试通过；类型检查、ESLint、格式检查、Rust 格式和桌面 debug 构建通过。Quick Look appex 与 watcher 双窗口闭环仍受本机工具链/桌面沙箱限制，详见实施结果。
+
+## Trust notice / 安全提示
+
+Same as v0.9.7. 同 v0.9.7。
+
+---
+
+# TextMark v0.9.7
+
+TextMark 0.9.7 repairs Windows Help menu actions. About TextMark now opens the in-app About page, Check for Updates opens Settings and starts a check, and Install CLI now adds its user-level command shims to PATH (new terminals pick them up automatically).
+
+TextMark 0.9.7 修复 Windows 帮助菜单功能：“关于 TextMark”现在打开应用内关于页，“检查更新”会打开设置并开始检查，“安装命令行工具”会将用户级命令脚本加入 PATH（重新打开终端后可直接使用）。
+
+---
+
+# TextMark v0.9.6
+
+TextMark 0.9.6 fixes a Windows WebView2 compatibility issue that could leave Settings blank. On Windows, Settings now opens reliably inside the already-loaded main window, so Settings and update-related menu actions do not depend on creating a second WebView. macOS and Linux continue to use their dedicated Settings window.
+
+TextMark 0.9.6 修复 Windows WebView2 兼容性问题：部分环境中设置窗口可能显示为空白。Windows 现改为在已经加载的主窗口内稳定打开设置，因此“设置”和更新相关菜单不会再依赖创建第二个 WebView。macOS 与 Linux 保持独立设置窗口。
+
+## Highlights / 主要更新
+
+- Windows 菜单稳定性：设置、检查更新等入口使用主窗口内面板，避免二级 WebView 资源尚未就绪导致的空白窗口。
+- 回归保障：新增 Windows 设置窗口策略测试；前端 289 项测试、Rust 原生测试、生产构建、静态检查、格式检查和包体预算通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.5. 同 v0.9.5。
+
+---
+
+# TextMark v0.9.5
+
+TextMark 0.9.5 makes external editing and AI handoffs dependable. The configurable default external editor is now preserved until changed in Settings, and a direct “Open in Default Editor” action works consistently from the toolbar. System-default opening remains safe for saved documents, while unsaved drafts explain that they must be saved first. Codex, Claude and ChatGPT are available in both native and browser surfaces, and the native application catalog now recognises popular editors including Windsurf, Trae, Obsidian, Typora and Notepad++.
+
+TextMark 0.9.5 改善外部编辑与 AI 交接体验。可配置的默认外部编辑器现在只会在设置中被修改，工具栏新增稳定的“使用默认编辑器打开”入口。系统默认方式仅用于已保存文档；未保存草稿会明确提示先保存。Codex、Claude 和 ChatGPT 在原生与浏览器界面均可使用，原生应用目录还新增识别 Windsurf、Trae、Obsidian、Typora、Notepad++ 等常用编辑器。
+
+## Highlights / 主要更新
+
+- 默认外部编辑器：设置项更名为“默认外部编辑器”；手动选择其他打开方式不再改写该偏好，工具栏和文件夹菜单都遵循它。
+- 系统默认打开：已保存 Markdown 通过操作系统默认关联打开；未保存文档会显示清晰提示。Linux 默认关联仅覆盖 Markdown MIME 类型，不再影响纯文本文件。
+- AI 与编辑器：Codex、Claude、ChatGPT 可直接交接或安全回退到复制；新增 Windsurf、Trae、Notepad++、Obsidian、Typora 的发现与启动支持。
+- 回归保障：前端交互、原生应用目录、Markdown 与设置测试，生产构建及静态检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.4. 同 v0.9.4。
+
+---
+
+# TextMark v0.9.4
+
+TextMark 0.9.4 makes installation choices clearer and restores complete table grids. Every release now ships a dedicated, bilingual installation guide that recommends the right package for each operating system and architecture, explains checksum verification, first launch, updates and uninstall, and makes the portable-versus-integrated trade-off explicit. Markdown tables now draw vertical as well as horizontal grid lines in preview and export layouts.
+
+TextMark 0.9.4 改善安装选择体验，并恢复完整表格网格线。每个发布版本现在都会附带独立的双语安装指南，按系统与架构推荐正确安装包，说明校验、首次启动、更新与卸载，并清晰标注便携版和系统集成版的差异。Markdown 表格现在在预览和导出布局中同时显示纵向与横向边框。
+
+## Highlights / 主要更新
+
+- 安装体验：新增 `INSTALL.md`，覆盖 Windows、macOS、Linux 的下载选择、SHA-256 校验、安装、更新与卸载；该指南会作为发布资产上传并纳入校验清单。
+- 表格：单元格使用完整边框，恢复列之间及表格外侧的纵向边线；桌面和窄屏布局一致。
+- 回归保障：安装发布流程测试、Markdown 表格测试、生产构建及桌面/窄屏视觉检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.3. 同 v0.9.3。
+
+---
+
+# TextMark v0.9.3
+
+TextMark 0.9.3 adds standard Emoji shortcode rendering and substantially broadens code-block highlighting. SQL, Docker Compose YAML, Dockerfile and a curated set of common programming and configuration languages render with syntax-aware colours on demand. Tables now use the full available document width and gain an isolated horizontal scroll surface when their content is wider than the page; print and export retain page-fitting layout. The release keeps the complete standard Emoji shortcode map, including `:smile:`, while preserving literal code and ordinary emoticon text.
+
+TextMark 0.9.3 新增标准 Emoji 短代码渲染，并大幅扩展代码块语法高亮。SQL、Docker Compose YAML、Dockerfile 以及一组常见编程与配置语言会按需加载并以语法颜色显示。表格现在占满文档可用宽度；内容超宽时仅表格区域横向滚动，打印和导出仍会自动适应页面。该版本保留完整的标准 Emoji 短代码表（包括 `:smile:`），同时保持代码中的字面文本和普通颜文字不被替换。
+
+## Highlights / 主要更新
+
+- Emoji：支持完整标准 `:shortcode:` 表，例如 `:smile:`、`:rocket:`；不支持自定义图片 Emoji，不替换 `:-)` 等普通文本。
+- 代码高亮：新增 SQL、Docker Compose、Dockerfile、Go、Java、Kotlin、C/C++、C#、PHP、Ruby、PowerShell、GraphQL、Nginx、Diff 等，并支持 `py`、`sh`、`zsh`、`yml` 等常见别名。
+- 表格：短表铺满正文区域；长表维持页面不横向溢出，并在表格内部提供横向滚动。PDF、PNG、HTML 导出使用一致的页面适配规则。
+- 回归保障：285 项前端测试、类型构建、静态检查、格式检查、包体预算、导出回归及桌面/窄屏视觉检查通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.2. 同 v0.9.2。
+
+---
+
+# TextMark v0.9.2
+
+TextMark 0.9.2 makes document exports more dependable and gives exported pages a cleaner, more consistent appearance. PNG export now captures through Blob output, adapts safely to browser canvas limits, and retries at a lower scale when needed. PDF export uses balanced A4 margins, crisp lossless page slices and page numbers; macOS continues to use the native vector-capable Save as PDF workflow. Markdown presentation now also covers keyboard shortcuts, disclosure blocks, footnotes, strong text and strikethrough, with a dedicated syntax regression suite for the supported CommonMark, GFM and TextMark extensions.
+
+TextMark 0.9.2 提升了文档导出的可靠性，并使导出页面拥有更干净、一致的版式。PNG 导出现在通过 Blob 生成，会安全适应浏览器画布限制，并在必要时以较低倍率重试。PDF 导出采用均衡的 A4 页边距、清晰的无损分页切片与页码；macOS 仍使用可保留矢量内容的原生“存储为 PDF”流程。Markdown 展示新增键盘快捷键、折叠块、脚注、加粗和删除线样式，并为已支持的 CommonMark、GFM 和 TextMark 扩展建立了专门的语法回归测试。
+
+## Highlights / 主要更新
+
+- PNG 导出：改用 Blob 输出并根据单边与总像素限制自适应缩放，避免超大文档在 WebKit 或 Chromium 中导出失败。
+- PDF 与打印：统一浅色打印色板、A4 页边距、分页规则、表头重复与页码，减少截断、色彩偏差和页面拥挤。
+- Markdown 展示：补齐 `kbd`、`details`、脚注、粗体与删除线的屏幕和打印样式；完整语法测试覆盖核心 Markdown、GFM、数学公式、Mermaid 与安全 HTML。
+- 回归保障：282 项前端测试、格式检查、静态检查、生产构建以及真实浏览器 PNG/PDF 导出与视觉检查均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.1. 同 v0.9.1。
+
+---
+
+# TextMark v0.9.1
+
+TextMark 0.9.1 completes the follow-up verification pass against Markdown Preview v0.0.51 and fixes export, formula, Mermaid, sharing and macOS editor-integration edge cases. KaTeX selections now copy as usable Markdown source, Mermaid node labels remain visible in secure HTML/PDF/PNG output, and block equations no longer consume the following heading. macOS now uses the native sharing panel and filters Open With choices through the system editor role. The release also adds end-to-end coverage for preferences persistence, toolbar customization, image paste, export output and large documents.
+
+TextMark 0.9.1 完成针对 Markdown Preview v0.0.51 的后续验收，并修复导出、公式、Mermaid、分享及 macOS 编辑器集成边界问题。KaTeX 选区复制现在会生成可直接使用的 Markdown 源码；Mermaid 节点标签在安全的 HTML/PDF/PNG 输出中保持可见；块级公式不会再吞掉后续标题。macOS 现使用原生系统分享面板，并通过系统编辑器角色筛选“打开方式”应用。本版本还新增偏好设置持久化、工具栏自定、图片粘贴、导出结果及大文档的端到端覆盖。
+
+## Highlights / 主要更新
+
+- 公式与图表：KaTeX 复制保留 `$…$` / `$$…$$`；安全转换 Mermaid `foreignObject` 标签为 SVG 文本，移除脚本和事件属性，同时保证标签可读。
+- 导出可靠性：修复 PDF 中 Alert 图标异常放大与块级公式后的标题解析；HTML、PNG、PDF 导出增加 CSP、资源、主题恢复、签名、尺寸与视觉回归检查。
+- macOS 工作流：Share 调用原生系统分享面板；Open With 依据 LaunchServices 编辑器角色筛选已安装应用，跨平台继续安全回退。
+- 回归保障：280 项前端测试、13 项 Rust 测试、21 项桌面端流程、完整 Markdown 语法文档及浏览器视觉验收均通过；构建、静态检查、包体积预算与安全审计通过。
+
+## Trust notice / 安全提示
+
+Same as v0.9.0. 同 v0.9.0。
+
+---
+
+# TextMark v0.9.0
+
+TextMark 0.9.0 completes another deep parity pass against the latest Markdown Preview while making editing and desktop workflows substantially more robust. The editor now loads language support for fenced code blocks on demand, renders pasted local images inline, and renames pasted-image files transactionally when their Markdown paths change. New-document and folder deep-link flows are safer, dirty tabs are never silently replaced, seven built-in appearance themes are available from a dedicated settings pane, and the renderer and deep-link lifecycle have been split into focused modules for easier maintenance. Default Chinese and full Windows, Linux, and macOS support remain unchanged.
+
+TextMark 0.9.0 完成新一轮对最新版 Markdown Preview 的深度对标，并显著增强编辑与桌面工作流的可靠性。编辑器现可按需加载围栏代码块的语言支持、在源码中内联预览粘贴的本地图片，并在 Markdown 图片路径变化时以事务方式安全重命名文件；新建文档与文件夹深链接流程更加稳健，未保存标签不会被静默替换；设置新增独立外观页与七套内置主题；渲染器和深链接生命周期也拆分为职责清晰的模块，便于后续维护。默认中文及 Windows、Linux、macOS 三平台支持保持不变。
+
+## Highlights / 主要更新
+
+- 编辑器与代码块：围栏识别覆盖反引号/波浪线、缩进、长围栏及嵌套边界；CodeMirror 语言包按需加载，保持主编辑器包轻量，并补齐对应装饰与回归测试。
+- 图片工作流：粘贴图片可直接在编辑器中预览；修改自动生成的图片路径时，原生端采用预检、冲突保护与回滚机制完成文件重命名，避免覆盖或半完成状态。
+- 文档与窗口：新增可靠的新建文档入口和文件夹深链接处理；打开目标文档时优先复用合适窗口，同时保护含未保存内容的现有标签；工具栏空白区恢复原生窗口拖动。
+- 外观设置：新增独立外观页、七套内置主题、跟随系统模式与一键恢复默认；关于页从应用元数据动态读取版本号。
+- 架构与性能：Markdown 渲染、深链接监听从主应用组件拆分为独立 hooks；代码语言数据拆包加载，主编辑器资源体积显著下降。
+- 回归保障：259 项前端测试、13 项 Rust 测试、20 项原生端到端测试及完整 Markdown 语法文档显示测试通过；类型检查、代码规范、格式、Clippy、生产构建、包体预算与生产依赖安全审计均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.8.2. 同 v0.8.2。
+
+---
+
+# TextMark v0.8.2
+
+TextMark 0.8.2 completes the latest Markdown Preview parity improvements and adds a full-document rendering regression suite. Rendering now follows CommonMark soft-break semantics, preserves safe GFM table alignment, produces stable Chinese anchors, keeps long code lines horizontally scrollable, and prevents literal HTML-looking task text from truncating the remainder of a document. The release also includes auto-save, multi-document tabs, custom themes, image paste and rename workflows, deep-link handoff, and related desktop reliability improvements.
+
+TextMark 0.8.2 完成最新 Markdown Preview 对标改进，并新增整篇 Markdown 文档渲染回归测试。渲染现遵循 CommonMark 软换行语义，安全保留 GFM 表格对齐，生成稳定的中文锚点，超长代码行支持横向滚动，并修复任务项中的字面 HTML 样式文本可能截断后续内容的问题。本版本还包含自动保存、多文档标签、自定义主题、图片粘贴与重命名、深链接交接及相关桌面端可靠性改进。
+
+## Highlights / 主要更新
+
+- Markdown 渲染：修复软换行、中文标题锚点、表格对齐和超长代码块横向滚动；保留脚本、事件属性与 iframe 的安全过滤。
+- 文档完整性：任务列表不再重复注入未转义源码，含字面 `<script>` 的任务项不会吞掉后续内容与脚注。
+- 编辑与工作流：增加自动保存、多文档标签、主题自定义、图片粘贴/重命名，以及外部编辑器和 LLM 深链接支持。
+- 回归保障：将完整 Markdown 语法文档接入原生桌面端端到端测试；248 项前端测试、Rust 测试、Clippy、构建与端到端套件均通过。
+
+## Trust notice / 安全提示
+
+Same as v0.8.1. 同 v0.8.1。
+
+---
+
+# TextMark v0.8.1
+
+TextMark 0.8.1 fixes a native print fallback reliability issue: repeated or concurrent exports now receive unique, sanitized temporary filenames, preventing one PDF export from replacing another. A Rust regression test covers uniqueness and extension sanitization. Default Chinese and cross-platform support are unchanged.
+
+TextMark 0.8.1 修复原生打印回退流程的可靠性问题：重复或并发导出现在会获得唯一且已清洗的临时文件名，避免一个 PDF 导出覆盖另一个。新增 Rust 回归测试，覆盖路径唯一性与扩展名清洗。默认中文与跨平台支持不变。
+
+## Highlights / 主要更新
+
+- 导出可靠性：macOS 原生打印回退的临时 PDF 文件名加入高精度时间戳与进程内序列号；保留扩展名白名单清洗和 `pdf` 默认值。
+- 回归保障：新增 `temporary_export_paths_are_unique_and_sanitize_extensions` Rust 单元测试。
+
+## Trust notice / 安全提示
+
+Same as v0.8.0. 同 v0.8.0。
+
+---
+
 # TextMark v0.8.0
 
 TextMark 0.8.0 completes the current Markdown Preview `main` parity pass (v0.0.49 plus its sidebar-selection fix). Output actions now wait for Mermaid, fonts and images before capture; macOS Print and Export as PDF use the native vector-capable Save as PDF workflow; Always on Top correctly yields while the window is full screen; settings are a dedicated, lightweight native window with General, Privacy and About panes; and the source editor gains Markdown-aware formatting toggles and visible syntax decorations. Quick Look adds immediate Command-A/Command-C selection and a Copy Markdown action. Default Chinese and cross-platform support are unchanged.

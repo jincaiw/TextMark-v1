@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { detectPlatform, detectRuntime, errorCode, isMacos, parentDirectory, resolveSiblingPath } from './platform'
+import {
+  detectPlatform,
+  detectRuntime,
+  discoverApplications,
+  errorCode,
+  isMacos,
+  parentDirectory,
+  resolveSiblingPath,
+  shouldUseDedicatedSettingsWindow,
+} from './platform'
 
 const mockUserAgent = (agent: string, platform = '') => {
   Object.defineProperty(navigator, 'userAgent', { value: agent, configurable: true })
@@ -34,6 +43,14 @@ describe('platform detection adapter', () => {
     mockUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36', 'MacIntel')
     expect(isMacos()).toBe(true)
   })
+
+  it('keeps Settings in the primary window on Windows', () => {
+    expect(shouldUseDedicatedSettingsWindow('windows', true, false)).toBe(false)
+    expect(shouldUseDedicatedSettingsWindow('linux', true, false)).toBe(true)
+    expect(shouldUseDedicatedSettingsWindow('macos', true, false)).toBe(true)
+    expect(shouldUseDedicatedSettingsWindow('macos', false, false)).toBe(false)
+    expect(shouldUseDedicatedSettingsWindow('macos', true, true)).toBe(false)
+  })
 })
 
 describe('platform paths', () => {
@@ -54,5 +71,14 @@ describe('platform paths', () => {
   it('extracts serialized error codes without exposing text', () => {
     expect(errorCode('{"code":"not_found","detail":"secret"}')).toBe('not_found')
     expect(errorCode('arbitrary platform error')).toBeNull()
+  })
+})
+
+describe('external application discovery', () => {
+  it('keeps all supported AI handoff targets available in browser mode', async () => {
+    const applications = await discoverApplications()
+    expect(
+      applications.filter((application) => application.kind === 'llm' && application.available).map((application) => application.id),
+    ).toEqual(['codex', 'claude', 'chatgpt'])
   })
 })

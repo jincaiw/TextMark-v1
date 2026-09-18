@@ -13,8 +13,8 @@ describe('renderMarkdown', () => {
   it('builds stable heading anchors and an outline', () => {
     const rendered = renderMarkdown('# Hello world\n\n## Hello world')
     expect(rendered.outline).toEqual([
-      { id: 'hello-world', text: 'Hello world', level: 1 },
-      { id: 'hello-world-2', text: 'Hello world', level: 2 },
+      { id: 'hello-world', text: 'Hello world', level: 1, line: 1 },
+      { id: 'hello-world-2', text: 'Hello world', level: 2, line: 3 },
     ])
     expect(rendered.html).toContain('id="hello-world"')
   })
@@ -72,12 +72,110 @@ describe('renderMarkdown', () => {
   it('renders canonical LaTeX delimiters but keeps code literal', async () => {
     const rendered = await renderMarkdownEnhanced('\\(x + y\\) and `\\(literal\\)`\n\n\\[z^2\\]')
     expect(rendered.html).toContain('katex')
+    expect(rendered.html).toContain('style="height:')
     expect(rendered.html).toContain('\\(literal\\)')
+  })
+
+  it('preserves a heading boundary immediately after display math', async () => {
+    const rendered = await renderMarkdownEnhanced('$$\nx^2\n$$\n\n## Diagram')
+    expect(rendered.html).toContain('katex-display')
+    expect(rendered.html).toContain('<h2 id="diagram">Diagram</h2>')
+    expect(rendered.outline).toContainEqual({ id: 'diagram', text: 'Diagram', level: 2, line: 5 })
+  })
+
+  it('keeps only KaTeX layout styles and rejects user-controlled CSS', async () => {
+    const rendered = await renderMarkdownEnhanced(
+      '$x^2$ <span style="color:red">plain</span> <span class="katex"><span style="background:url(https://example.com/x);position:fixed">fake</span></span>',
+    )
+    expect(rendered.html).toContain('style="height:')
+    expect(rendered.html).not.toContain('color:red')
+    expect(rendered.html).not.toContain('background:')
+    expect(rendered.html).not.toContain('position:fixed')
+  })
+
+  it('keeps escaped brackets in reference-link labels out of the math parser', () => {
+    const rendered = renderMarkdown('[\\[4\\]][source]\n\n[source]: https://example.com')
+    expect(rendered.html).toContain('href="https://example.com"')
+    expect(rendered.html).toContain('[4]')
+    expect(rendered.html).not.toContain('textmark-math-placeholder')
+    expect(rendered.hasMath).toBe(false)
+  })
+
+  it('keeps escaped brackets literal in inline links and ordinary text', () => {
+    const inline = renderMarkdown('[\\[4\\]](https://example.com)')
+    const plain = renderMarkdown('Range: \\[4\\] and \\[draft\\]. Parentheses: \\(圆括号\\).')
+    expect(inline.html).toContain('href="https://example.com"')
+    expect(inline.html).toContain('[4]')
+    expect(inline.hasMath).toBe(false)
+    expect(plain.html).toContain('Range: [4] and [draft]. Parentheses: (圆括号).')
+    expect(plain.hasMath).toBe(false)
+  })
+
+  it('restores inline code nested inside a Markdown link', () => {
+    const rendered = renderMarkdown('[`code`](https://example.com)')
+    expect(rendered.html).toContain('<a href="https://example.com"')
+    expect(rendered.html).toContain('<code>code</code>')
+    expect(rendered.html).not.toContain('TEXTMARKPROTECTED')
   })
 
   it('uses a real HCL grammar for Terraform fences', async () => {
     const rendered = await renderMarkdownEnhanced('```terraform\nresource "aws_s3_bucket" "example" { enabled = true }\n```')
     expect(rendered.html).toContain('hljs-keyword')
     expect(rendered.html).toContain('hljs-attr')
+  })
+
+  it('renders standard Emoji shortcodes without affecting literal code or text emoticons', () => {
+    const rendered = renderMarkdown(':smile: :rocket: :-)\n\n`:smile:`\n\n```text\n:smile:\n```')
+    expect(rendered.html).toContain('😄 🚀 :-')
+    expect(rendered.html).toContain('<code>:smile:</code>')
+    expect(rendered.html).toContain(':smile:')
+  })
+
+  it('wraps tables for full-width layout and narrow-screen scrolling', () => {
+    const rendered = renderMarkdown('| Name | Value |\n| --- | --- |\n| TextMark | Ready |')
+    expect(rendered.html).toContain('<div class="md-table-scroll"><table>')
+    expect(rendered.html).toContain('</table>\n</div>')
+  })
+
+  it('highlights SQL, Docker Compose YAML and expanded common languages', async () => {
+    const rendered = await renderMarkdownEnhanced(
+      '```sql\nSELECT id, title FROM documents WHERE published = true;\n```\n\n```docker-compose\nservices:\n  app:\n    image: textmark:latest\n```\n\n```go\npackage main\nfunc main() {}\n```',
+    )
+    expect(rendered.html).toContain('language-sql')
+    expect(rendered.html).toContain('language-yaml')
+    expect(rendered.html).toContain('language-go')
+    expect(rendered.html).toContain('hljs-keyword')
+  })
+
+  it('highlights an unlabeled common-language code fence without changing explicit source syntax', async () => {
+    const rendered = await renderMarkdownEnhanced('```\nconst title: string = "TextMark"\n```')
+    expect(rendered.optionalRenderers).toContain('highlight')
+    expect(rendered.html).toContain('language-javascript')
+  })
+
+  it('keeps CommonMark soft breaks soft while preserving explicit hard breaks', () => {
+    const rendered = renderMarkdown('soft line\ncontinues\n\nhard line  \ncontinues\n\\\nhard again')
+    expect(rendered.html).toContain('<p>soft line\ncontinues</p>')
+    expect(rendered.html).toContain('hard line<br>\ncontinues\n<br>\nhard again')
+  })
+
+  it('uses safe alignment classes instead of inline table styles', () => {
+    const rendered = renderMarkdown('| A | B | C |\n| :--- | ---: | :---: |\n| left | right | center |')
+    expect(rendered.html).toContain('md-table-align-right')
+    expect(rendered.html).toContain('md-table-align-center')
+    expect(rendered.html).not.toContain('style=')
+  })
+
+  it('creates manual-link-compatible Chinese heading anchors after marker punctuation', () => {
+    const rendered = renderMarkdown('## 一、标题与分隔线 🅲')
+    expect(rendered.outline).toEqual([{ id: '一标题与分隔线', text: '一、标题与分隔线 🅲', level: 2, line: 1 }])
+  })
+
+  it('does not let task labels turn escaped code into raw HTML that consumes following content', () => {
+    const rendered = renderMarkdown('- [ ] Inline `<script>` must stay literal\n\n# After task\n\nText[^a]\n\n[^a]: Note')
+    expect(rendered.html).toContain('&lt;script&gt;')
+    expect(rendered.html).toContain('After task')
+    expect(rendered.html).toContain('footnotes')
+    expect(rendered.html).not.toContain('<script')
   })
 })

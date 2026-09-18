@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import packageJson from './package.json' with { type: 'json' }
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST
@@ -8,6 +9,7 @@ const host = process.env.TAURI_DEV_HOST
 export default defineConfig(async () => ({
   base: './',
   plugins: [react()],
+  define: { __APP_VERSION__: JSON.stringify(packageJson.version) },
   build: {
     // Mermaid and CodeMirror are offline, user-triggered chunks. The preview
     // bootstrap remains below the 300 kB gzip budget and never preloads them.

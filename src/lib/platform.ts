@@ -1,6 +1,15 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
-import type { AppError, AppSettings, ExternalApplication, FileNode, StartupRequest, TextDocument } from '../types'
+import type { AppError, AppSettings, ExternalApplication, FileNode, OpenPathRequest, StartupRequest, TextDocument } from '../types'
+
+export interface SavedPastedImage {
+  relativePath: string
+}
+
+export interface RenamedPastedImage {
+  relativePath: string
+  document: TextDocument
+}
 
 declare global {
   interface Window {
@@ -25,6 +34,20 @@ export function detectPlatform(): Platform {
 /** Resolves the runtime; drives the CSS `[data-runtime]` adapter. */
 export function detectRuntime(): 'tauri' | 'browser' {
   return isTauri() ? 'tauri' : 'browser'
+}
+
+/**
+ * WebView2 can create the secondary Settings WebView before its app asset is
+ * ready on some Windows installations. Keep Settings in the already-loaded
+ * document WebView there, which also means native menu commands never depend
+ * on creating another window. macOS and Linux retain the dedicated window.
+ */
+export function shouldUseDedicatedSettingsWindow(
+  platform: Platform = detectPlatform(),
+  native = isTauri(),
+  webdriver = Boolean(import.meta.env.VITE_WDIO),
+): boolean {
+  return native && platform !== 'windows' && !webdriver
 }
 
 export async function tempExportPath(extension: string): Promise<string> {
@@ -71,8 +94,26 @@ export async function readStartupRequest(): Promise<StartupRequest> {
   return invoke<StartupRequest>('startup_request')
 }
 
+export async function resolveOpenPath(path: string): Promise<OpenPathRequest> {
+  return invoke<OpenPathRequest>('resolve_open_path', { path })
+}
+
 export async function writeDocument(path: string, contents: string, expectedRevision?: string, force = false): Promise<TextDocument> {
   return invoke<TextDocument>('write_text_file', { path, contents, expectedRevision, force })
+}
+
+export async function savePastedImage(documentPath: string, bytes: Uint8Array): Promise<SavedPastedImage> {
+  return invoke<SavedPastedImage>('save_pasted_image', { documentPath, bytes: Array.from(bytes) })
+}
+
+export async function renamePastedImage(
+  documentPath: string,
+  relativePath: string,
+  name: string,
+  contents: string,
+  expectedRevision?: string,
+): Promise<RenamedPastedImage> {
+  return invoke<RenamedPastedImage>('rename_pasted_image', { documentPath, relativePath, name, contents, expectedRevision })
 }
 
 export async function scanFolder(path: string): Promise<FileNode[]> {
@@ -128,9 +169,16 @@ export async function discoverApplications(): Promise<ExternalApplication[]> {
   if (!isTauri())
     return [
       { id: 'system', name: 'System Default', kind: 'system', available: true },
+      { id: 'codex', name: 'Codex', kind: 'llm', available: true },
+      { id: 'claude', name: 'Claude', kind: 'llm', available: true },
       { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
     ]
   return invoke<ExternalApplication[]>('discover_applications')
+}
+
+export async function shareSourceNatively(source: string): Promise<void> {
+  if (!isTauri()) throw new Error('Native sharing is unavailable')
+  await invoke('share_source', { source })
 }
 
 export async function loadNativeSettings(): Promise<unknown | null> {

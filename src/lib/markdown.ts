@@ -1,10 +1,11 @@
 import MarkdownIt, { type MarkdownIt as MarkdownItInstance, type RendererRule } from 'markdown-it'
+import { full as emoji } from 'markdown-it-emoji'
 import footnote from 'markdown-it-footnote'
 import taskLists from 'markdown-it-task-lists'
 import type { OutlineItem, RenderedMarkdown } from '../types'
 import { splitFrontmatter } from './frontmatter'
 import { sanitizeRenderedMarkdown } from './sanitize'
-import { parseCodeFenceInfo } from './codeFence'
+import { detectCodeFenceLanguage, parseCodeFenceInfo } from './codeFence'
 
 const slugPattern = /[^\p{L}\p{N}\s-]/gu
 const remotePattern = /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i
@@ -19,7 +20,7 @@ interface RenderEnvironment {
 }
 
 function slugify(value: string): string {
-  return value.toLowerCase().trim().replace(slugPattern, '').replace(/\s+/g, '-') || 'section'
+  return value.toLowerCase().replace(slugPattern, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'section'
 }
 
 function escapeHtml(value: string): string {
@@ -41,29 +42,51 @@ function makeRenderer() {
     html: true,
     linkify: true,
     typographer: true,
-    breaks: true,
+    // CommonMark soft line breaks are whitespace, while an explicit trailing
+    // backslash or two spaces remains a <br>. This matters in imported prose
+    // and keeps source wrapping separate from author-requested line breaks.
+    breaks: false,
     highlight(code, language): string {
       const normalized = parseCodeFenceInfo(language).highlightLanguage
       return `<pre class="hljs"><code${normalized ? ` data-highlight-language="${escapeHtml(normalized)}" data-highlight-source="${encodeURIComponent(code)}"` : ''}>${escapeHtml(code)}</code></pre>`
     },
   })
 
+  // Only standard :shortcode: names are enabled. Do not replace plain-text emoticons
+  // and do not introduce any custom image-based emoji surface.
+  md.use(emoji, { shortcuts: {} })
   md.use(footnote)
-  md.use(taskLists, { enabled: true, label: true, labelAfter: true })
+  // The plugin's optional label wrapper reinjects raw source text. In a task
+  // such as `- [ ] literal <script>`, that can turn escaped inline code back
+  // into a real tag before DOMPurify sees it. The checkbox remains interactive
+  // through PreviewPane, so omit the unsafe duplicate label markup.
+  md.use(taskLists, { enabled: true, label: false })
 
   const defaultFence = md.renderer.rules.fence
   const fenceRule: RendererRule = (tokens, index, options, env, self) => {
     const token = tokens[index]
-    const language = parseCodeFenceInfo(token.info).language
+    const parsed = parseCodeFenceInfo(token.info)
+    const detectedLanguage = parsed.language ? null : detectCodeFenceLanguage(token.content)
+    const language = parsed.language || detectedLanguage || ''
     const state = env as RenderEnvironment
     if (language === 'mermaid') {
       state.hasMermaid = true
       return `<figure class="diagram"><div class="mermaid" data-mermaid-source="${encodeURIComponent(token.content)}"></div></figure>`
     }
+    if (detectedLanguage) token.info = detectedLanguage
     if (language && language !== 'math') state.hasHighlight = true
     return defaultFence ? defaultFence(tokens, index, options, env, self) : self.renderToken(tokens, index, options)
   }
   md.renderer.rules.fence = fenceRule
+
+  const defaultTableOpen = md.renderer.rules.table_open
+  const tableOpenRule: RendererRule = (tokens, index, options, env, self) =>
+    `<div class="md-table-scroll">${defaultTableOpen ? defaultTableOpen(tokens, index, options, env, self) : self.renderToken(tokens, index, options)}`
+  md.renderer.rules.table_open = tableOpenRule
+  const defaultTableClose = md.renderer.rules.table_close
+  const tableCloseRule: RendererRule = (tokens, index, options, env, self) =>
+    `${defaultTableClose ? defaultTableClose(tokens, index, options, env, self) : self.renderToken(tokens, index, options)}</div>`
+  md.renderer.rules.table_close = tableCloseRule
 
   const defaultImage = md.renderer.rules.image
   const imageRule: RendererRule = (tokens, index, options, env, self) => {
@@ -92,6 +115,28 @@ function makeRenderer() {
 
   md.renderer.rules.text = (tokens, index) => escapeHtml(tokens[index].content).replace(/\t/g, '<span class="md-inline-tab">\t</span>')
 
+  // markdown-preview supports ==highlight== as a small, readable inline
+  // extension. Keep the transform conservative: code spans and raw HTML are
+  // handled by MarkdownIt before this rule, while escaped markers remain text.
+  md.inline.ruler.after('emphasis', 'textmark_highlight', (state, silent) => {
+    const marker = '=='
+    const start = state.pos
+    if (state.src.slice(start, start + marker.length) !== marker) return false
+    const end = state.src.indexOf(marker, start + marker.length)
+    if (end < start + marker.length + 1) return false
+    if (!silent) {
+      const token = state.push('mark_open', 'mark', 1)
+      token.markup = marker
+      const content = state.src.slice(start + marker.length, end)
+      const text = state.push('text', '', 0)
+      text.content = content
+      const close = state.push('mark_close', 'mark', -1)
+      close.markup = marker
+    }
+    state.pos = end + marker.length
+    return true
+  })
+
   const headingOpenRule: RendererRule = (tokens, index, _options, env) => {
     const token = tokens[index]
     const inline = tokens[index + 1]
@@ -104,7 +149,7 @@ function makeRenderer() {
     state.slugs.set(base, count + 1)
     const id = count ? `${base}-${count + 1}` : base
     const level = Number(token.tag.slice(1))
-    state.outline.push({ id, text, level })
+    state.outline.push({ id, text, level, line: token.map ? token.map[0] + 1 : 0 })
     return `<${token.tag} id="${id}">`
   }
   md.renderer.rules.heading_open = headingOpenRule
@@ -140,8 +185,24 @@ let lastRenderSource: string | undefined
 let lastRenderLocale: 'zh-CN' | 'en' | undefined
 let lastRenderResult: RenderedMarkdown | undefined
 
+function looksLikeDelimitedMath(body: string) {
+  const trimmed = body.trim()
+  if (!trimmed) return false
+  // CommonMark uses the same backslashes to escape literal brackets and
+  // parentheses. Preserve prose such as \[draft\] or \(圆括号\), while still
+  // accepting canonical LaTeX expressions and single-letter variables.
+  const withoutTextCommands = trimmed.replace(/\\(?:text|mathrm|mathbf|operatorname)\{[^}]*\}/g, '')
+  if (/[^\x00-\x7f]/.test(withoutTextCommands)) return false
+  return /\\[A-Za-z]+|[_^=+*/<>]|(?:^|\s)-(?:\s|\d|[A-Za-z])|^[A-Za-z]$/.test(trimmed)
+}
+
 function containsMath(source: string) {
-  return /\$[^$\n]+\$|\$\$[\s\S]+?\$\$|\\\(|\\\[|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(source)
+  // Escaped brackets in Markdown link labels are ordinary text. Removing
+  // complete links here keeps the optional KaTeX chunk aligned with the
+  // protected-link path in normalizeMath.
+  const withoutLinks = source.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, '')
+  if (/\$[^$\n]+\$|\$\$[\s\S]+?\$\$|^(?:`{3,}|~{3,})[ \t]*math(?:\s|$)/im.test(withoutLinks)) return true
+  return [...withoutLinks.matchAll(/\\(?:\[|\()([\s\S]*?)\\(?:\]|\))/g)].some((match) => looksLikeDelimitedMath(match[1]))
 }
 
 function readingDirection(source: string): 'rtl' | 'auto' {
@@ -166,19 +227,27 @@ function normalizeMath(source: string) {
     },
   )
   normalized = normalized.replace(/(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\1(?!`)/g, protect)
+  // A literal \[...\] in a Markdown link label is an escaped bracket, not a
+  // display-math delimiter. Protect complete links before normalising LaTeX so
+  // reference links such as [\[4\]][source] retain their Markdown meaning.
+  normalized = normalized.replace(/(?<!!)\[(?:\\.|[^\]\\\n])*\](?:\[[^\]\n]*\]|\([^\)\n]*\))/g, protect)
   normalized = normalized
-    .replace(/(?<!\\)\\\\\[([\s\S]*?)\\\\\]/g, (_match, body: string) => `$$${body}$$`)
-    .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (_match, body: string) => `$$${body}$$`)
-    .replace(/(?<!\\)\\\\\(([^\n]*?)\\\\\)/g, (_match, body: string) => `$${body}$`)
-    .replace(/(?<!\\)\\\(([^\n]*?)\\\)/g, (_match, body: string) => `$${body}$`)
+    .replace(/(?<!\\)\\\\\[([\s\S]*?)\\\\\]/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$$${body}$$` : match))
+    .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$$${body}$$` : match))
+    .replace(/(?<!\\)\\\\\(([^\n]*?)\\\\\)/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$${body}$` : match))
+    .replace(/(?<!\\)\\\(([^\n]*?)\\\)/g, (match, body: string) => (looksLikeDelimitedMath(body) ? `$${body}$` : match))
   normalized = normalized
-    .replace(/^\s*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$\s*$/gm, (_match, body: string) => placeholder(body, true))
+    .replace(/^[ \t]*\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$[ \t]*$/gm, (_match, body: string) => placeholder(body, true))
     .replace(/\$\$([^\n]+?)\$\$/g, (_match, body: string) => placeholder(body, true))
     .replace(/(^|[^\\$])\$([^\n$]+?)\$(?!\$)/g, (match, prefix: string, body: string) => {
       if (!body.trim() || body !== body.trim()) return match
       return `${prefix}${placeholder(body, false)}`
     })
-  return normalized.replace(/TEXTMARKPROTECTED(\d+)TOKEN/g, (_match, index: string) => protectedBlocks[Number(index)] ?? '')
+  // A protected link can itself contain a protected inline-code token. Restore
+  // from the outside in until nested placeholders are exhausted.
+  for (let pass = 0; pass <= protectedBlocks.length && /TEXTMARKPROTECTED\d+TOKEN/.test(normalized); pass += 1)
+    normalized = normalized.replace(/TEXTMARKPROTECTED(\d+)TOKEN/g, (_match, index: string) => protectedBlocks[Number(index)] ?? '')
+  return normalized
 }
 
 function buildSourceMaps(source: string) {
@@ -243,6 +312,31 @@ function buildSourceMaps(source: string) {
   return { sourceMap, tables, tasks }
 }
 
+/** Heading tokens are produced from the math-normalised source, so their
+ * markdown-it line map can drift away from the authored document. Re-anchor
+ * every outline entry to the real heading line by walking the original source
+ * in document order. */
+function anchorOutlineToSource(outline: OutlineItem[], source: string) {
+  const lines = source.split(/\r?\n/)
+  let cursor = 0
+  return outline.map((item) => {
+    const wanted = item.text.trim()
+    for (let index = cursor; index < lines.length; index += 1) {
+      const atx = lines[index].match(/^\s{0,3}#{1,6}\s+(.*)$/)
+      if (atx && (atx[1].trim() === wanted || atx[1].includes(wanted))) {
+        cursor = index + 1
+        return { ...item, line: index + 1 }
+      }
+      const underline = lines[index + 1]?.match(/^\s*(?:=+|-+)\s*$/)
+      if (underline && lines[index].trim() === wanted && lines[index].trim()) {
+        cursor = index + 1
+        return { ...item, line: index + 1 }
+      }
+    }
+    return item
+  })
+}
+
 function frontmatterHtml(entries: RenderedMarkdown['frontmatter']) {
   if (!entries.length) return ''
   return `<section class="md-frontmatter" aria-label="Frontmatter"><table><tbody>${entries.map((entry) => `<tr><th>${escapeHtml(entry.key)}</th><td>${entry.items?.length ? entry.items.map((item) => `<span class="md-fm-pill">${escapeHtml(item)}</span>`).join('') : entry.value ? escapeHtml(entry.value) : '<span class="md-fm-empty"></span>'}</td></tr>`).join('')}</tbody></table></section>`
@@ -254,6 +348,25 @@ function convertRawRelativeImages(html: string) {
     (match, before: string, quote: string, source: string, after: string) => {
       if (!source || remotePattern.test(source) || /\bdata-local-src=/i.test(match)) return match
       return `<img${before}src="" data-local-src=${quote}${escapeHtml(source)}${quote}${after}>`
+    },
+  )
+}
+
+/**
+ * markdown-it emits GFM column alignment as inline styles. Inline styles are
+ * forbidden globally for untrusted Markdown, so convert this narrow,
+ * renderer-owned value to classes before sanitisation rather than weakening
+ * the HTML policy.
+ */
+function preserveTableAlignment(html: string) {
+  return html.replace(
+    /<(th|td)\b([^>]*?)\sstyle=(['"])text-align:\s*(left|right|center)\s*;?\3([^>]*)>/gi,
+    (_match, tag: string, before: string, _quote: string, alignment: string, after: string) => {
+      const attributes = `${before}${after}`
+      const className = `md-table-align-${alignment.toLowerCase()}`
+      if (/\bclass=(['"])(.*?)\1/i.test(attributes))
+        return `<${tag}${attributes.replace(/\bclass=(['"])(.*?)\1/i, (_classMatch, quote: string, classes: string) => `class=${quote}${classes} ${className}${quote}`)}>`
+      return `<${tag}${attributes} class="${className}">`
     },
   )
 }
@@ -297,10 +410,10 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   const hasMath = containsMath(frontmatter.body)
   const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body
   let raw = renderer.render(mathNormalized, environment)
-  const outline = environment.outline ?? []
+  const outline = anchorOutlineToSource(environment.outline ?? [], source)
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ol></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
-  raw = convertAlerts(convertRawRelativeImages(raw), locale)
+  raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw), locale))
   raw = `${frontmatterHtml(frontmatter.entries)}${raw}`
   const maps = buildSourceMaps(source)
   const hasMermaid = environment.hasMermaid ?? false
@@ -337,7 +450,9 @@ export async function renderMarkdownEnhancedUnsafe(source: string, locale: 'zh-C
   const result = renderMarkdownUnsafe(source, locale)
   let html = result.html
   if (result.optionalRenderers.includes('highlight')) {
-    const { highlightCode } = await import('./syntaxHighlight')
+    const { highlightCode, prepareHighlightLanguages } = await import('./syntaxHighlight')
+    const codeBlocks = [...html.matchAll(/<code\s+data-highlight-language="([^"]+)"\s+data-highlight-source="([^"]*)">[\s\S]*?<\/code>/g)]
+    await prepareHighlightLanguages(codeBlocks.map((match) => match[1]))
     html = html.replace(
       /<code\s+data-highlight-language="([^"]+)"\s+data-highlight-source="([^"]*)">[\s\S]*?<\/code>/g,
       (_match, language: string, encoded: string) => {

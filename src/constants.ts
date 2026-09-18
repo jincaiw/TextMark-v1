@@ -45,7 +45,7 @@ console.log(\`TextMark runs on \${platforms.join(", ")}\`);
 \`\`\`
 `
 
-export const MARKDOWN_EXTENSIONS = ['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'mdwn', 'mdtxt', 'mdtext', 'rmd', 'txt']
+export const MARKDOWN_EXTENSIONS = ['md', 'markdown', 'mdown', 'mdx', 'mkd', 'mkdn', 'mdwn', 'mdtxt', 'mdtext', 'rmd', 'txt']
 
 export const MARKDOWN_FILTERS = [
   {

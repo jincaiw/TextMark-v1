@@ -77,7 +77,7 @@
   --toast-bg: rgba(25, 25, 28, 0.88);
   /* Layout */
   --toolbar-height: 52px;
-  --sidebar-width: 300px;
+  --sidebar-width: 260px;
   --inspector-width: 292px;
 }
 
@@ -341,6 +341,18 @@ select:focus-visible {
 .toolbar-group button:hover,
 .toolbar-group summary:hover {
   background: var(--hover);
+}
+.toolbar-group.document-actions {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.toolbar-group.document-actions button {
+  border-radius: 0;
+}
+.toolbar-group.document-actions button + button {
+  border-left: 1px solid var(--border);
 }
 .toolbar-group svg,
 .more-menu svg {
@@ -615,6 +627,23 @@ select:focus-visible {
   background: var(--selected);
   color: var(--accent);
 }
+.find-bar .find-action {
+  width: auto;
+  height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.find-bar .find-action:hover:not(:disabled) {
+  background: var(--hover);
+}
+.find-bar .find-action:disabled {
+  opacity: 0.45;
+}
 .find-bar .find-count {
   width: auto;
   min-width: 70px;
@@ -739,13 +768,38 @@ select:focus-visible {
   width: 13px;
 }
 .document-shell.with-sidebar {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
 }
 .document-shell.with-inspector {
-  grid-template-columns: minmax(0, 1fr) var(--inspector-width);
+  grid-template-columns: minmax(0, 1fr) 6px var(--inspector-width);
 }
 .document-shell.with-sidebar.with-inspector {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width);
+  grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr) 6px var(--inspector-width);
+}
+.panel-resizer {
+  position: relative;
+  z-index: 2;
+  width: 6px;
+  min-height: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+.resizing-panel .panel-resizer::after {
+  background: var(--accent);
+  opacity: 0.55;
+}
+.panel-resizer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .document-workspace {
   position: relative;
@@ -810,6 +864,17 @@ select:focus-visible {
   min-height: 0;
   overflow: auto;
   padding: 2px 10px 16px;
+}
+.native-outline .outline-row {
+  display: flex;
+  align-items: stretch;
+}
+.native-outline .outline-disclosure {
+  flex: 0 0 24px;
+  width: 24px;
+  min-height: 30px;
+  padding: 0;
+  justify-content: center;
 }
 .native-outline button {
   width: 100%;
@@ -1049,6 +1114,29 @@ select:focus-visible {
   color: var(--muted);
   font-size: var(--text-sm);
 }
+.inspector-location {
+  display: grid;
+  gap: 7px;
+}
+.inspector-location code {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.inspector-location span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.inspector-location button {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
 
 .editor-pane,
 .preview-pane {
@@ -1063,12 +1151,46 @@ select:focus-visible {
   padding: 0;
 }
 .editor-page {
+  position: relative;
   width: min(820px, 100%);
   height: 100%;
   margin: 0 auto;
 }
+.code-fence-language-control {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-hud);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.code-fence-language-control input {
+  width: 96px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: 0;
+  font: inherit;
+}
 .editor-pane.content-full .editor-page {
   width: 100%;
+}
+/* @uiw/react-codemirror wraps the editor in a theme div between the page and
+   `.cm-editor`. Without a height that wrapper breaks the `height: 100%` chain,
+   the editor grows to its full content height, and the outer `.editor-pane`
+   scrolls instead of CodeMirror's own scroller. Every scroll-derived reading —
+   the top source line handed to the preview, the scroll fraction, the caret
+   restoration — then reports zero, and viewport virtualization is disabled. */
+.editor-pane .cm-theme {
+  height: 100%;
 }
 .editor-pane .cm-editor {
   height: 100%;
@@ -1076,9 +1198,9 @@ select:focus-visible {
 }
 .editor-pane .cm-scroller {
   overflow: auto;
-  padding-inline: 40px;
+  padding-inline: var(--document-page-padding-horizontal, 40px);
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-  line-height: 1.52;
+  line-height: var(--document-line-height, 1.52);
 }
 .editor-pane .cm-content {
   width: 100%;
@@ -1095,6 +1217,37 @@ select:focus-visible {
 }
 .editor-pane .cm-selectionBackground {
   background: color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+.editor-pane .cm-md-image-preview {
+  display: inline-flex;
+  width: 112px;
+  height: 76px;
+  margin: 4px 8px;
+  padding: 3px;
+  vertical-align: middle;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--document-fill);
+  cursor: pointer;
+}
+.editor-pane .cm-md-image-preview:hover {
+  border-color: var(--accent);
+}
+.editor-pane .cm-md-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+.editor-pane .cm-md-image-preview.asset-error::after {
+  content: '!';
+  margin: auto;
+  color: var(--danger);
+  font-weight: 700;
+}
+.editor-pane .cm-md-image-preview.asset-error img {
+  display: none;
 }
 /* Editor headings follow the preview's minor-third scale (upstream parity). */
 .editor-pane .cm-md-h1,
@@ -1217,7 +1370,7 @@ select:focus-visible {
 }
 .markdown-body.content-full {
   width: 100%;
-  padding-inline: 40px;
+  padding-inline: var(--document-page-padding-horizontal, 40px);
 }
 .markdown-body > *:first-child {
   margin-top: 0 !important;
@@ -1275,10 +1428,43 @@ select:focus-visible {
 .markdown-body .md-source-blank-line-final + h4,
 .markdown-body .md-source-blank-line-final + h5,
 .markdown-body .md-source-blank-line-final + h6 {
-  margin-top: 22.8px;
+  margin-top: var(--document-source-line-height, 22.8px);
 }
 .markdown-body p {
   margin: 12px 0 0;
+}
+.markdown-body strong {
+  font-weight: 650;
+}
+.markdown-body mark {
+  padding: 0 0.14em;
+  border-radius: 0.22em;
+  color: inherit;
+  background: color-mix(in srgb, var(--accent-color) 24%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.markdown-body s,
+.markdown-body del {
+  color: var(--document-secondary);
+  text-decoration-thickness: 1.5px;
+}
+.markdown-body sub,
+.markdown-body sup {
+  line-height: 0;
+}
+.markdown-body kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.08em 0.42em;
+  border: 1px solid var(--document-grid);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--document-fill);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  text-align: center;
 }
 .markdown-body ul,
 .markdown-body ol {
@@ -1332,24 +1518,81 @@ select:focus-visible {
 .markdown-body blockquote p:last-child {
   margin-bottom: 0;
 }
-.markdown-body table {
-  display: block;
-  max-width: 100%;
+.markdown-body details {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--document-grid);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--document-fill) 58%, transparent);
+}
+.markdown-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.markdown-body details[open] summary {
+  margin-bottom: 10px;
+}
+.markdown-body details > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body .md-table-scroll {
+  width: 100%;
   margin: 24px 0 0;
   overflow-x: auto;
+}
+.markdown-body table {
+  width: 100%;
+  min-width: max-content;
+  margin: 0;
   border-spacing: 0;
   border-collapse: collapse;
   font-size: 0.92em;
 }
+.markdown-body.textmark-exporting {
+  margin: 0;
+}
+.markdown-body.textmark-exporting .md-table-scroll {
+  overflow: visible;
+}
+.markdown-body.textmark-exporting table {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+.markdown-body.textmark-exporting th,
+.markdown-body.textmark-exporting td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.markdown-body.textmark-exporting pre {
+  overflow: visible;
+  white-space: pre-wrap;
+}
+.markdown-body.textmark-exporting pre code {
+  width: auto;
+  min-width: 0;
+  white-space: inherit;
+}
 .markdown-body th,
 .markdown-body td {
   padding: 9px 10px;
-  border-top: 1px solid var(--document-grid);
-  border-bottom: 1px solid var(--document-grid);
+  border: 1px solid var(--document-grid);
   text-align: start;
 }
 .markdown-body th {
   font-weight: 600;
+}
+.markdown-body th.md-table-align-left,
+.markdown-body td.md-table-align-left {
+  text-align: left;
+}
+.markdown-body th.md-table-align-right,
+.markdown-body td.md-table-align-right {
+  text-align: right;
+}
+.markdown-body th.md-table-align-center,
+.markdown-body td.md-table-align-center {
+  text-align: center;
 }
 .markdown-body td.editing {
   outline: 2px solid var(--accent);
@@ -1362,6 +1605,7 @@ select:focus-visible {
   background: var(--document-fill);
   color: var(--document-text);
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: var(--document-code-font-size, 0.88em);
   font-size: 0.88em;
 }
 .markdown-body pre {
@@ -1375,10 +1619,14 @@ select:focus-visible {
   background: var(--document-fill);
   color: var(--document-text);
   line-height: 1.45;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 .markdown-body pre code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
   padding: 0;
   background: transparent;
   color: inherit;
@@ -1502,6 +1750,14 @@ pre:hover .copy-code-button {
   padding-top: 1em;
   border-top: 1px solid var(--document-grid);
   font-size: 0.9em;
+}
+.markdown-body .footnotes ol {
+  padding-left: 1.45em;
+}
+.markdown-body .footnote-ref a,
+.markdown-body .footnote-backref {
+  font-weight: 650;
+  text-decoration: none;
 }
 .table-of-contents {
   margin: 1em 0 2em;
@@ -1844,6 +2100,9 @@ mark.search-match.active {
 }
 .settings-dialog {
   width: min(680px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 0 var(--space-6) var(--space-6);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -1876,10 +2135,12 @@ mark.search-match.active {
   width: 16px;
 }
 .settings-layout {
+  min-height: 0;
   display: grid;
   grid-template-columns: 148px minmax(0, 1fr);
   gap: 22px;
   padding-top: 18px;
+  overflow: hidden;
 }
 .settings-nav {
   display: grid;
@@ -1910,7 +2171,11 @@ mark.search-match.active {
   height: 16px;
 }
 .settings-pane {
+  min-width: 0;
   min-height: 330px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
 }
 .settings-dialog label {
   min-height: 58px;
@@ -1932,15 +2197,18 @@ mark.search-match.active {
   font-size: var(--text-xs);
 }
 .settings-text-size {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .settings-text-size button {
+  min-width: 0;
   height: var(--control-h-lg);
-  padding: 0 12px;
+  padding: 0 6px;
   display: inline-flex;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -1998,6 +2266,121 @@ mark.search-match.active {
   font-size: var(--text-xs);
   line-height: 1.5;
 }
+.theme-colors {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.theme-colors > strong {
+  font-size: var(--text-md);
+}
+.theme-colors-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.theme-colors-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.theme-colors-heading button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.theme-colors-heading svg {
+  width: 13px;
+  height: 13px;
+}
+.theme-presets {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-md);
+}
+.theme-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.theme-preset-grid > button {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: start;
+  cursor: pointer;
+}
+.theme-preset-grid > button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.theme-preset-grid > button.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.theme-preset-preview {
+  height: 32px;
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.18);
+}
+.theme-preset-preview i {
+  width: 18%;
+  height: 70%;
+  border-radius: 2px;
+}
+.theme-preset-preview i:nth-child(2) {
+  width: 45%;
+  height: 100%;
+}
+.theme-colors fieldset {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.theme-colors legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.settings-dialog .theme-colors label {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  border: 0;
+  font-size: var(--text-xs);
+}
+.theme-colors input[type='color'] {
+  width: 100%;
+  height: 27px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
 .settings-about {
   display: grid;
   gap: 6px;
@@ -2029,6 +2412,7 @@ mark.search-match.active {
 .settings-window-shell .settings-dialog {
   width: min(680px, 100vw);
   height: 100vh;
+  max-height: none;
   padding-inline: 22px;
   border: 0;
   border-radius: 0;
@@ -2036,6 +2420,9 @@ mark.search-match.active {
 }
 .settings-window-shell .settings-dialog header {
   height: 54px;
+}
+.settings-window-shell .settings-layout {
+  padding-bottom: 22px;
 }
 .setting-toggle {
   display: flex;
@@ -2147,8 +2534,10 @@ mark.search-match.active {
 .toolbar-customizer {
   width: min(620px, calc(100vw - 40px));
   max-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 0 var(--space-6) var(--space-5);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--window);
@@ -2184,6 +2573,12 @@ mark.search-match.active {
 }
 .toolbar-customizer header svg {
   width: 16px;
+}
+.tc-scroll-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
 }
 .tc-section {
   margin: 18px 0 10px;
@@ -2318,7 +2713,9 @@ mark.search-match.active {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 18px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .toolbar-customizer footer button {
   display: flex;
@@ -2490,7 +2887,10 @@ mark.search-match.active {
 }
 @media (max-width: 920px) {
   .document-shell.with-sidebar.with-inspector {
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
+  }
+  .panel-resizer-inspector {
+    display: none;
   }
   .inspector-panel {
     position: absolute;
@@ -2530,8 +2930,28 @@ mark.search-match.active {
   }
 }
 @media print {
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm;
+  }
+  :root,
+  :root[data-theme='dark'] {
+    --window: #fff !important;
+    --chrome: #fff !important;
+    --sidebar: #fff !important;
+    --surface: #fff !important;
+    --text: #1d1d1f !important;
+    --document-text: #1d1d1f !important;
+    --document-secondary: #66666b !important;
+    --accent: #0066cc !important;
+    --document-link: #005eb8 !important;
+    --document-fill: #f5f5f7 !important;
+    --document-grid: #d2d2d7 !important;
+    color-scheme: light;
+  }
   .native-toolbar,
   .native-sidebar,
+  .document-tabs,
   .inspector-panel,
   .formatting-toolbar,
   .find-bar,
@@ -2549,6 +2969,11 @@ mark.search-match.active {
     overflow: visible;
     background: white;
   }
+  body {
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .app-shell,
   .document-shell {
     display: block;
@@ -2557,7 +2982,27 @@ mark.search-match.active {
     width: 100%;
     max-width: none;
     padding: 0;
-    color: black;
+    color: var(--document-text);
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    break-after: avoid-page;
+  }
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body blockquote,
+  .markdown-body .markdown-alert,
+  .markdown-body .diagram,
+  .markdown-body details,
+  .markdown-body img {
+    break-inside: avoid-page;
+  }
+  .markdown-body thead {
+    display: table-header-group;
   }
   html[data-export-pdf='1'] body,
   html[data-export-pdf='1'] #root,
@@ -2565,13 +3010,13 @@ mark.search-match.active {
   html[data-export-pdf='1'] .document-shell,
   html[data-export-pdf='1'] .document-workspace,
   html[data-export-pdf='1'] .preview-pane {
-    background: var(--surface);
+    background: white;
   }
   html[data-export-pdf='1'] .markdown-body {
-    width: 820px;
-    max-width: none;
+    width: 100%;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 40px 40px 48px;
+    padding: 0;
     color: var(--document-text);
   }
 }

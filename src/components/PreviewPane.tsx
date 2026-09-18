@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import DOMPurify from 'dompurify'
 import morphdom from 'morphdom'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { writeKatexSelectionToClipboard } from '../lib/copyTex'
+import { sanitizeMermaidSvg } from '../lib/sanitize'
 import { invoke } from '@tauri-apps/api/core'
 import { isTauri, loadLocalAsset } from '../lib/platform'
 import { t } from '../lib/i18n'
@@ -9,6 +10,7 @@ import { nextZoomStep } from '../constants'
 import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
+import { buildSearchPattern } from '../lib/search'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
 
 interface PreviewPaneProps {
@@ -34,11 +36,11 @@ interface PreviewPaneProps {
   onActiveHeading: (id: string | null) => void
   onZoomChange: (zoom: number) => void
   onOpenRelative: (path: string) => void
+  onRenameImage: (path: string) => void
   onToggleTask: (index: number, checked: boolean) => void
   onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void
 }
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value)
 const disclosureKey = (details: HTMLDetailsElement, index: number) =>
   `${index}:${details.querySelector('summary')?.textContent?.trim() ?? ''}`
@@ -116,6 +118,12 @@ export function PreviewPane(props: PreviewPaneProps) {
     endRow: number
     endColumn: number
   } | null>(null)
+  // Parent callbacks are re-created on every App render. Reading them through a
+  // ref keeps them out of the hydration effect's dependency list: an unstable
+  // `onHydrated` made that effect clean up and restart on each parent render,
+  // which discarded the in-flight `mermaid.render` result it was waiting on.
+  const onHydratedRef = useRef(props.onHydrated)
+  onHydratedRef.current = props.onHydrated
 
   useEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = props.initialScrollTop
@@ -284,9 +292,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
 
     if (props.searchQuery) {
-      const flags = props.matchCase ? 'g' : 'gi'
-      const prefix = props.searchMode === 'beginsWith' ? '\\b' : ''
-      const pattern = new RegExp(`${prefix}${escapeRegExp(props.searchQuery)}`, flags)
+      const pattern = buildSearchPattern(props.searchQuery, props.matchCase, props.searchMode)
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode: (node) =>
           node.parentElement?.closest('.katex-mathml, button, svg') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -343,6 +349,7 @@ export function PreviewPane(props: PreviewPaneProps) {
           securityLevel: 'strict',
           theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'neutral',
           fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
+          flowchart: { htmlLabels: true },
         })
         await Promise.all(
           Array.from(root.querySelectorAll<HTMLElement>('.mermaid[data-mermaid-source]:not([data-mermaid-rendered="true"])')).map(
@@ -351,7 +358,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                 const source = decodeURIComponent(node.dataset.mermaidSource ?? '')
                 const { svg } = await mermaid.render(`textmark-diagram-${Date.now()}-${index}`, source)
                 if (!cancelled) {
-                  node.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+                  node.innerHTML = sanitizeMermaidSvg(svg)
                   node.dataset.mermaidRendered = 'true'
                   const figure = node.closest('figure')
                   if (figure && !figure.querySelector('.diagram-hud')) {
@@ -407,7 +414,6 @@ export function PreviewPane(props: PreviewPaneProps) {
     props.searchMode,
     props.locale,
     props.renderKey,
-    props.onHydrated,
   ])
 
   return (
@@ -422,7 +428,11 @@ export function PreviewPane(props: PreviewPaneProps) {
         props.onZoomChange(nextZoomStep(props.zoom, event.deltaY < 0 ? 1 : -1))
       }}
       onCopy={(event) => {
-        if (!tableSelection || !containerRef.current) return
+        if (!containerRef.current) return
+        if (!tableSelection) {
+          writeKatexSelectionToClipboard(event.nativeEvent, containerRef.current)
+          return
+        }
         const table = editableMarkdownTables(containerRef.current)[tableSelection.table]
         const rows = Array.from(table?.querySelectorAll('tr') ?? [])
         const minRow = Math.min(tableSelection.startRow, tableSelection.endRow)
@@ -464,6 +474,11 @@ export function PreviewPane(props: PreviewPaneProps) {
           setTableSelection((selection) => (selection ? { ...selection, endRow: cell.row, endColumn: cell.column } : selection))
         }}
         onDoubleClick={(event) => {
+          const image = (event.target as HTMLElement).closest<HTMLImageElement>('img[data-local-src]')
+          if (image?.dataset.localSrc) {
+            props.onRenameImage(image.dataset.localSrc)
+            return
+          }
           const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>('td, th')
           if (cell) {
             event.preventDefault()

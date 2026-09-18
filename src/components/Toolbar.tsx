@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow,
   Check,
@@ -79,13 +79,16 @@ const SIMPLE_ACTIONS: Partial<
   inspector: { title: 'getInfo', icon: <Info />, action: (p) => p.onToggleInspector() },
   alwaysOnTop: { title: 'alwaysOnTop', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
   share: { title: 'shareSource', icon: <Share />, action: (p) => p.onShare() },
-  edit: { title: 'toggleEdit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
+  edit: { title: 'edit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
   print: { title: 'printItem', icon: <Printer />, action: (p) => p.onPrint() },
   copy: { title: 'copyItem', icon: <Clipboard />, action: (p) => p.onCopy() },
   export: { title: 'exportItem', icon: <FileDown />, action: (p) => p.onExport() },
   exportPdf: { title: 'exportPdf', icon: <FileDown />, action: (p) => p.onExportPdf() },
   search: { title: 'searchItem', icon: <Search />, action: (p) => p.onSearchOpen() },
 }
+
+const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>
+  item === 'edit' && props.viewMode === 'edit' ? ('stopEditing' as const) : fallback
 
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key)
@@ -100,9 +103,15 @@ export function Toolbar(props: ToolbarProps) {
     else void window.toggleMaximize()
   }
 
-  const lastLlmTarget = typeof localStorage !== 'undefined' ? localStorage.getItem('textmark.lastLlmTarget') : null
-  const editorApps = props.applications.filter((application) => application.kind !== 'llm' && application.available)
-  const llmApps = props.applications.filter((application) => application.kind === 'llm')
+  const [lastLlmTarget, setLastLlmTarget] = useState(() =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem('textmark.lastLlmTarget') : null,
+  )
+  const editorApps = useMemo(
+    () => props.applications.filter((application) => application.kind !== 'llm' && application.available),
+    [props.applications],
+  )
+  const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
+  const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget) ?? editorApps[0]
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -117,11 +126,20 @@ export function Toolbar(props: ToolbarProps) {
       {application.id === props.defaultOpenTarget ? <Check className="check" /> : null}
     </button>
   ))
+  const defaultEditorButton = defaultEditor ? (
+    <button onClick={() => props.onOpenWith(defaultEditor.id)}>
+      <AppWindow />
+      <span>{tx('openWithDefault')}</span>
+    </button>
+  ) : null
   const llmButtons = llmApps.map((application) => (
     <button
       key={application.id}
       disabled={!application.available}
-      onClick={() => props.onOpenInLlm(application.id as 'codex' | 'claude' | 'chatgpt')}
+      onClick={() => {
+        setLastLlmTarget(application.id)
+        props.onOpenInLlm(application.id as 'codex' | 'claude' | 'chatgpt')
+      }}
     >
       <Sparkles />
       {application.name}
@@ -232,6 +250,7 @@ export function Toolbar(props: ToolbarProps) {
               emptyAppItem()
             ) : (
               <>
+                {defaultEditorButton}
                 {llmApps.length > 0 && <b>{tx('aiApps')}</b>}
                 {llmButtons}
                 {llmApps.length > 0 && editorApps.length > 0 && <hr />}
@@ -249,7 +268,10 @@ export function Toolbar(props: ToolbarProps) {
             {withLabel(<AppWindow />, 'openWith')}
             <ChevronDown />
           </summary>
-          <div className="menu-popover">{editorApps.length ? editorButtons : emptyAppItem()}</div>
+          <div className="menu-popover">
+            {defaultEditorButton}
+            {editorApps.length ? editorButtons : emptyAppItem()}
+          </div>
         </details>,
       )
     if (item === 'openInLlm')
@@ -275,6 +297,33 @@ export function Toolbar(props: ToolbarProps) {
           </button>
         </div>,
       )
+    if (item === 'documentActions')
+      return (() => {
+        const editTitle = props.viewMode === 'edit' ? 'stopEditing' : 'edit'
+        return slot(
+          <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
+            <button
+              className={props.inspectorVisible ? 'selected' : ''}
+              title={tx('getInfo')}
+              aria-label={tx('getInfo')}
+              onClick={props.onToggleInspector}
+            >
+              {withLabel(<Info />, 'getInfo')}
+            </button>
+            <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
+              {withLabel(<Share />, 'shareSource')}
+            </button>
+            <button
+              className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
+              title={tx(editTitle)}
+              aria-label={tx(editTitle)}
+              onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
+            >
+              {withLabel(<FilePenLine />, editTitle)}
+            </button>
+          </div>,
+        )
+      })()
     if (item === 'search')
       return slot(
         <label className="document-search" onClick={props.onSearchOpen}>
@@ -289,6 +338,7 @@ export function Toolbar(props: ToolbarProps) {
       )
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
+      const title = actionTitle(item, props, simple.title)
       const active =
         (item === 'inspector' && props.inspectorVisible) ||
         (item === 'edit' && props.viewMode === 'edit') ||
@@ -296,8 +346,8 @@ export function Toolbar(props: ToolbarProps) {
       return slot(
         <button
           className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''} ${item === 'edit' && active ? 'edit-active' : ''}`}
-          title={tx(simple.title)}
-          aria-label={tx(simple.title)}
+          title={tx(title)}
+          aria-label={tx(title)}
           onClick={() => {
             if (item === 'copy') {
               props.onCopy()
@@ -306,7 +356,7 @@ export function Toolbar(props: ToolbarProps) {
             } else simple.action(props)
           }}
         >
-          {withLabel(item === 'copy' && copiedFlash ? <Check /> : simple.icon, simple.title)}
+          {withLabel(item === 'copy' && copiedFlash ? <Check /> : simple.icon, title)}
         </button>,
       )
     }
@@ -318,19 +368,20 @@ export function Toolbar(props: ToolbarProps) {
   return (
     <header
       className="native-toolbar"
+      data-tauri-drag-region
       onClick={(event) => {
         const details = (event.target as HTMLElement).closest('.menu-popover button')?.closest('details')
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}
     >
-      <div className="window-leading">
+      <div className="window-leading" data-tauri-drag-region>
         <div className="traffic-lights">
           <button aria-label={tx('close')} onClick={() => windowAction('close')} />
           <button aria-label={tx('minimize')} onClick={() => windowAction('minimize')} />
           <button aria-label={tx('maximize')} onClick={() => windowAction('toggleMaximize')} />
         </div>
       </div>
-      <div className="native-actions" ref={actionsRef}>
+      <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
         {props.items.map(renderItem)}
         <details className="more-menu">
           <summary title={tx('more')}>
@@ -339,10 +390,11 @@ export function Toolbar(props: ToolbarProps) {
           <div className="menu-popover align-right">
             {overflowItems.map((item) => {
               const meta = SIMPLE_ACTIONS[item]!
+              const title = actionTitle(item, props, meta.title)
               return (
                 <button key={`overflow-${item}`} onClick={() => meta.action(props)}>
                   {meta.icon}
-                  {tx(meta.title)}
+                  {tx(title)}
                 </button>
               )
             })}

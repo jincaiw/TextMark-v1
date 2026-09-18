@@ -26,6 +26,18 @@ export function eventAffectsPath(event: DiskChangeEvent, path: string): boolean 
   return event.paths.some((changedPath) => samePath(changedPath, path))
 }
 
+/**
+ * Directory watchers can report an atomic-save sequence as a sibling create,
+ * rename, or remove rather than as a direct modification of the open file.
+ * Treat same-directory events as a reload hint; the revision check in the
+ * caller still prevents unnecessary state updates.
+ */
+export function eventMayAffectDocument(event: DiskChangeEvent, path: string): boolean {
+  if (eventAffectsPath(event, path)) return true
+  if (!['create', 'modify', 'remove', 'rename'].includes(event.kind)) return false
+  return event.paths.some((changedPath) => directory(changedPath) === directory(path))
+}
+
 export function renamedDestinationInDirectory(event: DiskChangeEvent, originalPath: string): string | null {
   if (event.kind !== 'rename') return null
   const originalDirectory = directory(originalPath)

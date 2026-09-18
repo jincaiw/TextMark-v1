@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, ContentWidth, Locale, ThemeMode } from '../types'
+import type { AppSettings, ContentWidth, DocumentFont, Locale, ThemeMode } from '../types'
 import { loadNativeSettings, saveNativeSettings } from '../lib/platform'
-import { normalizeSettings, readSettings, SETTINGS_KEYS } from '../lib/settings'
+import {
+  normalizeAutoSaveInterval,
+  normalizeLineHeight,
+  normalizePagePadding,
+  normalizeSettings,
+  readSettings,
+  SETTINGS_KEYS,
+} from '../lib/settings'
 
 export { DEFAULT_SETTINGS, readSettings } from '../lib/settings'
 
@@ -34,5 +41,11 @@ export function useSettings() {
     setContentWidth: (contentWidth: ContentWidth) => patch({ contentWidth }),
     setZoom: (zoom: number) => patch({ zoom: Math.max(50, Math.min(300, zoom)) }),
     setEditorFontSize: (editorFontSize: number) => patch({ editorFontSize: Math.max(12, Math.min(24, editorFontSize)) }),
+    setLineHeight: (lineHeight: number) => patch({ lineHeight: normalizeLineHeight(lineHeight) }),
+    setPagePaddingHorizontal: (pagePaddingHorizontal: number) =>
+      patch({ pagePaddingHorizontal: normalizePagePadding(pagePaddingHorizontal) }),
+    setDocumentFont: (documentFont: DocumentFont) => patch({ documentFont }),
+    setAutoSaveIntervalMinutes: (autoSaveIntervalMinutes: number) =>
+      patch({ autoSaveIntervalMinutes: normalizeAutoSaveInterval(autoSaveIntervalMinutes) }),
   }
 }

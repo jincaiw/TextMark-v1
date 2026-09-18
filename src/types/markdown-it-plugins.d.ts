@@ -9,3 +9,9 @@ declare module 'markdown-it-task-lists' {
   const plugin: PluginWithOptions<{ enabled?: boolean; label?: boolean; labelAfter?: boolean }>
   export default plugin
 }
+
+declare module 'markdown-it-emoji' {
+  import type MarkdownIt from 'markdown-it'
+
+  export const full: MarkdownIt.PluginWithOptions<{ shortcuts?: Record<string, string> }>
+}

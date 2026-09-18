@@ -4,6 +4,9 @@ import type { ExternalApplication, FileNode, OutlineItem, SidebarMode } from '..
 import { t } from '../lib/i18n'
 import type { Locale } from '../types'
 
+/** Shared empty set so an untouched document does not allocate on every render. */
+const EMPTY_HEADINGS: ReadonlySet<string> = new Set<string>()
+
 interface TreeNodeProps {
   node: FileNode
   activePath: string | null
@@ -17,7 +20,13 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
   if (node.isDirectory) {
     return (
       <div>
-        <button className="tree-row" style={{ paddingLeft: 12 + depth * 16 }} onClick={() => setExpanded((value) => !value)}>
+        <button
+          className="tree-row"
+          style={{ paddingLeft: 12 + depth * 16 }}
+          aria-expanded={expanded}
+          aria-level={depth + 1}
+          onClick={() => setExpanded((value) => !value)}
+        >
           {expanded ? <ChevronDown /> : <ChevronRight />}
           {expanded ? <FolderOpen /> : <Folder />}
           <span>{node.name}</span>
@@ -41,6 +50,8 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
     <button
       className={`tree-row file ${activePath === node.path ? 'active' : ''}`}
       style={{ paddingLeft: 31 + depth * 16 }}
+      aria-level={depth + 1}
+      aria-current={activePath === node.path ? 'true' : undefined}
       onClick={() => onOpenFile(node.path)}
       onContextMenu={(event) => onContextMenu(event, node)}
       title={node.path}
@@ -54,6 +65,10 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
 interface SidebarProps {
   mode: SidebarMode
   fileName: string
+  /** Identifies the active document. Heading collapse state is kept per
+   * document: outline ids are derived from heading text, so two documents that
+   * share a heading name would otherwise share its collapsed state. */
+  documentKey: string
   files: FileNode[]
   workspacePath: string | null
   activePath: string | null
@@ -76,7 +91,25 @@ interface SidebarProps {
 
 export function Sidebar(props: SidebarProps) {
   const workspaceName = props.workspacePath?.split(/[\\/]/).pop()
+  const [collapsedByDocument, setCollapsedByDocument] = useState<Record<string, Set<string>>>({})
+  const collapsedHeadings = collapsedByDocument[props.documentKey] ?? EMPTY_HEADINGS
+  const toggleHeading = (id: string) =>
+    setCollapsedByDocument((current) => {
+      const next = new Set(current[props.documentKey] ?? [])
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return { ...current, [props.documentKey]: next }
+    })
   const [context, setContext] = useState<{ x: number; y: number; node: FileNode } | null>(null)
+  const visibleOutline = props.outline.filter((item, index) => {
+    for (let previous = index - 1; previous >= 0; previous -= 1) {
+      const ancestor = props.outline[previous]
+      if (ancestor.level >= item.level) continue
+      if (collapsedHeadings.has(ancestor.id)) return false
+    }
+    return true
+  })
+  const hasChildHeading = (index: number) => props.outline[index + 1]?.level > props.outline[index].level
   const contextMenu = (event: React.MouseEvent, node: FileNode) => {
     event.preventDefault()
     setContext({ x: event.clientX, y: event.clientY, node })
@@ -101,18 +134,33 @@ export function Sidebar(props: SidebarProps) {
       {props.mode === 'outline' ? (
         <nav className="native-outline" aria-label={t(props.locale, 'tableOfContents')}>
           {props.outline.length ? (
-            props.outline.map((item) => (
-              <button
-                key={item.id}
-                className={`outline-level-${item.level} ${props.activeHeading === item.id ? 'active' : ''}`}
-                aria-current={props.activeHeading === item.id ? 'location' : undefined}
-                style={{ paddingLeft: 18 + (item.level - 1) * 18 }}
-                onClick={() => props.onOutlineSelect(item.id)}
-              >
-                {item.level > 1 ? <ChevronRight /> : null}
-                <span>{item.text}</span>
-              </button>
-            ))
+            visibleOutline.map((item) => {
+              const sourceIndex = props.outline.findIndex((candidate) => candidate.id === item.id)
+              const expandable = hasChildHeading(sourceIndex)
+              const collapsed = collapsedHeadings.has(item.id)
+              return (
+                <div key={item.id} className="outline-row">
+                  {expandable ? (
+                    <button
+                      className="outline-disclosure"
+                      aria-label={collapsed ? '展开子标题' : '折叠子标题'}
+                      aria-expanded={!collapsed}
+                      onClick={() => toggleHeading(item.id)}
+                    >
+                      {collapsed ? <ChevronRight /> : <ChevronDown />}
+                    </button>
+                  ) : null}
+                  <button
+                    className={`outline-level-${item.level} ${props.activeHeading === item.id ? 'active' : ''}`}
+                    aria-current={props.activeHeading === item.id ? 'location' : undefined}
+                    style={{ paddingLeft: 18 + (item.level - 1) * 18 + (expandable ? 0 : 18) }}
+                    onClick={() => props.onOutlineSelect(item.id)}
+                  >
+                    <span>{item.text}</span>
+                  </button>
+                </div>
+              )
+            })
           ) : (
             <p>{t(props.locale, 'noHeadings')}</p>
           )}

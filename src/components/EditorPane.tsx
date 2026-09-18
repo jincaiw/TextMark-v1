@@ -1,21 +1,43 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
-import { editorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
+import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
+import {
+  codeFenceAutoCloseInsertion,
+  editableCodeFenceAtLine,
+  isCodeFenceBodyLine,
+  rewriteCodeFenceLanguage,
+  type EditableCodeFence,
+} from '../lib/codeFenceEditing'
 import { clampScrollFraction } from '../lib/scrollFraction'
-import type { ContentWidth, FormatCommand } from '../types'
+import { caretToOffset } from '../lib/readingPosition'
+import { loadLocalAsset } from '../lib/platform'
+import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
+import type { ContentWidth, FormatCommand, SearchMode } from '../types'
 
 export interface EditorPaneHandle {
   focus: () => void
+  find: (query: string, matchCase: boolean, backwards?: boolean) => boolean
+  replace: (query: string, replacement: string, options: ReplaceOptions) => number
+  revealLine: (line: number) => void
+  /** Source line currently at the top of the editor viewport. */
+  getTopLine: () => number | null
   format: (command: FormatCommand) => void
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
   getScrollFraction: () => number
+}
+
+export interface ReplaceOptions {
+  matchCase: boolean
+  all?: boolean
+  mode?: SearchMode
 }
 
 interface EditorPaneProps {
@@ -26,10 +48,35 @@ interface EditorPaneProps {
   contentWidth: ContentWidth
   /** Scroll fraction (0–1) to restore when entering edit mode from the preview. */
   initialScrollFraction?: number
+  /** Source line to reveal when entering edit mode. Takes precedence over the
+   * scroll fraction because heading anchors survive the layout difference
+   * between the preview and the editor. */
+  initialLine?: number
+  /** Caret to put back when returning to the editor, in source line/column.
+   * Only honoured together with `initialLine`, and only when the reader did not
+   * move while they were in the preview (see `caretForReturnToEditor`). */
+  initialCursor?: { line: number; column: number } | null
+  /** Called once the initial scroll position has been consumed. The parent is
+   * mounted through Suspense, so it cannot know when that happened and must not
+   * clear the pending position on the next tick. */
+  onInitialPositionApplied?: () => void
   initialFormat?: FormatCommand | null
   onInitialFormatApplied?: () => void
   onChange: (value: string) => void
+  /** Returns Markdown to insert after a clipboard image has been saved safely. */
+  onPasteImage?: (file: File) => Promise<string | null>
+  baseDirectory?: string | null
+  workspacePath?: string | null
+  onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
+  /** Find-bar state. The preview pane highlights matches in rendered text;
+   * the editor highlights the same matches in source text so the match
+   * counter, the cycle order and “replace” stay in step while editing. */
+  searchQuery?: string
+  searchIndex?: number
+  matchCase?: boolean
+  searchMode?: SearchMode
+  onSearchCount?: (count: number) => void
 }
 
 const wrappers: Partial<Record<FormatCommand, [string, string]>> = {
@@ -107,12 +154,152 @@ function applyFormat(view: EditorView, command: FormatCommand) {
 
 export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane(props, forwardedRef) {
   const viewRef = useRef<EditorView | null>(null)
+  const pasteImageRef = useRef(props.onPasteImage)
+  pasteImageRef.current = props.onPasteImage
+  const imageContextRef = useRef({
+    baseDirectory: props.baseDirectory,
+    workspacePath: props.workspacePath,
+    onRenameImage: props.onRenameImage,
+  })
+  imageContextRef.current = {
+    baseDirectory: props.baseDirectory,
+    workspacePath: props.workspacePath,
+    onRenameImage: props.onRenameImage,
+  }
   const [ready, setReady] = useState(false)
+  // Same unstable-callback hazard as the preview: the parent re-creates these on
+  // every render, and putting them in the dependency list made the effect re-run
+  // (and re-apply the position) whenever the parent happened to render.
+  const onInitialPositionAppliedRef = useRef(props.onInitialPositionApplied)
+  onInitialPositionAppliedRef.current = props.onInitialPositionApplied
+  const initialCursorRef = useRef(props.initialCursor)
+  initialCursorRef.current = props.initialCursor
+  const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
+  const imagePasteExtension = useMemo(
+    () =>
+      EditorView.domEventHandlers({
+        paste(event, view) {
+          const clipboard = event.clipboardData
+          const fileFromList = Array.from(clipboard?.files ?? []).find((file) => file.type.startsWith('image/'))
+          const fileFromItem = Array.from(clipboard?.items ?? [])
+            .find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            ?.getAsFile()
+          const image = fileFromList ?? fileFromItem
+          const saveImage = pasteImageRef.current
+          if (!image || !saveImage) return false
+          event.preventDefault()
+          const selection = view.state.selection.main
+          void saveImage(image).then((markdown) => {
+            if (!markdown) return
+            view.dispatch({
+              changes: { from: selection.from, to: selection.to, insert: markdown },
+              selection: { anchor: selection.from + markdown.length },
+            })
+            view.focus()
+          })
+          return true
+        },
+      }),
+    [],
+  )
+  const codeFenceInputExtension = useMemo(
+    () =>
+      EditorView.inputHandler.of((view, from, to, text) => {
+        if (from !== to) return false
+        const line = view.state.doc.lineAt(from)
+        const insertion = codeFenceAutoCloseInsertion(view.state.sliceDoc(line.from, from), view.state.sliceDoc(to, line.to), text)
+        if (!insertion) return false
+        view.dispatch({
+          changes: { from, to, insert: insertion.insert },
+          selection: { anchor: from + insertion.cursorOffset },
+          userEvent: 'input.type',
+        })
+        return true
+      }),
+    [],
+  )
+  const imagePreviewExtension = useMemo(
+    () =>
+      createEditorMarkdownDecorations({
+        resolveImage: (path) => {
+          const context = imageContextRef.current
+          if (!context.baseDirectory) return Promise.resolve(null)
+          return loadLocalAsset(context.baseDirectory, path, context.workspacePath).catch(() => null)
+        },
+        onRenameImage: (path) => imageContextRef.current.onRenameImage?.(path),
+      }),
+    [],
+  )
+  const indentFenceBody = (view: EditorView, direction: 'more' | 'less') => {
+    const line = view.state.doc.lineAt(view.state.selection.main.head)
+    const fence = editableCodeFenceAtLine(view.state.doc, line.number)
+    if (!isCodeFenceBodyLine(fence, line.number)) return false
+    return direction === 'more' ? indentMore(view) : indentLess(view)
+  }
 
   useImperativeHandle(
     forwardedRef,
     () => ({
       focus: () => viewRef.current?.focus(),
+      find: (query, matchCase, backwards = false) => {
+        const view = viewRef.current
+        if (!view || !query) return false
+        const source = view.state.doc.toString()
+        const haystack = matchCase ? source : source.toLocaleLowerCase()
+        const needle = matchCase ? query : query.toLocaleLowerCase()
+        const selection = view.state.selection.main
+        const start = backwards ? Math.max(0, selection.from - 1) : selection.to
+        const index = backwards ? haystack.lastIndexOf(needle, start) : haystack.indexOf(needle, start)
+        const target = index >= 0 ? index : backwards ? haystack.lastIndexOf(needle) : haystack.indexOf(needle)
+        if (target < 0) return false
+        view.dispatch({ selection: { anchor: target, head: target + query.length }, scrollIntoView: true })
+        view.focus()
+        return true
+      },
+      replace: (query, replacement, options) => {
+        const view = viewRef.current
+        if (!view || !query) return 0
+        const source = view.state.doc.toString()
+        const mode = options.mode ?? 'contains'
+        if (options.all) {
+          const outcome = replaceAllMatches(source, query, replacement, options.matchCase, mode)
+          if (!outcome.count) return 0
+          view.dispatch({
+            changes: { from: 0, to: source.length, insert: outcome.contents },
+            selection: { anchor: outcome.contents.length },
+          })
+          return outcome.count
+        }
+        const selection = view.state.selection.main
+        const selected = view.state.sliceDoc(selection.from, selection.to)
+        // “替换” acts on the current match when the caret already sits on one.
+        // Otherwise it takes the next match after the caret and wraps to the
+        // top of the document, so a query typed into the find bar is always
+        // replaceable instead of silently doing nothing.
+        const anchor = selectionMatches(selected, query, options.matchCase) ? selection.from : selection.to
+        const matches = orderedMatchesFrom(searchMatchOffsets(source, query, options.matchCase, mode), anchor)
+        const target = matches[0]
+        if (!target) return 0
+        view.dispatch({
+          changes: { from: target.index, to: target.index + target.length, insert: replacement },
+          selection: { anchor: target.index + replacement.length },
+        })
+        return 1
+      },
+      getTopLine: () => {
+        const view = viewRef.current
+        if (!view) return null
+        const block = view.lineBlockAtHeight(Math.max(0, view.scrollDOM.scrollTop - view.documentTop))
+        return view.state.doc.lineAt(block.from).number
+      },
+      revealLine: (line) => {
+        const view = viewRef.current
+        if (!view || line < 1) return
+        const target = Math.min(Math.max(1, Math.round(line)), view.state.doc.lines)
+        const position = view.state.doc.line(target).from
+        view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) })
+        view.focus()
+      },
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
       },
@@ -126,14 +313,59 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   )
 
   useEffect(() => {
-    if (!ready || props.initialScrollFraction == null || !viewRef.current) return
-    const dom = viewRef.current.scrollDOM
-    const fraction = clampScrollFraction(props.initialScrollFraction)
-    const frame = requestAnimationFrame(() => {
-      dom.scrollTop = fraction * Math.max(0, dom.scrollHeight - dom.clientHeight)
-    })
+    if (!ready || !viewRef.current) return
+    const view = viewRef.current
+    if (props.initialLine == null && props.initialScrollFraction == null) return
+    let frame = 0
+    if (props.initialLine != null) {
+      // A source line survives the layout difference between the preview and the
+      // editor; a scroll fraction does not, so the line wins when both arrive.
+      const target = Math.min(Math.max(1, Math.round(props.initialLine)), view.state.doc.lines)
+      const lineStart = view.state.doc.line(target).from
+      // Move the caret with the viewport: the editor is remounted on every mode
+      // switch, and leaving the selection at the document start put the caret
+      // thousands of pixels above the line the reader had just come back to.
+      // When the round trip ended where it started, put it back exactly.
+      const restored = caretToOffset(
+        initialCursorRef.current ?? null,
+        (line) => view.state.doc.line(line).from,
+        (line) => view.state.doc.line(line).to,
+        view.state.doc.lines,
+      )
+      view.dispatch({
+        selection: { anchor: restored ?? lineStart },
+        effects: EditorView.scrollIntoView(lineStart, { y: 'start' }),
+      })
+    } else {
+      const fraction = clampScrollFraction(props.initialScrollFraction ?? 0)
+      const dom = view.scrollDOM
+      frame = requestAnimationFrame(() => {
+        dom.scrollTop = fraction * Math.max(0, dom.scrollHeight - dom.clientHeight)
+      })
+    }
+    onInitialPositionAppliedRef.current?.()
     return () => cancelAnimationFrame(frame)
-  }, [ready, props.initialScrollFraction])
+  }, [ready, props.initialLine, props.initialScrollFraction])
+
+  useEffect(() => {
+    if (!ready) return
+    props.onSearchCount?.(searchMatchOffsets(props.value, props.searchQuery ?? '', props.matchCase ?? false, props.searchMode).length)
+  }, [ready, props.value, props.searchQuery, props.matchCase, props.searchMode, props.onSearchCount])
+
+  const searchIndex = props.searchIndex ?? 0
+  useEffect(() => {
+    if (!ready || !props.searchQuery || !viewRef.current) return
+    const view = viewRef.current
+    const matches = searchMatchOffsets(view.state.doc.toString(), props.searchQuery, props.matchCase ?? false, props.searchMode)
+    if (!matches.length) return
+    const target = matches[((searchIndex % matches.length) + matches.length) % matches.length]
+    // Selection only — stealing focus here would pull the caret out of the
+    // find bar while the user is still typing the query.
+    view.dispatch({
+      selection: { anchor: target.index, head: target.index + target.length },
+      effects: EditorView.scrollIntoView(target.index, { y: 'center' }),
+    })
+  }, [ready, searchIndex, props.searchQuery, props.matchCase, props.searchMode])
 
   useEffect(() => {
     if (ready && props.initialFormat && viewRef.current) {
@@ -145,23 +377,46 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   return (
     <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
       <div className="editor-page">
+        {activeFence ? (
+          <label className="code-fence-language-control">
+            <span>Code language</span>
+            <input
+              aria-label="Code fence language"
+              value={activeFence.language}
+              placeholder="auto"
+              onChange={(event) => {
+                const view = viewRef.current
+                if (!view) return
+                const fence = editableCodeFenceAtLine(view.state.doc, activeFence.lineNumber)
+                if (!fence) return
+                view.dispatch({ changes: rewriteCodeFenceLanguage(fence, event.target.value) })
+              }}
+            />
+          </label>
+        ) : null}
         <CodeMirror
           value={props.value}
           height="100%"
           theme={props.theme === 'dark' ? oneDark : 'light'}
           extensions={[
-            markdown(),
+            markdown({ codeLanguages: languages }),
             editorHeadings,
-            editorMarkdownDecorations,
+            imagePreviewExtension,
+            imagePasteExtension,
+            codeFenceInputExtension,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
-              { key: 'Tab', run: indentMore },
-              { key: 'Shift-Tab', run: indentLess },
+              { key: 'Tab', run: (view) => indentFenceBody(view, 'more') },
+              { key: 'Shift-Tab', run: (view) => indentFenceBody(view, 'less') },
             ]),
           ]}
           onCreateEditor={(view) => {
             viewRef.current = view
+            const head = view.state.selection.main.head
+            const line = view.state.doc.lineAt(head)
+            setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
+            props.onCursorChange(line.number, head - line.from + 1)
             setReady(true)
           }}
           onChange={props.onChange}
@@ -169,6 +424,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             if (!update.selectionSet && !update.docChanged) return
             const head = update.state.selection.main.head
             const line = update.state.doc.lineAt(head)
+            setActiveFence(editableCodeFenceAtLine(update.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
           }}
           basicSetup={{
