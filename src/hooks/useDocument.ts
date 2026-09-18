@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { MARKDOWN_FILTERS, SAMPLE_MARKDOWN } from '../constants'
-import { eventAffectsPath, renamedDestinationInDirectory, resolveChangedDocumentPath } from '../lib/diskChange'
+import { eventAffectsPath, eventMayAffectDocument, renamedDestinationInDirectory, resolveChangedDocumentPath } from '../lib/diskChange'
 import { autoSaveDelayMs, shouldAutoSave } from '../lib/autoSave'
 import {
   errorCode,
@@ -88,7 +88,7 @@ function browserOpen(): Promise<TextDocument | null> {
   return new Promise((resolve) => {
     const picker = document.createElement('input')
     picker.type = 'file'
-    picker.accept = '.md,.markdown,.mdown,.mkd,.mkdn,.mdwn,.mdtxt,.mdtext,.rmd,.txt,text/markdown,text/plain'
+    picker.accept = '.md,.markdown,.mdown,.mdx,.mkd,.mkdn,.mdwn,.mdtxt,.mdtext,.rmd,.txt,text/markdown,text/plain'
     picker.addEventListener('change', async () => {
       const file = picker.files?.[0]
       if (!file) return resolve(null)
@@ -230,7 +230,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         if (eventAffectsPath(event.payload, active.path)) pendingRenameRef.current = { originalPath: active.path, candidate }
         else if (candidate && pendingRenameRef.current?.originalPath === active.path) pendingRenameRef.current.candidate = candidate
       }
-      if (active?.path && eventAffectsPath(event.payload, active.path)) {
+      if (active?.path && eventMayAffectDocument(event.payload, active.path)) {
         window.clearTimeout(documentTimer)
         documentTimer = window.setTimeout(async () => {
           const originalPath = active.path!
@@ -321,9 +321,14 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     [applyDocument, openDocumentsInTabs, openFolderPath, showError],
   )
 
+  const confirmLeaveActive = useCallback(() => {
+    const current = sessionsRef.current.find((session) => session.id === activeId)
+    return !current?.dirty || window.confirm(messages[locale].closeDirty)
+  }, [activeId, locale])
+
   const navigatePath = useCallback(
-    async (path: string, scrollTop = 0) => {
-      if (!isTauri() || !active) return
+    async (path: string, scrollTop = 0, force = false) => {
+      if (!isTauri() || !active || (!force && !confirmLeaveActive())) return
       setBusy(true)
       try {
         const next = await readDocument(path)
@@ -351,12 +356,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         setBusy(false)
       }
     },
-    [active, showError],
+    [active, confirmLeaveActive, showError],
   )
 
   const moveNavigation = useCallback(
-    async (direction: -1 | 1, scrollTop = 0) => {
-      if (!active || !isTauri()) return
+    async (direction: -1 | 1, scrollTop = 0, force = false) => {
+      if (!active || !isTauri() || (!force && !confirmLeaveActive())) return
       const targetIndex = active.historyIndex + direction
       const target = active.history[targetIndex]
       if (!target?.path) return
@@ -386,7 +391,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         setBusy(false)
       }
     },
-    [active, showError],
+    [active, confirmLeaveActive, showError],
   )
 
   useEffect(() => {
@@ -639,9 +644,9 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   }, [updateActive])
 
   const closeSession = useCallback(
-    (id: string) => {
+    (id: string, force = false) => {
       const target = sessions.find((session) => session.id === id)
-      if (target?.dirty && !window.confirm(messages[locale].closeDirty)) return
+      if (target?.dirty && !force && !window.confirm(messages[locale].closeDirty)) return
       setSessions((current) => {
         const remaining = current.filter((session) => session.id !== id)
         if (remaining.length) return remaining
@@ -722,8 +727,8 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     openWorkspacePath: navigatePath,
     canGoBack: (active?.historyIndex ?? 0) > 0,
     canGoForward: Boolean(active && active.historyIndex < active.history.length - 1),
-    goBack: (scrollTop?: number) => moveNavigation(-1, scrollTop),
-    goForward: (scrollTop?: number) => moveNavigation(1, scrollTop),
+    goBack: (scrollTop?: number, force = false) => moveNavigation(-1, scrollTop, force),
+    goForward: (scrollTop?: number, force = false) => moveNavigation(1, scrollTop, force),
     saveFile,
     saveAs,
   }

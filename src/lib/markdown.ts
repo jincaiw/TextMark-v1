@@ -115,6 +115,28 @@ function makeRenderer() {
 
   md.renderer.rules.text = (tokens, index) => escapeHtml(tokens[index].content).replace(/\t/g, '<span class="md-inline-tab">\t</span>')
 
+  // markdown-preview supports ==highlight== as a small, readable inline
+  // extension. Keep the transform conservative: code spans and raw HTML are
+  // handled by MarkdownIt before this rule, while escaped markers remain text.
+  md.inline.ruler.after('emphasis', 'textmark_highlight', (state, silent) => {
+    const marker = '=='
+    const start = state.pos
+    if (state.src.slice(start, start + marker.length) !== marker) return false
+    const end = state.src.indexOf(marker, start + marker.length)
+    if (end < start + marker.length + 1) return false
+    if (!silent) {
+      const token = state.push('mark_open', 'mark', 1)
+      token.markup = marker
+      const content = state.src.slice(start + marker.length, end)
+      const text = state.push('text', '', 0)
+      text.content = content
+      const close = state.push('mark_close', 'mark', -1)
+      close.markup = marker
+    }
+    state.pos = end + marker.length
+    return true
+  })
+
   const headingOpenRule: RendererRule = (tokens, index, _options, env) => {
     const token = tokens[index]
     const inline = tokens[index + 1]
@@ -127,7 +149,7 @@ function makeRenderer() {
     state.slugs.set(base, count + 1)
     const id = count ? `${base}-${count + 1}` : base
     const level = Number(token.tag.slice(1))
-    state.outline.push({ id, text, level })
+    state.outline.push({ id, text, level, line: token.map ? token.map[0] + 1 : 0 })
     return `<${token.tag} id="${id}">`
   }
   md.renderer.rules.heading_open = headingOpenRule
@@ -290,6 +312,31 @@ function buildSourceMaps(source: string) {
   return { sourceMap, tables, tasks }
 }
 
+/** Heading tokens are produced from the math-normalised source, so their
+ * markdown-it line map can drift away from the authored document. Re-anchor
+ * every outline entry to the real heading line by walking the original source
+ * in document order. */
+function anchorOutlineToSource(outline: OutlineItem[], source: string) {
+  const lines = source.split(/\r?\n/)
+  let cursor = 0
+  return outline.map((item) => {
+    const wanted = item.text.trim()
+    for (let index = cursor; index < lines.length; index += 1) {
+      const atx = lines[index].match(/^\s{0,3}#{1,6}\s+(.*)$/)
+      if (atx && (atx[1].trim() === wanted || atx[1].includes(wanted))) {
+        cursor = index + 1
+        return { ...item, line: index + 1 }
+      }
+      const underline = lines[index + 1]?.match(/^\s*(?:=+|-+)\s*$/)
+      if (underline && lines[index].trim() === wanted && lines[index].trim()) {
+        cursor = index + 1
+        return { ...item, line: index + 1 }
+      }
+    }
+    return item
+  })
+}
+
 function frontmatterHtml(entries: RenderedMarkdown['frontmatter']) {
   if (!entries.length) return ''
   return `<section class="md-frontmatter" aria-label="Frontmatter"><table><tbody>${entries.map((entry) => `<tr><th>${escapeHtml(entry.key)}</th><td>${entry.items?.length ? entry.items.map((item) => `<span class="md-fm-pill">${escapeHtml(item)}</span>`).join('') : entry.value ? escapeHtml(entry.value) : '<span class="md-fm-empty"></span>'}</td></tr>`).join('')}</tbody></table></section>`
@@ -363,7 +410,7 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   const hasMath = containsMath(frontmatter.body)
   const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body
   let raw = renderer.render(mathNormalized, environment)
-  const outline = environment.outline ?? []
+  const outline = anchorOutlineToSource(environment.outline ?? [], source)
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ol></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
   raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw), locale))

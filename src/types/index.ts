@@ -46,12 +46,16 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 6
+  schemaVersion: 7
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth
   zoom: number
   editorFontSize: number
+  /** Reading line height for both the preview and the editor. */
+  lineHeight: number
+  /** Horizontal page gutter in px; the reading column keeps its own width. */
+  pagePaddingHorizontal: number
   documentFont: DocumentFont
   themePreset: ThemePreset
   themeColors: ThemeColors
@@ -110,6 +114,9 @@ export interface OutlineItem {
   id: string
   text: string
   level: number
+  /** Source line of the heading (1-based). Lets the outline jump to the exact
+   * Markdown line when the editor is showing instead of the preview. */
+  line: number
 }
 
 export interface RenderedMarkdown {

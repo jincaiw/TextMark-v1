@@ -127,7 +127,7 @@ describe('upstream MarkdownHTML rendering parity', () => {
   })
   it('builds a localized TOC', () => expect(renderMarkdown('# A\n\n[TOC]', 'zh-CN').html).toContain('aria-label="目录"'))
   it('builds Setext heading anchors', () =>
-    expect(renderMarkdown('Heading\n=======').outline).toEqual([{ id: 'heading', text: 'Heading', level: 1 }]))
+    expect(renderMarkdown('Heading\n=======').outline).toEqual([{ id: 'heading', text: 'Heading', level: 1, line: 1 }]))
   it('deduplicates heading anchors deterministically', () =>
     expect(renderMarkdown('# A\n# A\n# A').outline.map((item) => item.id)).toEqual(['a', 'a-2', 'a-3']))
   it('sanitizes script, event, form, and style surfaces', () => {
@@ -135,6 +135,16 @@ describe('upstream MarkdownHTML rendering parity', () => {
     expect(html).not.toMatch(/<form|<style|onload/i)
   })
   it('renders double-tilde strikethrough', () => expect(renderMarkdown('~~deleted~~').html).toContain('<s>deleted</s>'))
+  it('renders upstream-style ==highlight== without changing code spans', () => {
+    const rendered = renderMarkdown('Before ==important== after\n\n`==literal==`')
+    expect(rendered.html).toContain('<mark>important</mark>')
+    expect(rendered.html).toContain('<code>==literal==</code>')
+  })
+  it('keeps unmatched highlight markers as literal text', () => {
+    const rendered = renderMarkdown('A ==not closed')
+    expect(rendered.html).not.toContain('<mark>')
+    expect(rendered.html).toContain('==not closed')
+  })
   it('keeps single tildes literal (upstream #278)', () => {
     const html = renderMarkdown('~literal~').html
     expect(html).toContain('~literal~')

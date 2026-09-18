@@ -13,8 +13,8 @@ describe('renderMarkdown', () => {
   it('builds stable heading anchors and an outline', () => {
     const rendered = renderMarkdown('# Hello world\n\n## Hello world')
     expect(rendered.outline).toEqual([
-      { id: 'hello-world', text: 'Hello world', level: 1 },
-      { id: 'hello-world-2', text: 'Hello world', level: 2 },
+      { id: 'hello-world', text: 'Hello world', level: 1, line: 1 },
+      { id: 'hello-world-2', text: 'Hello world', level: 2, line: 3 },
     ])
     expect(rendered.html).toContain('id="hello-world"')
   })
@@ -80,7 +80,7 @@ describe('renderMarkdown', () => {
     const rendered = await renderMarkdownEnhanced('$$\nx^2\n$$\n\n## Diagram')
     expect(rendered.html).toContain('katex-display')
     expect(rendered.html).toContain('<h2 id="diagram">Diagram</h2>')
-    expect(rendered.outline).toContainEqual({ id: 'diagram', text: 'Diagram', level: 2 })
+    expect(rendered.outline).toContainEqual({ id: 'diagram', text: 'Diagram', level: 2, line: 5 })
   })
 
   it('keeps only KaTeX layout styles and rejects user-controlled CSS', async () => {
@@ -168,7 +168,7 @@ describe('renderMarkdown', () => {
 
   it('creates manual-link-compatible Chinese heading anchors after marker punctuation', () => {
     const rendered = renderMarkdown('## 一、标题与分隔线 🅲')
-    expect(rendered.outline).toEqual([{ id: '一标题与分隔线', text: '一、标题与分隔线 🅲', level: 2 }])
+    expect(rendered.outline).toEqual([{ id: '一标题与分隔线', text: '一、标题与分隔线 🅲', level: 2, line: 1 }])
   })
 
   it('does not let task labels turn escaped code into raw HTML that consumes following content', () => {

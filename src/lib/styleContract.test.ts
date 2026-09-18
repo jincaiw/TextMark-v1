@@ -24,7 +24,7 @@ describe('v0.0.49 visual and print contract', () => {
   it('keeps system preview typography aligned with the app', () => expect(UPSTREAM_DOCUMENT_TOKENS.fontFamily).toContain('SF Pro Text'))
   it('forces a light print palette and removes screen controls', () => {
     expect(documentCss).toContain('color-scheme:light')
-    expect(documentCss).toContain('.copy-code-button,.diagram-hud,mark.search-match{display:none!important}')
+    expect(documentCss).toContain('.copy-code-button,.diagram-hud{display:none!important}')
     expect(documentCss).toContain('break-inside:avoid')
   })
 })

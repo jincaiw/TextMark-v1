@@ -20,16 +20,32 @@ export const DOCUMENT_FONT_FAMILIES = {
 
 export type DocumentFontName = keyof typeof DOCUMENT_FONT_FAMILIES
 
-export function applyUpstreamDocumentTokens(root: HTMLElement = document.documentElement, documentFont: DocumentFontName = 'system') {
+/** User-tunable reading typography. Anything omitted falls back to the frozen
+ * upstream token so the default profile renders exactly like the reference. */
+export interface DocumentTokenOverrides {
+  lineHeight?: number
+  pagePaddingHorizontal?: number
+}
+
+export function applyUpstreamDocumentTokens(
+  root: HTMLElement = document.documentElement,
+  documentFont: DocumentFontName = 'system',
+  overrides: DocumentTokenOverrides = {},
+) {
   const tokens = UPSTREAM_DOCUMENT_TOKENS
+  const lineHeight = Number.isFinite(overrides.lineHeight) ? Number(overrides.lineHeight) : tokens.lineHeight
+  const pagePaddingHorizontal = Number.isFinite(overrides.pagePaddingHorizontal)
+    ? Number(overrides.pagePaddingHorizontal)
+    : tokens.pagePaddingHorizontal
   root.style.setProperty('--document-font-family', DOCUMENT_FONT_FAMILIES[documentFont])
   root.style.setProperty('--document-code-font-size', documentFont === 'serif' ? '0.84em' : documentFont === 'monospace' ? '1em' : '0.88em')
   root.style.setProperty('--document-font-size', `${tokens.fontSize}px`)
-  root.style.setProperty('--document-line-height', String(tokens.lineHeight))
+  root.style.setProperty('--document-line-height', String(lineHeight))
   root.style.setProperty('--document-column-width', `${tokens.contentColumnWidth}px`)
-  root.style.setProperty(
-    '--document-page-padding',
-    `${tokens.pagePaddingTop}px ${tokens.pagePaddingHorizontal}px ${tokens.pagePaddingBottom}px`,
-  )
-  root.style.setProperty('--document-source-line-height', `${tokens.sourceLineHeight}px`)
+  root.style.setProperty('--document-page-padding-horizontal', `${pagePaddingHorizontal}px`)
+  root.style.setProperty('--document-page-padding', `${tokens.pagePaddingTop}px ${pagePaddingHorizontal}px ${tokens.pagePaddingBottom}px`)
+  // The spacer that stands in for a source blank line is one text line tall.
+  // Deriving it keeps the preview's vertical rhythm in step when the reading
+  // line height changes; at the upstream 15px/1.52 it is the frozen 22.8px.
+  root.style.setProperty('--document-source-line-height', `${Number((tokens.fontSize * lineHeight).toFixed(2))}px`)
 }

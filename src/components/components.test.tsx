@@ -2,12 +2,15 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import { ConflictDialog } from './ConflictDialog'
 import { DocumentTabs } from './DocumentTabs'
 import { FindBar } from './FindBar'
 import { ToolbarCustomizer } from './ToolbarCustomizer'
 import { SettingsDialog } from './SettingsDialog'
 import { PreviewPane } from './PreviewPane'
+import { Sidebar } from './Sidebar'
+import { UnsavedCloseDialog } from './UnsavedCloseDialog'
 import type { DocumentSession, RenderedMarkdown } from '../types'
 
 const session = (id: string, name: string, dirty = false): DocumentSession => ({
@@ -22,6 +25,57 @@ const session = (id: string, name: string, dirty = false): DocumentSession => ({
   history: [{ path: null, scrollTop: 0 }],
   historyIndex: 0,
 })
+
+const settingsDialogProps = {
+  open: true,
+  theme: 'system',
+  contentWidth: 'normal',
+  editorFontSize: 15,
+  lineHeight: 1.66,
+  pagePaddingHorizontal: 56,
+  documentFont: 'system',
+  themePreset: 'normal',
+  themeColors: {},
+  autoSaveIntervalMinutes: 0,
+  openDocumentsInTabs: false,
+  alwaysOnTop: false,
+  zoom: 100,
+  applications: [
+    { id: 'system', name: 'System', kind: 'system', available: true },
+    { id: 'vscode', name: 'Visual Studio Code', kind: 'editor', available: true },
+    { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
+    { id: 'missing', name: 'Missing Editor', kind: 'editor', available: false },
+  ],
+  defaultOpenTarget: 'system',
+  locale: 'en',
+  crashReports: false,
+  crashReportsAvailable: false,
+  updateChannel: 'stable',
+  autoCheckUpdates: true,
+  lastUpdateCheckAt: null,
+  updateStatus: { state: 'idle' },
+  onLocaleChange: vi.fn(),
+  onCrashReportsChange: vi.fn(),
+  onUpdateChannelChange: vi.fn(),
+  onAutoCheckUpdatesChange: vi.fn(),
+  onCheckUpdate: vi.fn(),
+  onInstallUpdate: vi.fn(),
+  onThemeChange: vi.fn(),
+  onContentWidthChange: vi.fn(),
+  onEditorFontSizeChange: vi.fn(),
+  onLineHeightChange: vi.fn(),
+  onPagePaddingHorizontalChange: vi.fn(),
+  onDocumentFontChange: vi.fn(),
+  onThemePresetChange: vi.fn(),
+  onThemeColorChange: vi.fn(),
+  onThemeColorsReset: vi.fn(),
+  onAutoSaveIntervalChange: vi.fn(),
+  onOpenDocumentsInTabsChange: vi.fn(),
+  onAlwaysOnTopChange: vi.fn(),
+  onZoomChange: vi.fn(),
+  onDefaultOpenTargetChange: vi.fn(),
+  onClose: vi.fn(),
+} satisfies ComponentProps<typeof SettingsDialog>
 
 describe('localized desktop components', () => {
   it('renders the upstream Contains/Begins With find modes in Chinese', () => {
@@ -38,6 +92,10 @@ describe('localized desktop components', () => {
         onNext={vi.fn()}
         onMatchCaseChange={vi.fn()}
         onModeChange={vi.fn()}
+        replacement=""
+        onReplacementChange={vi.fn()}
+        onReplace={vi.fn()}
+        onReplaceAll={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -45,6 +103,52 @@ describe('localized desktop components', () => {
     expect(html).toContain('开头为')
     expect(html).toContain('第 1 项，共 2 项')
   })
+  it('offers save, discard and cancel when closing with unsaved documents', () => {
+    const html = renderToStaticMarkup(
+      <UnsavedCloseDialog locale="zh-CN" dirtyCount={2} canSaveAll onSave={vi.fn()} onDiscard={vi.fn()} onCancel={vi.fn()} />,
+    )
+    expect(html).toContain('2 个文稿有未存储的更改。')
+    expect(html).toContain('存储并关闭')
+    expect(html).toContain('放弃更改')
+    expect(html).not.toContain('disabled')
+  })
+  it('refuses to auto-save untitled documents and says why', () => {
+    const html = renderToStaticMarkup(
+      <UnsavedCloseDialog locale="zh-CN" dirtyCount={1} canSaveAll={false} onSave={vi.fn()} onDiscard={vi.fn()} onCancel={vi.fn()} />,
+    )
+    expect(html).toContain('未命名文稿需要先“存储为…”')
+    expect(html).toContain('disabled')
+  })
+
+  it('wires the unsaved-close choices to their handlers', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onSave = vi.fn()
+    const onDiscard = vi.fn()
+    const onCancel = vi.fn()
+    const dialog = (canSaveAll: boolean) => (
+      <UnsavedCloseDialog locale="zh-CN" dirtyCount={1} canSaveAll={canSaveAll} onSave={onSave} onDiscard={onDiscard} onCancel={onCancel} />
+    )
+    await act(async () => root.render(dialog(true)))
+    const button = (label: string) => Array.from(host.querySelectorAll('button')).find((node) => node.textContent === label)!
+    await act(async () => button('取消').click())
+    await act(async () => button('放弃更改').click())
+    await act(async () => button('存储并关闭').click())
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+    expect(onSave).toHaveBeenCalledTimes(1)
+
+    // An untitled dirty document has nowhere to save to, so “save and close”
+    // must stay disabled instead of silently discarding the edits.
+    await act(async () => root.render(dialog(false)))
+    expect(button('存储并关闭').disabled).toBe(true)
+    await act(async () => button('存储并关闭').click())
+    expect(onSave).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   it('exposes dirty document tabs and localized close labels', () => {
     const html = renderToStaticMarkup(
       <DocumentTabs
@@ -138,57 +242,76 @@ describe('localized desktop components', () => {
     host.remove()
   })
   it('keeps LLM applications out of the default editor target preference', () => {
-    const html = renderToStaticMarkup(
-      <SettingsDialog
-        open
-        theme="system"
-        contentWidth="normal"
-        editorFontSize={15}
-        documentFont="system"
-        themePreset="normal"
-        themeColors={{}}
-        autoSaveIntervalMinutes={0}
-        openDocumentsInTabs={false}
-        alwaysOnTop={false}
-        zoom={100}
-        applications={[
-          { id: 'system', name: 'System', kind: 'system', available: true },
-          { id: 'vscode', name: 'Visual Studio Code', kind: 'editor', available: true },
-          { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
-          { id: 'missing', name: 'Missing Editor', kind: 'editor', available: false },
-        ]}
-        defaultOpenTarget="system"
-        locale="en"
-        crashReports={false}
-        crashReportsAvailable={false}
-        updateChannel="stable"
-        autoCheckUpdates
-        lastUpdateCheckAt={null}
-        updateStatus={{ state: 'idle' }}
-        onLocaleChange={vi.fn()}
-        onCrashReportsChange={vi.fn()}
-        onUpdateChannelChange={vi.fn()}
-        onAutoCheckUpdatesChange={vi.fn()}
-        onCheckUpdate={vi.fn()}
-        onInstallUpdate={vi.fn()}
-        onThemeChange={vi.fn()}
-        onContentWidthChange={vi.fn()}
-        onEditorFontSizeChange={vi.fn()}
-        onDocumentFontChange={vi.fn()}
-        onThemePresetChange={vi.fn()}
-        onThemeColorChange={vi.fn()}
-        onThemeColorsReset={vi.fn()}
-        onAutoSaveIntervalChange={vi.fn()}
-        onOpenDocumentsInTabsChange={vi.fn()}
-        onAlwaysOnTopChange={vi.fn()}
-        onZoomChange={vi.fn()}
-        onDefaultOpenTargetChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    )
+    const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} />)
     expect(html).toContain('Visual Studio Code')
     expect(html).not.toContain('ChatGPT')
     expect(html).not.toContain('Missing Editor')
+  })
+  it('exposes the reading typography controls in the settings dialog', () => {
+    const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} locale="zh-CN" />)
+    expect(html).toContain('行高')
+    expect(html).toContain('左右页边距')
+    // The sliders must carry the live values; the markup is what proves the
+    // controls are reachable at all.
+    expect(html).toContain('value="1.66"')
+    expect(html).toContain('value="56"')
+    expect(html).toContain('max="96"')
+  })
+  it('keeps heading collapse state per document', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const outline = [
+      { id: 'intro', text: 'Intro', level: 1, line: 1 },
+      { id: 'intro-detail', text: 'Detail', level: 2, line: 4 },
+      { id: 'intro-deep', text: 'Deeper', level: 3, line: 6 },
+      { id: 'usage', text: 'Usage', level: 1, line: 9 },
+    ]
+    const props = {
+      mode: 'outline' as const,
+      fileName: 'a.md',
+      documentKey: 'doc-a',
+      files: [],
+      workspacePath: null,
+      activePath: null,
+      outline,
+      activeHeading: null,
+      applications: [],
+      defaultOpenTarget: 'system',
+      onModeChange: vi.fn(),
+      onOpenFolder: vi.fn(),
+      onOpenFile: vi.fn(),
+      onOpenFileInTab: vi.fn(),
+      onOpenFileInWindow: vi.fn(),
+      onOpenFileWith: vi.fn(),
+      onRevealFile: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onCopyFileContents: vi.fn(),
+      onOutlineSelect: vi.fn(),
+      locale: 'zh-CN' as const,
+    }
+    const rows = () => host.querySelectorAll('.outline-row')
+    const disclosure = () => host.querySelector<HTMLButtonElement>('.outline-disclosure')!
+
+    await act(async () => root.render(<Sidebar {...props} />))
+    expect(rows()).toHaveLength(4)
+
+    await act(async () => disclosure().click())
+    // Collapsing "Intro" hides its two descendants, not the following top-level
+    // heading.
+    expect(rows()).toHaveLength(2)
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false')
+
+    // A second document with the same heading ids must not inherit the fold.
+    await act(async () => root.render(<Sidebar {...props} documentKey="doc-b" fileName="b.md" />))
+    expect(rows()).toHaveLength(4)
+
+    // …and returning to the first document restores what the user had folded.
+    await act(async () => root.render(<Sidebar {...props} />))
+    expect(rows()).toHaveLength(2)
+
+    await act(async () => root.unmount())
+    host.remove()
   })
   it('preserves an open disclosure while incremental search marks are applied', async () => {
     const host = document.createElement('div')

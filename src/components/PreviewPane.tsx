@@ -10,6 +10,7 @@ import { nextZoomStep } from '../constants'
 import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
+import { buildSearchPattern } from '../lib/search'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
 
 interface PreviewPaneProps {
@@ -40,7 +41,6 @@ interface PreviewPaneProps {
   onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void
 }
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value)
 const disclosureKey = (details: HTMLDetailsElement, index: number) =>
   `${index}:${details.querySelector('summary')?.textContent?.trim() ?? ''}`
@@ -118,6 +118,12 @@ export function PreviewPane(props: PreviewPaneProps) {
     endRow: number
     endColumn: number
   } | null>(null)
+  // Parent callbacks are re-created on every App render. Reading them through a
+  // ref keeps them out of the hydration effect's dependency list: an unstable
+  // `onHydrated` made that effect clean up and restart on each parent render,
+  // which discarded the in-flight `mermaid.render` result it was waiting on.
+  const onHydratedRef = useRef(props.onHydrated)
+  onHydratedRef.current = props.onHydrated
 
   useEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = props.initialScrollTop
@@ -286,9 +292,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
 
     if (props.searchQuery) {
-      const flags = props.matchCase ? 'g' : 'gi'
-      const prefix = props.searchMode === 'beginsWith' ? '\\b' : ''
-      const pattern = new RegExp(`${prefix}${escapeRegExp(props.searchQuery)}`, flags)
+      const pattern = buildSearchPattern(props.searchQuery, props.matchCase, props.searchMode)
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode: (node) =>
           node.parentElement?.closest('.katex-mathml, button, svg') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -410,7 +414,6 @@ export function PreviewPane(props: PreviewPaneProps) {
     props.searchMode,
     props.locale,
     props.renderKey,
-    props.onHydrated,
   ])
 
   return (

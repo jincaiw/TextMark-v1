@@ -12,7 +12,18 @@ import { THEME_PRESETS } from '../lib/theme'
 /** A dedicated Settings WebView must not initialize document I/O or Markdown
  * rendering. Keeping this as a separate root makes that boundary explicit. */
 export function SettingsWindow() {
-  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, setDocumentFont, patch } = useSettings()
+  const {
+    settings,
+    setLocale,
+    setTheme,
+    setContentWidth,
+    setZoom,
+    setEditorFontSize,
+    setLineHeight,
+    setPagePaddingHorizontal,
+    setDocumentFont,
+    patch,
+  } = useSettings()
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [applications, setApplications] = useState<ExternalApplication[]>([])
   useTheme(settings.theme)
@@ -56,6 +67,8 @@ export function SettingsWindow() {
         theme={settings.theme}
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
+        lineHeight={settings.lineHeight}
+        pagePaddingHorizontal={settings.pagePaddingHorizontal}
         documentFont={settings.documentFont}
         themePreset={settings.themePreset}
         themeColors={settings.themeColors}
@@ -72,6 +85,8 @@ export function SettingsWindow() {
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
+        onLineHeightChange={setLineHeight}
+        onPagePaddingHorizontalChange={setPagePaddingHorizontal}
         onDocumentFontChange={setDocumentFont}
         onThemePresetChange={(themePreset) => {
           const flavor = THEME_PRESETS[themePreset].flavor

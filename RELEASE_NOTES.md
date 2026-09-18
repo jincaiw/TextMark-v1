@@ -1,3 +1,23 @@
+# TextMark v0.9.8
+
+TextMark 0.9.8 completes the next desktop parity pass against Markdown Preview: it adds `.mdx` document recognition and upstream-style `==highlight==` rendering, strengthens atomic-save file watching across windows, preserves reading position and cursor state across edit/preview transitions, and adds three-choice protection for dirty-tab closing and history navigation.
+
+TextMark 0.9.8 完成本轮对 Markdown Preview 的桌面对标：新增 `.mdx` 文档识别与上游风格的 `==高亮==` 渲染，强化多窗口原子保存文件监听，完善编辑/阅读切换时的阅读位置与光标交接，并为脏标签关闭和历史导航增加三选项保护。
+
+## Highlights / 主要更新
+
+- 桌面布局：侧栏与 Inspector 支持拖动调宽并持久化，大纲支持折叠、源码行跳转，标签页支持键盘导航。
+- 编辑体验：查找、替换、全部替换统一编辑态与阅读态语义；全部替换使用单次撤销；编辑器标题样式与预览对齐。
+- 可靠性：导出与打印等待预览水合并恢复原模式、滚动和光标；watcher 按窗口隔离并兼容原子保存替换；脏文档关闭、标签关闭与历史导航均支持存储并执行／放弃／取消。
+- Markdown：支持 `.mdx` 作为纯 Markdown 文档打开；支持 `==highlight==` 行内高亮，代码和未闭合标记保持字面量。
+- 回归保障：39 个前端测试文件、333 项 Vitest 测试与 14 项 Rust 测试通过；类型检查、ESLint、格式检查、Rust 格式和桌面 debug 构建通过。Quick Look appex 与 watcher 双窗口闭环仍受本机工具链/桌面沙箱限制，详见实施结果。
+
+## Trust notice / 安全提示
+
+Same as v0.9.7. 同 v0.9.7。
+
+---
+
 # TextMark v0.9.7
 
 TextMark 0.9.7 repairs Windows Help menu actions. About TextMark now opens the in-app About page, Check for Updates opens Settings and starts a check, and Install CLI now adds its user-level command shims to PATH (new terminals pick them up automatically).

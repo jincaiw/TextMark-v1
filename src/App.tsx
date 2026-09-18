@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { openPath as openExternalPath, openUrl } from '@tauri-apps/plugin-opener'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -11,7 +11,9 @@ import { FindBar } from './components/FindBar'
 import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
+import { PanelResizer } from './components/PanelResizer'
 import { SettingsDialog } from './components/SettingsDialog'
+import { UnsavedCloseDialog } from './components/UnsavedCloseDialog'
 import { SettingsWindow } from './components/SettingsWindow'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
@@ -23,6 +25,8 @@ import { useUpdater } from './hooks/useUpdater'
 import { useMarkdownRenderer } from './hooks/useMarkdownRenderer'
 import { useTextmarkDeepLinks } from './hooks/useTextmarkDeepLinks'
 import { clampScrollFraction } from './lib/scrollFraction'
+import { anchorForOffset, caretForReturnToEditor, lineForAnchor, offsetForLine, type EditorExitCaret } from './lib/readingPosition'
+import { createPreviewHydrationGate, type PreviewHydrationGate } from './lib/previewHydration'
 import { resolveAlwaysOnTopTransition } from './lib/alwaysOnTop'
 import { t } from './lib/i18n'
 import {
@@ -59,16 +63,36 @@ import type { ExternalApplication, FormatCommand, SearchMode, SidebarMode, ViewM
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
 function DocumentApp() {
-  const { settings, setLocale, setTheme, setContentWidth, setZoom, setEditorFontSize, setDocumentFont, patch } = useSettings()
+  const {
+    settings,
+    setLocale,
+    setTheme,
+    setContentWidth,
+    setZoom,
+    setEditorFontSize,
+    setLineHeight,
+    setPagePaddingHorizontal,
+    setDocumentFont,
+    patch,
+  } = useSettings()
   const documents = useDocument(settings.locale, {
     autoSaveIntervalMinutes: settings.autoSaveIntervalMinutes,
     openDocumentsInTabs: settings.openDocumentsInTabs,
   })
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
-  const [sidebarVisible, setSidebarVisible] = useState(true)
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('outline')
-  const [inspectorVisible, setInspectorVisible] = useState(false)
+  const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('textmark.sidebarVisible') !== 'false')
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
+    () => (localStorage.getItem('textmark.sidebarMode') as SidebarMode) || 'outline',
+  )
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    Math.min(400, Math.max(230, Number(localStorage.getItem('textmark.sidebarWidth')) || 260)),
+  )
+  // Inspector 默认关闭，因此只有显式存过 'true' 才恢复——与 sidebarVisible 的「默认开」相反。
+  const [inspectorVisible, setInspectorVisible] = useState(() => localStorage.getItem('textmark.inspectorVisible') === 'true')
+  const [inspectorWidth, setInspectorWidth] = useState(() =>
+    Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 292)),
+  )
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -84,7 +108,11 @@ function DocumentApp() {
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
+  const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
+  const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
+  const [pendingPreviewLine, setPendingPreviewLine] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [replacement, setReplacement] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
   const [searchCount, setSearchCount] = useState(0)
   const [matchCase, setMatchCase] = useState(false)
@@ -94,8 +122,28 @@ function DocumentApp() {
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const editorRef = useRef<EditorPaneHandle>(null)
+  const allowCloseRef = useRef(false)
+  const [closeGuard, setCloseGuard] = useState<{ dirty: number; canSaveAll: boolean } | null>(null)
+  const [tabCloseGuard, setTabCloseGuard] = useState<{ id: string; canSave: boolean } | null>(null)
+  const [navigationGuard, setNavigationGuard] = useState<{ direction: -1 | 1; canSave: boolean } | null>(null)
   const invalidDeepLinkTimerRef = useRef(0)
+  const documentsRef = useRef(documents)
+  documentsRef.current = documents
+  const viewModeRef = useRef(viewMode)
+  viewModeRef.current = viewMode
+  const cursorRef = useRef(cursor)
+  cursorRef.current = cursor
+  // The caret belongs to the editor, which is unmounted on every mode switch.
+  // Remembering it on the way out is what lets an output action put it back.
+  const editorExitRef = useRef<EditorExitCaret | null>(null)
   const rendered = useMarkdownRenderer(documents.document.contents, settings.locale)
+  useEffect(() => {
+    localStorage.setItem('textmark.sidebarVisible', String(sidebarVisible))
+    localStorage.setItem('textmark.sidebarMode', sidebarMode)
+    localStorage.setItem('textmark.sidebarWidth', String(sidebarWidth))
+    localStorage.setItem('textmark.inspectorVisible', String(inspectorVisible))
+    localStorage.setItem('textmark.inspectorWidth', String(inspectorWidth))
+  }, [inspectorVisible, inspectorWidth, sidebarMode, sidebarVisible, sidebarWidth])
   useTextmarkDeepLinks(documents.openPath, () => {
     setNotice(
       settings.locale === 'zh-CN'
@@ -105,7 +153,8 @@ function DocumentApp() {
     window.clearTimeout(invalidDeepLinkTimerRef.current)
     invalidDeepLinkTimerRef.current = window.setTimeout(() => setNotice(null), 4_000)
   })
-  const hydratedPreviewKeyRef = useRef<string | null>(null)
+  const previewHydrationRef = useRef<PreviewHydrationGate | null>(null)
+  previewHydrationRef.current ??= createPreviewHydrationGate()
   const stats = useMemo(
     () => ({
       words: documents.document.contents.trim().split(/\s+/u).filter(Boolean).length,
@@ -120,37 +169,27 @@ function DocumentApp() {
   const resolvedTheme = useTheme(settings.theme)
   const previewRenderKey = `${documents.document.id}:${documents.document.path ?? documents.document.name}:${rendered.html}`
 
-  const waitForPreviewHydration = async () => {
-    const key = previewRenderKey
-    if (hydratedPreviewKeyRef.current === key) return
-    await new Promise<void>((resolve) => {
-      const complete = (event: Event) => {
-        if ((event as CustomEvent<string>).detail !== key) return
-        window.removeEventListener('textmark-preview-hydrated', complete)
-        window.clearTimeout(timeout)
-        resolve()
-      }
-      // A timeout avoids trapping a user action when a third-party diagram or
-      // a broken image never settles. The export still captures the best
-      // available preview in that case.
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener('textmark-preview-hydrated', complete)
-        resolve()
-      }, 8_000)
-      window.addEventListener('textmark-preview-hydrated', complete)
-    })
-  }
-  const markPreviewHydrated = (key: string) => {
-    hydratedPreviewKeyRef.current = key
-    window.dispatchEvent(new CustomEvent('textmark-preview-hydrated', { detail: key }))
-  }
+  const waitForPreviewHydration = () => previewHydrationRef.current!.wait(previewRenderKey)
+  const markPreviewHydrated = (key: string) => previewHydrationRef.current!.report(key)
+  // The pane is only on screen in preview mode, and a render key repeats across
+  // the edit/preview round trip. Invalidating on both edges of that switch is
+  // what keeps an edit-mode export from capturing a preview that has not drawn
+  // its diagrams yet (see lib/previewHydration).
+  useEffect(() => {
+    const gate = previewHydrationRef.current!
+    if (viewMode === 'preview') gate.markMounted()
+    else gate.markUnmounted()
+  }, [viewMode])
 
   useEffect(() => {
     void configureCrashReporting(settings.crashReports)
   }, [settings.crashReports])
   useEffect(() => {
-    applyUpstreamDocumentTokens(document.documentElement, settings.documentFont)
-  }, [settings.documentFont])
+    applyUpstreamDocumentTokens(document.documentElement, settings.documentFont, {
+      lineHeight: settings.lineHeight,
+      pagePaddingHorizontal: settings.pagePaddingHorizontal,
+    })
+  }, [settings.documentFont, settings.lineHeight, settings.pagePaddingHorizontal])
   useEffect(() => {
     applyThemeColors(document.documentElement, settings.themePreset, resolvedTheme, settings.themeColors)
   }, [resolvedTheme, settings.themeColors, settings.themePreset])
@@ -241,12 +280,56 @@ function DocumentApp() {
     if (!pane || pane.scrollHeight <= pane.clientHeight) return 0
     return clampScrollFraction(pane.scrollTop / (pane.scrollHeight - pane.clientHeight))
   }
+  // Reading position of the preview expressed as a source line. Heading anchors
+  // survive the layout difference between the two surfaces, so this lands the
+  // editor on the text the reader was actually looking at.
+  /** Heading positions of the live preview, in source lines and pixels. */
+  const previewAnchors = () => {
+    const pane = document.querySelector<HTMLElement>('.preview-pane')
+    if (!pane) return []
+    const paneTop = pane.getBoundingClientRect().top
+    return rendered.outline.flatMap((item) => {
+      const element = document.getElementById(item.id)
+      if (!element) return []
+      return [{ line: item.line, top: element.getBoundingClientRect().top - paneTop + pane.scrollTop }]
+    })
+  }
+  const previewSourceLine = () => {
+    const pane = document.querySelector<HTMLElement>('.preview-pane')
+    const anchors = previewAnchors()
+    if (!pane || !anchors.length) return null
+    return lineForAnchor(
+      anchors.map((anchor) => anchor.line),
+      anchorForOffset(
+        anchors.map((anchor) => anchor.top),
+        pane.scrollTop,
+      ),
+    )
+  }
   // Hand the reading position between the preview and the editor on mode
   // switches (upstream restores the exact scroll anchor across the crossfade).
   const switchViewMode = (mode: ViewMode) => {
-    if (mode === viewMode) return
-    if (mode === 'edit') setPendingScrollFraction(previewFraction())
-    else setPendingScrollFraction(editorRef.current?.getScrollFraction() ?? 0)
+    // The guard must read the live mode, not the render-time snapshot: a single
+    // flow (export, print) switches away and back again from the same closure,
+    // so comparing against a captured `viewMode` made the return trip a no-op
+    // and left the user stranded in the mode the flow had switched to.
+    if (mode === viewModeRef.current) return
+    if (mode === 'edit') {
+      const anchorLine = previewSourceLine()
+      setPendingEditorLine(anchorLine)
+      setPendingScrollFraction(previewFraction())
+      setPendingEditorCursor(caretForReturnToEditor(anchorLine, editorExitRef.current))
+    } else {
+      editorExitRef.current = {
+        topLine: editorRef.current?.getTopLine() ?? null,
+        line: cursorRef.current.line,
+        column: cursorRef.current.column,
+      }
+      setPendingEditorLine(null)
+      setPendingEditorCursor(null)
+      setPendingPreviewLine(editorRef.current?.getTopLine() ?? null)
+      setPendingScrollFraction(editorRef.current?.getScrollFraction() ?? 0)
+    }
     setViewMode(mode)
   }
   const createNewDocument = () => {
@@ -254,9 +337,34 @@ function DocumentApp() {
     setPendingScrollFraction(0)
     setViewMode('edit')
   }
+  // The editor is mounted through Suspense, so it cannot consume the pending
+  // position in the same commit as the mode switch. Clearing these on the next
+  // tick (as this used to) discarded them across that boundary: every return to
+  // the editor opened at the top of the document instead of the source line the
+  // reader had left. The editor reports back when it has applied them.
+  const clearPendingEditorPosition = () => {
+    setPendingEditorLine(null)
+    setPendingEditorCursor(null)
+    setPendingScrollFraction(null)
+  }
+  // Returning to the preview has to wait for the pane to be laid out, so the
+  // source line is re-expanded into a pixel offset on the next frame.
   useEffect(() => {
-    if (pendingScrollFraction != null) setPendingScrollFraction(null)
-  }, [pendingScrollFraction])
+    if (viewMode !== 'preview' || pendingPreviewLine == null) return
+    const frame = requestAnimationFrame(() => {
+      const pane = document.querySelector<HTMLElement>('.preview-pane')
+      const anchors = previewAnchors()
+      if (pane && anchors.length) {
+        const offset = offsetForLine(
+          { lines: anchors.map((anchor) => anchor.line), offsets: anchors.map((anchor) => anchor.top) },
+          pendingPreviewLine,
+        )
+        if (offset != null) pane.scrollTop = offset
+      }
+      setPendingPreviewLine(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [pendingPreviewLine, viewMode])
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
@@ -367,12 +475,27 @@ function DocumentApp() {
       )
     else flash(t(settings.locale, 'copied'))
   }
+  const waitForNextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  // Output actions render from the live preview pane, so an edit-mode export has
+  // to switch to the preview, let it paint, and wait until its diagrams and
+  // images have settled in the DOM. The hydration listener is attached *before*
+  // the switch: with an already-warm module cache Mermaid can finish inside the
+  // paint wait, and a listener installed afterwards would miss the report and
+  // stall the export on the timeout instead.
+  const beginPreviewOutput = (restoreEditMode: boolean) => {
+    if (!restoreEditMode) return waitForPreviewHydration()
+    const hydrated = waitForPreviewHydration()
+    switchViewMode('preview')
+    return Promise.all([waitForNextPaint(), hydrated]).then(() => undefined)
+  }
   const exportDocument = async (format: 'html' | 'png') => {
-    await waitForPreviewHydration()
-    const root = document.querySelector<HTMLElement>('.markdown-body')
-    if (!root) return
-    const exporter = await import('./lib/export')
+    const restoreEditMode = viewMode === 'edit'
+    const previewReady = beginPreviewOutput(restoreEditMode)
     try {
+      await previewReady
+      const root = document.querySelector<HTMLElement>('.markdown-body')
+      if (!root) return
+      const exporter = await import('./lib/export')
       if (format === 'html') {
         if (!isTauri()) {
           await exporter.downloadHtml(documents.document.name, root)
@@ -390,20 +513,24 @@ function DocumentApp() {
       }
     } catch {
       flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+    } finally {
+      if (restoreEditMode) switchViewMode('edit')
     }
   }
   const exportPdf = async () => {
+    const restoreEditMode = viewMode === 'edit'
+    const previewReady = beginPreviewOutput(restoreEditMode)
     // macOS's print dialog provides the native “Save as PDF” workflow and
     // preserves selectable text/vector diagrams. Keep the byte-export path
     // for browser and non-macOS desktop runtimes.
-    if (isTauri() && isMacos()) {
-      await printDocument(true)
-      return
-    }
-    await waitForPreviewHydration()
-    const root = document.querySelector<HTMLElement>('.markdown-body')
-    if (!root) return
     try {
+      if (isTauri() && isMacos()) {
+        await printDocument(true)
+        return
+      }
+      await previewReady
+      const root = document.querySelector<HTMLElement>('.markdown-body')
+      if (!root) return
       const exporter = await import('./lib/export')
       if (!isTauri()) {
         await exporter.downloadPdf(documents.document.name, root)
@@ -413,9 +540,13 @@ function DocumentApp() {
       if (await saveExportFile(name, bytes, 'PDF', ['pdf'])) flash(t(settings.locale, 'exported'))
     } catch {
       flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+    } finally {
+      if (restoreEditMode) switchViewMode('edit')
     }
   }
   const printDocument = async (exportingPdf = false) => {
+    const restoreEditMode = viewMode === 'edit'
+    const previewReady = beginPreviewOutput(restoreEditMode)
     const html = document.documentElement
     const previousPdfMode = html.getAttribute('data-export-pdf')
     if (exportingPdf) html.dataset.exportPdf = '1'
@@ -423,7 +554,7 @@ function DocumentApp() {
       // Use Wry's native macOS print dialog first. Its “Save as PDF” path keeps
       // text and vector diagrams selectable instead of flattening the page.
       if (isTauri() && isMacos()) {
-        await waitForPreviewHydration()
+        await previewReady
         try {
           await printCurrentWindow()
           return
@@ -445,13 +576,14 @@ function DocumentApp() {
         }
         return
       }
-      await waitForPreviewHydration()
+      await previewReady
       window.print()
     } finally {
       if (exportingPdf) {
         if (previousPdfMode === null) html.removeAttribute('data-export-pdf')
         else html.setAttribute('data-export-pdf', previousPdfMode)
       }
+      if (restoreEditMode) switchViewMode('edit')
     }
   }
   const menuCommandRef = useRef<(command: string) => void>(() => {})
@@ -545,6 +677,16 @@ function DocumentApp() {
   }
   const nextMatch = (direction: 1 | -1) =>
     setSearchIndex((current) => (searchCount ? (current + direction + searchCount) % searchCount : 0))
+  const replaceCurrent = () => {
+    if (viewMode !== 'edit' || !searchQuery) return
+    const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, mode: searchMode }) ?? 0
+    if (replaced) flash(t(settings.locale, 'replacedCount', { count: replaced }))
+  }
+  const replaceAll = () => {
+    if (viewMode !== 'edit' || !searchQuery) return
+    const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, all: true, mode: searchMode }) ?? 0
+    if (replaced) flash(t(settings.locale, 'replacedCount', { count: replaced }))
+  }
   const previewScrollTop = () => document.querySelector<HTMLElement>('.preview-pane')?.scrollTop ?? 0
   const previewPane = () => document.querySelector<HTMLElement>('.preview-pane')
   const scrollPreviewLine = (direction: 1 | -1) => previewPane()?.scrollBy({ top: direction * 42, behavior: 'smooth' })
@@ -566,6 +708,17 @@ function DocumentApp() {
     const target = direction < 0 ? Math.max(0, current - 1) : Math.min(ids.length - 1, current + 1)
     document.getElementById(ids[target])?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setActiveHeading(ids[target])
+  }
+  // The outline follows the visible surface: the preview scrolls to the heading
+  // anchor, the editor jumps to the heading's source line.
+  const selectOutline = (id: string) => {
+    setActiveHeading(id)
+    const item = rendered.outline.find((entry) => entry.id === id)
+    if (viewMode === 'edit') {
+      if (item?.line) editorRef.current?.revealLine(item.line)
+      return
+    }
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   useEffect(() => {
@@ -597,12 +750,12 @@ function DocumentApp() {
         }
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
-          void documents.goBack(previewScrollTop())
+          requestNavigation(-1)
           return
         }
         if (event.key === 'ArrowRight') {
           event.preventDefault()
-          void documents.goForward(previewScrollTop())
+          requestNavigation(1)
           return
         }
       }
@@ -735,10 +888,10 @@ function DocumentApp() {
         openSettings()
       } else if (key === '[') {
         event.preventDefault()
-        void documents.goBack(previewScrollTop())
+        requestNavigation(-1)
       } else if (key === ']') {
         event.preventDefault()
-        void documents.goForward(previewScrollTop())
+        requestNavigation(1)
       }
     }
     window.addEventListener('keydown', keydown)
@@ -752,6 +905,100 @@ function DocumentApp() {
     window.addEventListener('beforeunload', beforeUnload)
     return () => window.removeEventListener('beforeunload', beforeUnload)
   }, [documents.sessions])
+
+  useEffect(() => {
+    if (!isTauri()) return
+    const windowHandle = getCurrentWindow()
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void windowHandle
+      .onCloseRequested((event) => {
+        if (allowCloseRef.current) return
+        const dirty = documentsRef.current.sessions.filter((session) => session.dirty)
+        if (!dirty.length) return
+        event.preventDefault()
+        setCloseGuard({ dirty: dirty.length, canSaveAll: dirty.every((session) => Boolean(session.path)) })
+      })
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+  const closeWindowNow = () => {
+    allowCloseRef.current = true
+    void getCurrentWindow().close()
+  }
+  const discardAndClose = () => {
+    setCloseGuard(null)
+    closeWindowNow()
+  }
+  const saveAndClose = async () => {
+    const dirty = documentsRef.current.sessions.filter((session) => session.dirty)
+    for (const session of dirty) {
+      if (documentsRef.current.activeId !== session.id) documentsRef.current.activate(session.id)
+      // Let React commit the activation before the next save; saveFile works on
+      // whichever document is active at the time it runs.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+      await documentsRef.current.saveFile()
+    }
+    if (documentsRef.current.sessions.some((session) => session.dirty)) return
+    setCloseGuard(null)
+    closeWindowNow()
+  }
+
+  const performNavigation = (direction: -1 | 1) =>
+    direction === -1 ? documentsRef.current.goBack(previewScrollTop(), true) : documentsRef.current.goForward(previewScrollTop(), true)
+  const requestNavigation = (direction: -1 | 1) => {
+    const active = documentsRef.current.sessions.find((session) => session.id === documentsRef.current.activeId)
+    if (!active?.dirty) {
+      void performNavigation(direction)
+      return
+    }
+    setNavigationGuard({ direction, canSave: Boolean(active.path) })
+  }
+  const discardAndNavigate = () => {
+    if (!navigationGuard) return
+    void performNavigation(navigationGuard.direction)
+    setNavigationGuard(null)
+  }
+  const saveAndNavigate = async () => {
+    if (!navigationGuard?.canSave) return
+    const direction = navigationGuard.direction
+    await documentsRef.current.saveFile()
+    const active = documentsRef.current.sessions.find((session) => session.id === documentsRef.current.activeId)
+    if (active?.dirty) return
+    if (direction === -1) await documentsRef.current.goBack(previewScrollTop(), true)
+    else await documentsRef.current.goForward(previewScrollTop(), true)
+    setNavigationGuard(null)
+  }
+  const requestTabClose = (id: string) => {
+    const target = documentsRef.current.sessions.find((session) => session.id === id)
+    if (!target?.dirty) {
+      documentsRef.current.closeSession(id)
+      return
+    }
+    setTabCloseGuard({ id, canSave: Boolean(target.path) })
+  }
+  const discardTabAndClose = () => {
+    if (!tabCloseGuard) return
+    documentsRef.current.closeSession(tabCloseGuard.id, true)
+    setTabCloseGuard(null)
+  }
+  const saveTabAndClose = async () => {
+    if (!tabCloseGuard?.canSave) return
+    const { id } = tabCloseGuard
+    if (documentsRef.current.activeId !== id) documentsRef.current.activate(id)
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    await documentsRef.current.saveFile()
+    const session = documentsRef.current.sessions.find((candidate) => candidate.id === id)
+    if (session?.dirty) return
+    documentsRef.current.closeSession(id, true)
+    setTabCloseGuard(null)
+  }
 
   const chooseSidebarMode = (mode: SidebarMode) => {
     setSidebarMode(mode)
@@ -770,8 +1017,8 @@ function DocumentApp() {
         defaultOpenTarget={settings.defaultOpenTarget}
         canGoBack={documents.canGoBack}
         canGoForward={documents.canGoForward}
-        onBack={() => void documents.goBack(previewScrollTop())}
-        onForward={() => void documents.goForward(previewScrollTop())}
+        onBack={() => requestNavigation(-1)}
+        onForward={() => requestNavigation(1)}
         sidebarVisible={sidebarVisible}
         sidebarMode={sidebarMode}
         inspectorVisible={inspectorVisible}
@@ -818,6 +1065,10 @@ function DocumentApp() {
           count={searchCount}
           matchCase={matchCase}
           mode={searchMode}
+          replacement={replacement}
+          onReplacementChange={setReplacement}
+          onReplace={replaceCurrent}
+          onReplaceAll={replaceAll}
           onQueryChange={(value) => {
             setSearchQuery(value)
             setSearchIndex(0)
@@ -835,32 +1086,39 @@ function DocumentApp() {
           activeId={documents.activeId}
           locale={settings.locale}
           onActivate={(id) => documents.activate(id, previewScrollTop())}
-          onClose={documents.closeSession}
+          onClose={requestTabClose}
         />
-        <div className={`document-shell ${sidebarVisible ? 'with-sidebar' : ''} ${inspectorVisible ? 'with-inspector' : ''}`}>
+        <div
+          className={`document-shell ${sidebarVisible ? 'with-sidebar' : ''} ${inspectorVisible ? 'with-inspector' : ''}`}
+          style={{ '--sidebar-width': `${sidebarWidth}px`, '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
+        >
           {sidebarVisible ? (
-            <Sidebar
-              locale={settings.locale}
-              mode={sidebarMode}
-              fileName={documents.document.name}
-              files={documents.files}
-              workspacePath={documents.workspacePath}
-              activePath={documents.document.path}
-              outline={rendered.outline}
-              activeHeading={activeHeading}
-              applications={applications}
-              defaultOpenTarget={settings.defaultOpenTarget}
-              onModeChange={chooseSidebarMode}
-              onOpenFolder={() => void documents.openFolder()}
-              onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
-              onOpenFileInTab={(path) => void documents.openPath(path, true)}
-              onOpenFileInWindow={(path) => void openDocumentWindow(path)}
-              onOpenFileWith={openFileWith}
-              onRevealFile={(path) => void revealInFileManager(path)}
-              onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
-              onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
-              onOutlineSelect={(id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            />
+            <>
+              <Sidebar
+                locale={settings.locale}
+                mode={sidebarMode}
+                fileName={documents.document.name}
+                documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
+                files={documents.files}
+                workspacePath={documents.workspacePath}
+                activePath={documents.document.path}
+                outline={rendered.outline}
+                activeHeading={activeHeading}
+                applications={applications}
+                defaultOpenTarget={settings.defaultOpenTarget}
+                onModeChange={chooseSidebarMode}
+                onOpenFolder={() => void documents.openFolder()}
+                onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
+                onOpenFileInTab={(path) => void documents.openPath(path, true)}
+                onOpenFileInWindow={(path) => void openDocumentWindow(path)}
+                onOpenFileWith={openFileWith}
+                onRevealFile={(path) => void revealInFileManager(path)}
+                onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
+                onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
+                onOutlineSelect={selectOutline}
+              />
+              <PanelResizer side="sidebar" width={sidebarWidth} min={230} max={400} onWidthChange={setSidebarWidth} />
+            </>
           ) : null}
           <div className="document-workspace">
             {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
@@ -873,7 +1131,10 @@ function DocumentApp() {
                   fontSize={settings.editorFontSize}
                   zoom={settings.zoom}
                   contentWidth={settings.contentWidth}
-                  initialScrollFraction={pendingScrollFraction ?? undefined}
+                  initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
+                  initialLine={pendingEditorLine ?? undefined}
+                  initialCursor={pendingEditorCursor}
+                  onInitialPositionApplied={clearPendingEditorPosition}
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
                   onChange={documents.updateContents}
@@ -882,6 +1143,11 @@ function DocumentApp() {
                   workspacePath={documents.workspacePath}
                   onRenameImage={(path) => void documents.renamePastedImage(path)}
                   onCursorChange={(line, column) => setCursor({ line, column })}
+                  searchQuery={searchQuery}
+                  searchIndex={searchIndex}
+                  matchCase={matchCase}
+                  searchMode={searchMode}
+                  onSearchCount={setSearchCount}
                 />
               </Suspense>
             ) : (
@@ -915,15 +1181,18 @@ function DocumentApp() {
             {viewMode === 'edit' ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
           </div>
           {inspectorVisible ? (
-            <Inspector
-              locale={settings.locale}
-              document={documents.document}
-              stats={stats}
-              frontmatter={rendered.frontmatter}
-              onCopyPath={(path) => void navigator.clipboard.writeText(path)}
-              onRevealPath={(path) => void revealInFileManager(path)}
-              onClose={() => setInspectorVisible(false)}
-            />
+            <>
+              <PanelResizer side="inspector" width={inspectorWidth} min={270} max={500} onWidthChange={setInspectorWidth} />
+              <Inspector
+                locale={settings.locale}
+                document={documents.document}
+                stats={stats}
+                frontmatter={rendered.frontmatter}
+                onCopyPath={(path) => void navigator.clipboard.writeText(path)}
+                onRevealPath={(path) => void revealInFileManager(path)}
+                onClose={() => setInspectorVisible(false)}
+              />
+            </>
           ) : null}
         </div>
       </div>
@@ -933,6 +1202,36 @@ function DocumentApp() {
         </div>
       ) : null}
       <ConflictDialog change={documents.externalChange} locale={settings.locale} onResolve={documents.resolveExternal} />
+      {closeGuard ? (
+        <UnsavedCloseDialog
+          locale={settings.locale}
+          dirtyCount={closeGuard.dirty}
+          canSaveAll={closeGuard.canSaveAll}
+          onSave={() => void saveAndClose()}
+          onDiscard={discardAndClose}
+          onCancel={() => setCloseGuard(null)}
+        />
+      ) : null}
+      {tabCloseGuard ? (
+        <UnsavedCloseDialog
+          locale={settings.locale}
+          dirtyCount={1}
+          canSaveAll={tabCloseGuard.canSave}
+          onSave={() => void saveTabAndClose()}
+          onDiscard={discardTabAndClose}
+          onCancel={() => setTabCloseGuard(null)}
+        />
+      ) : null}
+      {navigationGuard ? (
+        <UnsavedCloseDialog
+          locale={settings.locale}
+          dirtyCount={1}
+          canSaveAll={navigationGuard.canSave}
+          onSave={() => void saveAndNavigate()}
+          onDiscard={discardAndNavigate}
+          onCancel={() => setNavigationGuard(null)}
+        />
+      ) : null}
       <ExportDialog
         open={exportOpen}
         locale={settings.locale}
@@ -983,6 +1282,8 @@ function DocumentApp() {
         theme={settings.theme}
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
+        lineHeight={settings.lineHeight}
+        pagePaddingHorizontal={settings.pagePaddingHorizontal}
         documentFont={settings.documentFont}
         themePreset={settings.themePreset}
         themeColors={settings.themeColors}
@@ -999,6 +1300,8 @@ function DocumentApp() {
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
+        onLineHeightChange={setLineHeight}
+        onPagePaddingHorizontalChange={setPagePaddingHorizontal}
         onDocumentFontChange={setDocumentFont}
         onThemePresetChange={(themePreset) => {
           const flavor = THEME_PRESETS[themePreset].flavor

@@ -5,7 +5,7 @@ use image::{ImageBuffer, ImageFormat, Rgb};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{
     fs,
     io::{Cursor, Write},
@@ -18,13 +18,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
-    Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
+    Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 use tauri_plugin_updater::UpdaterExt;
 
 const MARKDOWN_EXTENSIONS: &[&str] = &[
-    "md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "rmd", "txt",
+    "md", "markdown", "mdown", "mdx", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "rmd", "txt",
 ];
 const ASSET_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico"];
 const MAX_ASSET_BYTES: u64 = 8 * 1024 * 1024;
@@ -217,7 +217,7 @@ struct AppError {
 type AppResult<T> = Result<T, AppError>;
 
 #[derive(Default)]
-struct WatchState(Mutex<Option<RecommendedWatcher>>);
+struct WatchState(Mutex<HashMap<String, RecommendedWatcher>>);
 
 fn settings_path() -> AppResult<PathBuf> {
     #[cfg(feature = "e2e")]
@@ -339,11 +339,12 @@ fn save_settings(settings: serde_json::Value) -> AppResult<()> {
 
 #[tauri::command]
 fn watch_paths(
-    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     state: State<'_, WatchState>,
     paths: Vec<String>,
 ) -> AppResult<()> {
-    let handle = app.clone();
+    let handle = window.clone();
+    let event_handle = handle.clone();
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         if let Ok(event) = result {
             let kind = match event.kind {
@@ -359,7 +360,7 @@ fn watch_paths(
                 .map(|path| path.to_string_lossy().to_string())
                 .collect::<Vec<_>>();
             if !paths.is_empty() {
-                let _ = handle.emit("disk-change", DiskChangeEvent { kind, paths });
+                let _ = event_handle.emit("disk-change", DiskChangeEvent { kind, paths });
             }
         }
     })
@@ -371,12 +372,17 @@ fn watch_paths(
                 .watch(&path, RecursiveMode::Recursive)
                 .map_err(io_error)?;
         } else if let Some(parent) = path.parent() {
+            // Atomic saves replace the document inode, so watching the file
+            // itself stops receiving events after the first replacement. Watch
+            // the containing directory and let the frontend filter events by
+            // the active document/workspace path instead.
             watcher
                 .watch(parent, RecursiveMode::NonRecursive)
                 .map_err(io_error)?;
         }
     }
-    *state.0.lock().map_err(io_error)? = Some(watcher);
+    let label = window.label().to_string();
+    state.0.lock().map_err(io_error)?.insert(label, watcher);
     Ok(())
 }
 
@@ -2074,15 +2080,39 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if let Some(path) = id
+            let command = if let Some(path) = id
                 .strip_prefix("recent-")
                 .and_then(|index| index.parse::<usize>().ok())
                 .and_then(|index| load_recent_files().get(index).cloned())
             {
-                let _ = app.emit("menu-command", format!("open-recent:{path}"));
-                return;
+                format!("open-recent:{path}")
+            } else {
+                id.to_string()
+            };
+            // Menu commands belong to the key window. Broadcasting them to
+            // every WebView makes a save, close, or mode switch happen in
+            // several documents at once. MenuEvent carries no window, so the
+            // focused window is resolved here; only a menu-bar invocation with
+            // every window blurred falls back to the app-wide broadcast.
+            let focused = app
+                .webview_windows()
+                .into_values()
+                .find(|window| window.is_focused().unwrap_or(false));
+            match focused {
+                Some(window) => {
+                    let _ = window.emit("menu-command", command);
+                }
+                None => {
+                    let _ = app.emit("menu-command", command);
+                }
             }
-            let _ = app.emit("menu-command", id);
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::Destroyed = event {
+                if let Ok(mut watchers) = window.app_handle().state::<WatchState>().0.lock() {
+                    watchers.remove(window.label());
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             read_text_file,
@@ -2127,6 +2157,8 @@ mod tests {
         assert!(is_markdown(Path::new("README.md")));
         assert!(is_markdown(Path::new("NOTES.MARKDOWN")));
         assert!(is_markdown(Path::new("draft.txt")));
+        assert!(is_markdown(Path::new("component.mdx")));
+        assert!(is_markdown(Path::new("COMPONENT.MDX")));
         assert!(!is_markdown(Path::new("payload.html")));
     }
 

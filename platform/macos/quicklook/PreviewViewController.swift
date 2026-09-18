@@ -541,11 +541,12 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             in: nil,
             contentWorld: .page
         )
+        // Finder owns keyboard focus while Quick Look is open. Do not claim
+        // first responder on load: arrow keys must keep moving between files,
+        // and Space must keep closing the preview. The user can click the
+        // document before using text-selection and copy shortcuts; the Copy
+        // button remains available without that click.
         copyButton.isHidden = false
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.view.window?.makeFirstResponder(self.webView)
-        }
     }
 
     @objc private func copySource() {

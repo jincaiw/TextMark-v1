@@ -1,13 +1,20 @@
 import type { AppSettings, ToolbarItem } from '../types'
 import { normalizeThemeColors } from './theme'
+import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 export const SETTINGS_KEYS = [
+  'textmark.settings.v7',
   'textmark.settings.v6',
   'textmark.settings.v5',
   'textmark.settings.v3',
   'textmark.settings.v2',
   'textmark.settings.v1',
 ] as const
+
+/** Reading typography bounds. The upstream defaults (1.52 / 40px) stay inside
+ * these ranges so an unmodified profile is byte-identical to the reference. */
+export const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.4, step: 0.02 } as const
+export const PAGE_PADDING_RANGE = { min: 0, max: 96, step: 4 } as const
 export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'navigation',
   'sidebar',
@@ -58,12 +65,14 @@ const V5_DEFAULT_TOOLBAR: ToolbarItem[] = [
 ]
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   locale: 'zh-CN',
   theme: 'system',
   contentWidth: 'normal',
   zoom: 100,
   editorFontSize: 15,
+  lineHeight: UPSTREAM_DOCUMENT_TOKENS.lineHeight,
+  pagePaddingHorizontal: UPSTREAM_DOCUMENT_TOKENS.pagePaddingHorizontal,
   documentFont: 'system',
   themePreset: 'normal',
   themeColors: {},
@@ -97,12 +106,14 @@ export function normalizeSettings(value: unknown): AppSettings {
   const usesPriorDefault =
     rawToolbar.length === V5_DEFAULT_TOOLBAR.length && rawToolbar.every((item, index) => item === V5_DEFAULT_TOOLBAR[index])
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
     theme: valid(stored.theme, ['system', 'light', 'dark'], 'system'),
     contentWidth: valid(stored.contentWidth, ['normal', 'full'], 'normal'),
     zoom: Number.isFinite(stored.zoom) ? Math.min(300, Math.max(50, Number(stored.zoom))) : 100,
     editorFontSize: Number.isFinite(stored.editorFontSize) ? Math.min(24, Math.max(12, Number(stored.editorFontSize))) : 15,
+    lineHeight: normalizeLineHeight(stored.lineHeight),
+    pagePaddingHorizontal: normalizePagePadding(stored.pagePaddingHorizontal),
     documentFont: valid(stored.documentFont, ['system', 'serif', 'rounded', 'monospace'], 'system'),
     themePreset: valid(
       stored.themePreset,
@@ -132,6 +143,20 @@ export function normalizeAutoSaveInterval(value: unknown): number {
   const minutes = Math.trunc(Number(value))
   if (minutes === -30 || minutes === 0) return minutes
   return Math.min(60, Math.max(1, minutes))
+}
+
+/** Reading line height is clamped rather than rejected so a profile written by
+ * a future build can never make the document unreadable. */
+export function normalizeLineHeight(value: unknown): number {
+  if (!Number.isFinite(value)) return UPSTREAM_DOCUMENT_TOKENS.lineHeight
+  const parsed = Number(value)
+  return Math.min(LINE_HEIGHT_RANGE.max, Math.max(LINE_HEIGHT_RANGE.min, Math.round(parsed * 100) / 100))
+}
+
+export function normalizePagePadding(value: unknown): number {
+  if (!Number.isFinite(value)) return UPSTREAM_DOCUMENT_TOKENS.pagePaddingHorizontal
+  const parsed = Math.round(Number(value))
+  return Math.min(PAGE_PADDING_RANGE.max, Math.max(PAGE_PADDING_RANGE.min, parsed))
 }
 
 export function readSettings(storage: Pick<Storage, 'getItem'> = localStorage): AppSettings {

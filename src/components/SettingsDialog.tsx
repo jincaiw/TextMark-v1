@@ -1,6 +1,7 @@
 import { Info, Palette, Settings2, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { t } from '../lib/i18n'
+import { LINE_HEIGHT_RANGE, PAGE_PADDING_RANGE } from '../lib/settings'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import { AppearanceSettings } from './AppearanceSettings'
 import type {
@@ -23,6 +24,8 @@ interface SettingsDialogProps {
   theme: ThemeMode
   contentWidth: ContentWidth
   editorFontSize: number
+  lineHeight: number
+  pagePaddingHorizontal: number
   documentFont: DocumentFont
   themePreset: ThemePreset
   themeColors: ThemeColors
@@ -48,6 +51,8 @@ interface SettingsDialogProps {
   onThemeChange: (theme: ThemeMode) => void
   onContentWidthChange: (width: ContentWidth) => void
   onEditorFontSizeChange: (size: number) => void
+  onLineHeightChange: (value: number) => void
+  onPagePaddingHorizontalChange: (value: number) => void
   onDocumentFontChange: (font: DocumentFont) => void
   onThemePresetChange: (preset: ThemePreset) => void
   onThemeColorChange: (scheme: ThemeColorScheme, slot: ThemeColorSlot, color: string) => void
@@ -167,6 +172,36 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       onChange={(event) => props.onEditorFontSizeChange(Number(event.target.value))}
                     />
                     <output>{props.editorFontSize}px</output>
+                  </div>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'lineHeight')}</span>
+                  <div className="setting-range">
+                    <input
+                      type="range"
+                      min={LINE_HEIGHT_RANGE.min}
+                      max={LINE_HEIGHT_RANGE.max}
+                      step={LINE_HEIGHT_RANGE.step}
+                      value={props.lineHeight}
+                      aria-label={t(props.locale, 'lineHeight')}
+                      onChange={(event) => props.onLineHeightChange(Number(event.target.value))}
+                    />
+                    <output>{props.lineHeight.toFixed(2)}</output>
+                  </div>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'pagePaddingHorizontal')}</span>
+                  <div className="setting-range">
+                    <input
+                      type="range"
+                      min={PAGE_PADDING_RANGE.min}
+                      max={PAGE_PADDING_RANGE.max}
+                      step={PAGE_PADDING_RANGE.step}
+                      value={props.pagePaddingHorizontal}
+                      aria-label={t(props.locale, 'pagePaddingHorizontal')}
+                      onChange={(event) => props.onPagePaddingHorizontalChange(Number(event.target.value))}
+                    />
+                    <output>{props.pagePaddingHorizontal}px</output>
                   </div>
                 </label>
                 <label>
