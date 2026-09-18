@@ -34,6 +34,8 @@ export function DocumentTabs({
             else if (event.key === 'ArrowLeft') moveTo(index - 1)
             else if (event.key === 'Home') moveTo(0)
             else if (event.key === 'End') moveTo(sessions.length - 1)
+            else if (event.key === 'Enter' || event.key === ' ') onActivate(session.id)
+            else if (event.key === 'Delete' || event.key === 'Backspace') onClose(session.id)
             else return
             event.preventDefault()
           }}

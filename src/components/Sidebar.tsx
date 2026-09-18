@@ -124,12 +124,26 @@ export function Sidebar(props: SidebarProps) {
     <aside className="native-sidebar">
       <div className="sidebar-section-title">
         <strong>{props.mode === 'outline' ? props.fileName : (workspaceName ?? t(props.locale, 'project'))}</strong>
-        <button
-          title={props.mode === 'outline' ? t(props.locale, 'projectNavigator') : t(props.locale, 'tableOfContents')}
-          onClick={() => props.onModeChange(props.mode === 'outline' ? 'files' : 'outline')}
-        >
-          {props.mode === 'outline' ? <Folder /> : <ListTree />}
-        </button>
+        <div className="sidebar-mode-switch" role="tablist" aria-label={t(props.locale, 'sidebar')}>
+          <button
+            role="tab"
+            aria-selected={props.mode === 'outline'}
+            className={props.mode === 'outline' ? 'active' : ''}
+            title={t(props.locale, 'tableOfContents')}
+            onClick={() => props.onModeChange('outline')}
+          >
+            <ListTree />
+          </button>
+          <button
+            role="tab"
+            aria-selected={props.mode === 'files'}
+            className={props.mode === 'files' ? 'active' : ''}
+            title={t(props.locale, 'projectNavigator')}
+            onClick={() => props.onModeChange('files')}
+          >
+            <Folder />
+          </button>
+        </div>
       </div>
       {props.mode === 'outline' ? (
         <nav className="native-outline" aria-label={t(props.locale, 'tableOfContents')}>

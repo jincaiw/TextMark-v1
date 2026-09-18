@@ -1,3 +1,18 @@
+# TextMark v0.10.0
+
+TextMark 0.10.0 completes the Markdown Preview desktop parity pass and adds native GitHub project links plus separate Apple Silicon and Universal macOS DMG assets.
+
+TextMark 0.10.0 完成本轮 Markdown Preview 桌面对标，并新增原生 GitHub 项目入口以及 Apple Silicon 与 Universal macOS DMG 产物。
+
+## Highlights / 主要更新
+
+- 桌面 UI：完成默认工作区几何、侧栏工作区、Inspector 面板、文档上下文标题、标签页键盘操作和 Markdown 正文显示细节对齐。
+- 原生菜单：新增 GitHub 项目主页、Releases 和报告问题入口，并保持当前焦点窗口定向。
+- macOS 发布：同时提供 `TextMark_<版本>_arm64.dmg` 与 `TextMark_<版本>_universal.dmg`；软件内更新继续使用签名 Universal `.app.tar.gz`。
+- 回归保障：40 个前端测试文件、340 项 Vitest 测试、15 项 Rust 测试，以及 TypeScript、ESLint、格式、Rust 格式和 DMG/Quick Look smoke 验证通过。
+
+---
+
 # TextMark v0.9.9
 
 TextMark 0.9.9 adds signed in-app updates with stable and beta channels, real download progress, guarded installation and automatic relaunch, while preserving the v0.9.8 desktop parity improvements.
@@ -10,6 +25,7 @@ TextMark 0.9.9 增加带签名的软件内更新能力，支持稳定版与测�
 - 下载体验：安装更新时显示真实下载进度，检查、下载和安装失败分别反馈；防止重复检查和重复安装。
 - 安全校验：更新通道白名单、公钥签名资产校验、`latest.json` 与 `.sig` 内容一致性验证。
 - 发布流程：正式 Release 与 beta 通道均刷新 `latest.json`；更新私钥只使用 CI Secret，不进入仓库。
+- macOS 发布：同时提供 Universal DMG 与 `TextMark_<版本>_arm64.dmg` 原生 Apple Silicon DMG；软件内更新仍使用签名的 Universal `.app.tar.gz`，不引用 DMG。
 
 ---
 

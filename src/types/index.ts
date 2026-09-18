@@ -7,6 +7,7 @@ export type ThemeColorScheme = 'light' | 'dark'
 export type ThemeColorSlot = 'windowBackground' | 'editorBackground' | 'codeBlockBackground' | 'textColor' | 'linkColor'
 export type ThemeColors = Partial<Record<ThemeColorScheme, Partial<Record<ThemeColorSlot, string>>>>
 export type SidebarMode = 'outline' | 'files'
+export type InspectorMode = 'outline' | 'document' | 'tags' | 'outgoing' | 'backlinks'
 export type ContentWidth = 'normal' | 'full'
 export type ToolbarDisplayMode = 'iconOnly' | 'iconAndLabel'
 export type SearchMode = 'contains' | 'beginsWith'

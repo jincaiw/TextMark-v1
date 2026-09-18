@@ -5,6 +5,7 @@ import windowsInstallerTest from '../platform/windows/test-installer.ps1?raw'
 import macosPackageTest from '../platform/macos/test-package.sh?raw'
 import releaseInventory from '../scripts/verify-release-assets.mjs?raw'
 import releaseWorkflow from '../.github/workflows/release.yml?raw'
+import tauriLib from '../src-tauri/src/lib.rs?raw'
 import linuxConfig from '../src-tauri/tauri.linux.conf.json'
 import kdeConfig from '../src-tauri/tauri.linux-kde.conf.json'
 import macosConfig from '../src-tauri/tauri.macos.conf.json'
@@ -69,6 +70,20 @@ describe('native desktop package integration', () => {
     expect(releaseInventory).toContain('^TextMark(?:[_-]${version})?[_-]universal\\\\.app\\\\.tar\\\\.gz$')
     expect(releaseInventory).toContain('latest.json references a missing asset for ${platform}')
     expect(releaseInventory).toContain('latest.json references an unsigned asset for ${platform}')
+  })
+
+  it('keeps GitHub menu entries in both native menu layouts', () => {
+    for (const id of ['project-home', 'github-releases', 'report-issue']) expect(tauriLib).toContain(`"${id}"`)
+    expect(tauriLib).toContain('SubmenuBuilder::new(app, "TextMark")')
+    expect(tauriLib).toContain('SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })')
+  })
+
+  it('publishes both Universal and Apple Silicon macOS DMGs', () => {
+    expect(releaseWorkflow).toContain('npm run tauri build -- --target aarch64-apple-darwin')
+    expect(releaseWorkflow).toContain('TextMark_${version}_arm64.dmg')
+    expect(releaseWorkflow).toContain('TextMark_${version}_universal.dmg')
+    expect(releaseInventory).toContain("findMatch('macOS ARM64 DMG'")
+    expect(releaseInventory).toContain('^TextMark[_-]${version}[_-]arm64\\\\.dmg$')
   })
 
   it('keeps updater artifacts signed, channel-aware, and published with latest.json', () => {

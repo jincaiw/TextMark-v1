@@ -381,6 +381,9 @@ export function Toolbar(props: ToolbarProps) {
           <button aria-label={tx('maximize')} onClick={() => windowAction('toggleMaximize')} />
         </div>
       </div>
+      <div className="toolbar-document-context" data-tauri-drag-region title={props.fileName}>
+        <span className="toolbar-document-name">{props.fileName}</span>
+      </div>
       <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
         {props.items.map(renderItem)}
         <details className="more-menu">

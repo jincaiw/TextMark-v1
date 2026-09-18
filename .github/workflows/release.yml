@@ -98,7 +98,14 @@ jobs:
       - run: npm run build
       - name: Build and test the native Quick Look host
         run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
-      - name: Build macOS release bundles
+      - name: Build macOS ARM64 DMG
+        shell: bash
+        run: npm run tauri build -- --target aarch64-apple-darwin --bundles dmg
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: '-'
+      - name: Build macOS Universal updater and DMG
         shell: bash
         run: npm run tauri build -- --target universal-apple-darwin
         env:
@@ -114,13 +121,20 @@ jobs:
         shell: bash
         run: |
           set -e
-          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          universal_bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          arm64_bundle_dir="src-tauri/target/aarch64-apple-darwin/release/bundle"
           version="${RELEASE_TAG#v}"
-          archive=$(find "$bundle_dir"/macos -maxdepth 1 -name '*.app.tar.gz' -print -quit)
+          arm64_dmg=$(find "$arm64_bundle_dir"/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$arm64_dmg"
+          mv "$arm64_dmg" "$arm64_bundle_dir/dmg/TextMark_${version}_arm64.dmg"
+          universal_dmg=$(find "$universal_bundle_dir"/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$universal_dmg"
+          mv "$universal_dmg" "$universal_bundle_dir/dmg/TextMark_${version}_universal.dmg"
+          archive=$(find "$universal_bundle_dir"/macos -maxdepth 1 -name '*.app.tar.gz' -print -quit)
           test -n "$archive"
-          mv "$archive" "$bundle_dir/macos/TextMark_${version}_universal.app.tar.gz"
-          mv "$archive.sig" "$bundle_dir/macos/TextMark_${version}_universal.app.tar.gz.sig"
-          for asset in "$bundle_dir"/dmg/*.dmg "$bundle_dir"/macos/*.tar.gz "$bundle_dir"/macos/*.sig; do
+          mv "$archive" "$universal_bundle_dir/macos/TextMark_${version}_universal.app.tar.gz"
+          mv "$archive.sig" "$universal_bundle_dir/macos/TextMark_${version}_universal.app.tar.gz.sig"
+          for asset in "$arm64_bundle_dir"/dmg/*.dmg "$universal_bundle_dir"/dmg/*.dmg "$universal_bundle_dir"/macos/*.tar.gz "$universal_bundle_dir"/macos/*.sig; do
             [ -f "$asset" ] || continue
             for attempt in 1 2 3 4 5; do
               if node scripts/upload-release-assets.mjs "$RELEASE_TAG" "$asset"; then break; fi
@@ -139,9 +153,12 @@ jobs:
       - name: Install/mount/Quick Look registration smoke
         shell: bash
         run: |
-          dmg=$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
-          test -n "$dmg"
-          platform/macos/test-package.sh "$dmg"
+          for dmg in \
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/TextMark_*.dmg \
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/TextMark_*.dmg; do
+            test -f "$dmg"
+            platform/macos/test-package.sh "$dmg"
+          done
   bundle-windows:
     name: Windows ${{ matrix.architecture }} installers + Explorer preview
     needs: [verify, prepare]

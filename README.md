@@ -18,7 +18,7 @@ It is the portable successor to `pluk-inc/markdown-preview`. The original AppKit
 - Guarded relative-image loading without full-filesystem webview access
 - Dark, light and system appearance, content width and 50–300% zoom
 - macOS Quick Look, Windows Explorer Preview Handler, Freedesktop thumbnails/desktop action and KDE 6 thumbnail integration
-- Windows x64/ARM64 MSI, NSIS and portable ZIP; Linux x64/ARM64 AppImage/DEB/RPM; macOS Universal 2 app/DMG
+- Windows x64/ARM64 MSI, NSIS and portable ZIP; Linux x64/ARM64 AppImage/DEB/RPM; macOS Universal 2 and Apple Silicon ARM64 app/DMG
 - Signed in-app updater metadata, SHA-256 checksums and CycloneDX SBOM release assets
 - Traceable parity against the current upstream `v0.0.51` / `main` baseline, with 280 frontend and 13 Rust tests
 
@@ -28,7 +28,7 @@ Supported documents: `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdwn`, `.m
 
 ## Desktop and command line
 
-Download the installer or portable archive for your architecture from [GitHub Releases](https://github.com/jincaiw/TextMark-v1/releases). For a clear package recommendation, checksum verification, first launch and uninstall instructions, see [INSTALL.md](INSTALL.md). Windows installers register Explorer Preview and file associations; DEB/RPM install standard MIME and thumbnail integration; the macOS DMG includes Quick Look. AppImage and Windows portable ZIP remain self-contained.
+Download the installer or portable archive for your architecture from [GitHub Releases](https://github.com/jincaiw/TextMark-v1/releases). Intel Macs should use the Universal DMG; Apple Silicon Macs can use the native ARM64 DMG or the Universal DMG. For package recommendations, checksum verification, first launch and uninstall instructions, see [INSTALL.md](INSTALL.md). Windows installers register Explorer Preview and file associations; DEB/RPM install standard MIME and thumbnail integration; macOS DMGs include Quick Look. AppImage and Windows portable ZIP remain self-contained.
 
 DEB/RPM expose `textmark`, `tm` and `text-mark` on `PATH`; the Windows portable archive and macOS app bundle include the same launchers beside the application. They accept files, folders and multiple paths; add `--new-window` when each requested document should open separately.
 

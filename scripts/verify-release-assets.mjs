@@ -36,6 +36,7 @@ for (const architecture of [
 }
 
 findMatch('macOS Universal DMG', [new RegExp(`^TextMark[_-]${version}[_-]universal\\.dmg$`, 'i')])
+findMatch('macOS ARM64 DMG', [new RegExp(`^TextMark[_-]${version}[_-]arm64\\.dmg$`, 'i')])
 requireSigned('macOS Universal updater archive', [new RegExp(`^TextMark(?:[_-]${version})?[_-]universal\\.app\\.tar\\.gz$`, 'i')])
 findMatch('signed updater metadata', [/^latest\.json$/])
 

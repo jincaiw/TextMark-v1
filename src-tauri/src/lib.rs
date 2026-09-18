@@ -895,6 +895,14 @@ fn build_menu(
         .build()?;
 
     let help_item = item("help", "TextMark 帮助", "TextMark Help", None)?;
+    let project_home = item("project-home", "GitHub 项目主页", "GitHub Project", None)?;
+    let releases = item(
+        "github-releases",
+        "GitHub Releases",
+        "GitHub Releases",
+        None,
+    )?;
+    let report_issue = item("report-issue", "报告问题…", "Report an Issue…", None)?;
     let check_updates = item("check-updates", "检查更新…", "Check for Updates…", None)?;
     let install_cli = item("install-cli", "安装命令行工具…", "Install CLI…", None)?;
     let crash_reports = item(
@@ -911,7 +919,14 @@ fn build_menu(
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
         .item(&help_item)
         .separator()
-        .items(&[&check_updates, &install_cli, &crash_reports])
+        .items(&[
+            &project_home,
+            &releases,
+            &report_issue,
+            &check_updates,
+            &install_cli,
+            &crash_reports,
+        ])
         .separator()
         .item(&about);
     let help = help_builder.build()?;
@@ -927,7 +942,14 @@ fn build_menu(
             None,
         )
         .separator()
-        .items(&[&check_updates, &install_cli, &crash_reports])
+        .items(&[
+            &project_home,
+            &releases,
+            &report_issue,
+            &check_updates,
+            &install_cli,
+            &crash_reports,
+        ])
         .separator()
         .item(&preferences)
         .separator()

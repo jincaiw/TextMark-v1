@@ -29,6 +29,7 @@ import { anchorForOffset, caretForReturnToEditor, lineForAnchor, offsetForLine, 
 import { createPreviewHydrationGate, type PreviewHydrationGate } from './lib/previewHydration'
 import { resolveAlwaysOnTopTransition } from './lib/alwaysOnTop'
 import { t } from './lib/i18n'
+import { externalMenuUrl } from './lib/menuCommands'
 import {
   clearRecentFiles,
   detectPlatform,
@@ -58,7 +59,7 @@ import { configureCrashReporting, crashReportingAvailable } from './lib/telemetr
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
-import type { ExternalApplication, FormatCommand, SearchMode, SidebarMode, ViewMode } from './types'
+import type { ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
@@ -86,12 +87,15 @@ function DocumentApp() {
     () => (localStorage.getItem('textmark.sidebarMode') as SidebarMode) || 'outline',
   )
   const [sidebarWidth, setSidebarWidth] = useState(() =>
-    Math.min(400, Math.max(230, Number(localStorage.getItem('textmark.sidebarWidth')) || 260)),
+    Math.min(400, Math.max(230, Number(localStorage.getItem('textmark.sidebarWidth')) || 240)),
   )
   // Inspector 默认关闭，因此只有显式存过 'true' 才恢复——与 sidebarVisible 的「默认开」相反。
   const [inspectorVisible, setInspectorVisible] = useState(() => localStorage.getItem('textmark.inspectorVisible') === 'true')
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(
+    () => (localStorage.getItem('textmark.inspectorMode') as InspectorMode) || 'document',
+  )
   const [inspectorWidth, setInspectorWidth] = useState(() =>
-    Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 292)),
+    Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 270)),
   )
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
@@ -142,8 +146,9 @@ function DocumentApp() {
     localStorage.setItem('textmark.sidebarMode', sidebarMode)
     localStorage.setItem('textmark.sidebarWidth', String(sidebarWidth))
     localStorage.setItem('textmark.inspectorVisible', String(inspectorVisible))
+    localStorage.setItem('textmark.inspectorMode', inspectorMode)
     localStorage.setItem('textmark.inspectorWidth', String(inspectorWidth))
-  }, [inspectorVisible, inspectorWidth, sidebarMode, sidebarVisible, sidebarWidth])
+  }, [inspectorMode, inspectorVisible, inspectorWidth, sidebarMode, sidebarVisible, sidebarWidth])
   useTextmarkDeepLinks(documents.openPath, () => {
     setNotice(
       settings.locale === 'zh-CN'
@@ -646,6 +651,7 @@ function DocumentApp() {
       void updater.checkNow()
     } else if (command === 'install-cli') installCliAction()
     else if (command === 'crash-reports') patch({ crashReports: !settings.crashReports })
+    else if (externalMenuUrl(command)) void openUrl(externalMenuUrl(command)!)
     else if (command === 'help') void openUrl('https://github.com/jincaiw/TextMark-v1#readme')
     else if (command === 'customize-toolbar') setToolbarOpen(true)
     else if (command.startsWith('format-')) format(command.slice('format-'.length) as FormatCommand)
@@ -1185,9 +1191,16 @@ function DocumentApp() {
               <PanelResizer side="inspector" width={inspectorWidth} min={270} max={500} onWidthChange={setInspectorWidth} />
               <Inspector
                 locale={settings.locale}
+                mode={inspectorMode}
+                outline={rendered.outline}
                 document={documents.document}
                 stats={stats}
                 frontmatter={rendered.frontmatter}
+                onModeChange={(mode) => {
+                  setInspectorMode(mode)
+                  setInspectorVisible(true)
+                }}
+                onOutlineSelect={selectOutline}
                 onCopyPath={(path) => void navigator.clipboard.writeText(path)}
                 onRevealPath={(path) => void revealInFileManager(path)}
                 onClose={() => setInspectorVisible(false)}

@@ -8,7 +8,8 @@
 | --- | --- | --- |
 | Windows x64 | `*_x64_*.msi` | 需要传统安装器时选 NSIS；没有管理员权限或不希望写入系统设置时选 `*_portable.zip`。 |
 | Windows on ARM | `*_arm64_*.msi` | 与 x64 相同；请勿在 ARM 设备上下载 x64 安装器。 |
-| macOS（Intel 或 Apple 芯片） | `*.dmg` | DMG 是 Universal 版本，同一个文件支持两种 Mac。 |
+| macOS Intel | `TextMark_<版本>_universal.dmg` | Universal DMG 支持 Intel 与 Apple 芯片；也可下载 ARM64 DMG 以便在 Apple 芯片设备上使用原生架构。 |
+| macOS Apple 芯片 | `TextMark_<版本>_arm64.dmg` | 原生 Apple Silicon/ARM64 版本；Universal DMG 也可使用。 |
 | Debian / Ubuntu | `*.deb` | 想免安装、随身携带时选 `*.AppImage`。 |
 | Fedora / RHEL / openSUSE | `*.rpm` | 想免安装、随身携带时选 `*.AppImage`。 |
 | 其他 Linux 发行版 | `*.AppImage` | AppImage 不会安装系统级文件关联或缩略图服务。 |
@@ -29,6 +30,8 @@ macOS：
 
 ```sh
 shasum -a 256 TextMark_<版本>_universal.dmg
+# Apple 芯片原生包
+shasum -a 256 TextMark_<版本>_arm64.dmg
 ```
 
 Linux：
@@ -91,6 +94,6 @@ DEB/RPM 会提供 `textmark`、`tm`、`text-mark` 命令，并注册 MIME 类型
 
 Download the matching asset from [Releases](https://github.com/jincaiw/TextMark-v1/releases/latest) and verify it against `SHA256SUMS.txt` before installing. MSI/NSIS, DEB/RPM, and DMG install platform integration; Windows portable ZIP and AppImage remain self-contained.
 
-Choose MSI for Windows (x64 or ARM64) when administrator access is available, the Universal DMG for any supported Mac, DEB for Debian/Ubuntu, RPM for Fedora/RHEL/openSUSE, and AppImage or the portable ZIP when no installation is wanted. See the Chinese instructions above for the exact verification, installation, update, and uninstall commands.
+Choose MSI for Windows (x64 or ARM64) when administrator access is available, the Universal DMG for Intel Macs, the ARM64 DMG for native Apple Silicon, DEB for Debian/Ubuntu, RPM for Fedora/RHEL/openSUSE, and AppImage or the portable ZIP when no installation is wanted. See the Chinese instructions above for the exact verification, installation, update, and uninstall commands.
 
 The current Windows installers are not Authenticode-signed and the macOS build is not Apple-notarized. A SmartScreen or Gatekeeper warning may appear. Only proceed after verifying the SHA-256 checksum and confirming the download came from the official release page.
