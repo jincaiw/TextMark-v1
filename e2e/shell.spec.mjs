@@ -179,7 +179,14 @@ describe('TextMark desktop shell', () => {
     })
     expect(existsSync(pastedImagePath)).toBe(true)
     await $("button[aria-label='停止编辑并返回预览']").click()
-    await browser.waitUntil(async () => (await $$('.markdown-body img')).length > 0)
+    await browser.waitUntil(
+      async () => {
+        const images = await $$('.markdown-body img')
+        if (images.length === 0) return false
+        return (await images[0].getAttribute('src'))?.startsWith('data:image/png;base64,') ?? false
+      },
+      { timeoutMsg: 'pasted image preview did not load as a data URL' },
+    )
   })
 
   it('saves through Rust and safely resolves an external write conflict', async () => {

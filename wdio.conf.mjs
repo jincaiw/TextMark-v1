@@ -63,6 +63,7 @@ export const config = {
         env: { TEXTMARK_E2E_CONFIG_DIR: configPath },
         driverProvider: 'embedded',
         embeddedPort: 4445,
+        autoInstallTauriDriver: true,
       },
     ],
   ],
