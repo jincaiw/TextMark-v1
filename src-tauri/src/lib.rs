@@ -4,7 +4,7 @@ use font8x8::UnicodeFonts;
 use image::{ImageBuffer, ImageFormat, Rgb};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::{
     fs,
@@ -18,10 +18,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
-    Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_updater::{Error as UpdaterError, UpdaterExt};
 
 const MARKDOWN_EXTENSIONS: &[&str] = &[
     "md", "markdown", "mdown", "mdx", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "rmd", "txt",
@@ -198,7 +198,7 @@ struct UpdateDownloadProgress {
     finished: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct OpenPathRequest {
     path: String,
@@ -232,8 +232,26 @@ type AppResult<T> = Result<T, AppError>;
 #[derive(Default)]
 struct WatchState(Mutex<HashMap<String, RecommendedWatcher>>);
 
+#[derive(Default)]
+struct PendingOpenPaths(Mutex<Vec<OpenPathRequest>>);
+
+fn enqueue_pending_open_paths(
+    state: &PendingOpenPaths,
+    paths: impl IntoIterator<Item = OpenPathRequest>,
+) {
+    if let Ok(mut pending) = state.0.lock() {
+        for path in paths {
+            if !pending.contains(&path) {
+                pending.push(path);
+            }
+        }
+    }
+}
+
 fn settings_path() -> AppResult<PathBuf> {
-    #[cfg(feature = "e2e")]
+    // The isolated directory is an explicit test/diagnostic override. Keeping
+    // it available in the normal debug binary lets recovery tests exercise the
+    // real desktop process without touching the user's Group Container.
     if let Some(directory) = std::env::var_os("TEXTMARK_E2E_CONFIG_DIR").map(PathBuf::from) {
         fs::create_dir_all(&directory).map_err(io_error)?;
         return Ok(directory.join("settings-v3.json"));
@@ -250,14 +268,22 @@ fn settings_path() -> AppResult<PathBuf> {
     Ok(directory.join("settings-v3.json"))
 }
 
-fn recent_files_path() -> AppResult<PathBuf> {
+fn app_data_file(name: &str) -> AppResult<PathBuf> {
     let directory = settings_path()?
         .parent()
         .map(Path::to_path_buf)
         .ok_or(AppError {
             code: "invalid_path",
         })?;
-    Ok(directory.join("recent.json"))
+    Ok(directory.join(name))
+}
+
+fn recent_files_path() -> AppResult<PathBuf> {
+    app_data_file("recent.json")
+}
+
+fn session_manifest_path() -> AppResult<PathBuf> {
+    app_data_file("session-v1.json")
 }
 
 /// In-memory cache of the recent files list. Startup (`setup`) must not do
@@ -322,6 +348,133 @@ fn record_recent_file(path: String) -> AppResult<()> {
 fn clear_recent_files() -> AppResult<()> {
     save_recent_files(&[])?;
     update_recent_cache(Vec::new());
+    Ok(())
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionWindowGeometry {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionWindowSnapshot {
+    window_id: String,
+    documents: Vec<String>,
+    active_index: usize,
+    workspace_path: Option<String>,
+    #[serde(default)]
+    geometry: Option<SessionWindowGeometry>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionManifest {
+    version: u8,
+    updated_at: u64,
+    windows: Vec<SessionWindowSnapshot>,
+}
+
+fn empty_session_manifest() -> SessionManifest {
+    SessionManifest {
+        version: 1,
+        updated_at: 0,
+        windows: Vec::new(),
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[tauri::command]
+fn load_session_manifest() -> AppResult<Option<SessionManifest>> {
+    let path = session_manifest_path()?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let contents = fs::read_to_string(path).map_err(io_error)?;
+    let manifest = serde_json::from_str::<SessionManifest>(&contents).map_err(io_error)?;
+    if manifest.version != 1 {
+        return Ok(None);
+    }
+    Ok(Some(manifest))
+}
+
+fn remove_session_window_from_manifest(window_id: &str) -> AppResult<()> {
+    let path = session_manifest_path()?;
+    let Some(manifest) = load_session_manifest()? else {
+        return Ok(());
+    };
+    let manifest = remove_window_from_manifest(manifest, window_id);
+    let contents = serde_json::to_vec_pretty(&manifest).map_err(io_error)?;
+    let mut file = AtomicWriteFile::open(&path).map_err(io_error)?;
+    file.write_all(&contents).map_err(io_error)?;
+    file.commit().map_err(io_error)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_session_window(window_id: String) -> AppResult<()> {
+    remove_session_window_from_manifest(&window_id)
+}
+
+#[tauri::command]
+fn remove_current_window_session(window: tauri::WebviewWindow) -> AppResult<()> {
+    remove_session_window_from_manifest(window.label())
+}
+
+fn remove_window_from_manifest(mut manifest: SessionManifest, window_id: &str) -> SessionManifest {
+    manifest
+        .windows
+        .retain(|window| window.window_id != window_id);
+    manifest
+}
+
+fn normalize_session_snapshot(
+    mut snapshot: SessionWindowSnapshot,
+) -> Option<SessionWindowSnapshot> {
+    let mut documents = Vec::new();
+    for document in snapshot.documents {
+        if !documents.contains(&document) {
+            documents.push(document);
+        }
+    }
+    if documents.is_empty() {
+        return None;
+    }
+    snapshot.active_index = snapshot.active_index.min(documents.len() - 1);
+    snapshot.documents = documents;
+    Some(snapshot)
+}
+
+#[tauri::command]
+fn save_session_snapshot(snapshot: SessionWindowSnapshot) -> AppResult<()> {
+    let path = session_manifest_path()?;
+    let mut manifest = load_session_manifest()?.unwrap_or_else(empty_session_manifest);
+    manifest.updated_at = now_ms();
+    manifest
+        .windows
+        .retain(|window| window.window_id != snapshot.window_id);
+    if let Some(snapshot) = normalize_session_snapshot(snapshot) {
+        manifest.windows.push(snapshot);
+    }
+    let contents = serde_json::to_vec_pretty(&manifest).map_err(io_error)?;
+    let mut file = AtomicWriteFile::open(&path).map_err(io_error)?;
+    file.write_all(&contents).map_err(io_error)?;
+    file.commit().map_err(io_error)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(io_error)?;
+    }
     Ok(())
 }
 
@@ -498,33 +651,58 @@ fn show_in_file_manager(path: String) -> AppResult<()> {
     command.spawn().map(|_| ()).map_err(io_error)
 }
 
-#[tauri::command]
-fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
+fn build_document_window(
+    app: &tauri::AppHandle,
+    path: String,
+    label_prefix: &str,
+    restore_window_id: Option<&str>,
+) -> AppResult<()> {
     let request = resolve_open_path(path)?;
     let canonical = PathBuf::from(&request.path);
     let is_directory = request.is_directory;
     let label = format!(
-        "document-{}",
-        std::time::SystemTime::now()
+        "{label_prefix}-{}",
+        SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos()
     );
     let encoded = utf8_percent_encode(&canonical.to_string_lossy(), NON_ALPHANUMERIC).to_string();
     let query = if is_directory { "folder" } else { "open" };
-    WebviewWindowBuilder::new(
-        &app,
-        label,
-        WebviewUrl::App(format!("index.html?{query}={encoded}").into()),
-    )
-    .title(canonical.file_name().unwrap_or_default().to_string_lossy())
-    .inner_size(1100.0, 720.0)
-    .min_inner_size(720.0, 480.0)
-    .center()
-    .resizable(true)
-    .build()
-    .map(|_| ())
-    .map_err(io_error)
+    let mut url = format!("index.html?{query}={encoded}");
+    if let Some(window_id) = restore_window_id {
+        let encoded_window_id = utf8_percent_encode(window_id, NON_ALPHANUMERIC).to_string();
+        url.push_str("&restoreWindowId=");
+        url.push_str(&encoded_window_id);
+    }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+        .title(canonical.file_name().unwrap_or_default().to_string_lossy())
+        .inner_size(1100.0, 720.0)
+        .min_inner_size(720.0, 480.0)
+        .center()
+        .resizable(true)
+        .build()
+        .map(|_| ())
+        .map_err(io_error)
+}
+
+#[tauri::command]
+fn open_document_window(app: tauri::AppHandle, path: String) -> AppResult<()> {
+    build_document_window(&app, path, "document", None)
+}
+
+#[tauri::command]
+fn open_session_window(app: tauri::AppHandle, snapshot: SessionWindowSnapshot) -> AppResult<()> {
+    let SessionWindowSnapshot {
+        window_id,
+        documents,
+        ..
+    } = snapshot;
+    let path = documents
+        .into_iter()
+        .next()
+        .ok_or(AppError { code: "not_found" })?;
+    build_document_window(&app, path, "restored", Some(&window_id))
 }
 
 #[tauri::command]
@@ -1410,6 +1588,31 @@ fn read_text_file(path: String) -> AppResult<TextDocument> {
 }
 
 #[tauri::command]
+fn drain_pending_open_paths(state: State<'_, PendingOpenPaths>) -> Vec<OpenPathRequest> {
+    state
+        .0
+        .lock()
+        .map(|mut paths| std::mem::take(&mut *paths))
+        .unwrap_or_default()
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+fn test_open_path(
+    app: tauri::AppHandle,
+    state: State<'_, PendingOpenPaths>,
+    path: String,
+) -> AppResult<()> {
+    let request = parse_launch_request([path], &std::env::current_dir().unwrap_or_default())
+        .paths
+        .into_iter()
+        .next()
+        .ok_or(AppError { code: "not_found" })?;
+    enqueue_pending_open_paths(&state, vec![request.clone()]);
+    app.emit("open-paths", vec![request]).map_err(io_error)
+}
+
+#[tauri::command]
 fn startup_request() -> StartupRequest {
     parse_launch_request(
         std::env::args_os()
@@ -1737,15 +1940,43 @@ fn build_updater(
         .map_err(|_| AppError { code: "io" })
 }
 
+fn updater_check_error(error: UpdaterError) -> AppError {
+    let code = match error {
+        UpdaterError::ReleaseNotFound => "update_release_not_found",
+        UpdaterError::UnsupportedArch | UpdaterError::UnsupportedOs => {
+            "update_unsupported_platform"
+        }
+        UpdaterError::TargetNotFound(_) | UpdaterError::TargetsNotFound(_) => {
+            "update_target_not_found"
+        }
+        UpdaterError::Minisign(_) | UpdaterError::Base64(_) | UpdaterError::SignatureUtf8(_) => {
+            "update_signature"
+        }
+        UpdaterError::Reqwest(_) | UpdaterError::Network(_) => "update_network",
+        UpdaterError::Serialization(_) => "update_invalid_manifest",
+        UpdaterError::UrlParse(_)
+        | UpdaterError::EmptyEndpoints
+        | UpdaterError::InsecureTransportProtocol => "update_endpoint",
+        _ => "update_check",
+    };
+    AppError { code }
+}
+
+fn updater_install_error(error: UpdaterError) -> AppError {
+    let mut mapped = updater_check_error(error);
+    if mapped.code == "update_check" {
+        mapped.code = "update_install";
+    }
+    mapped
+}
+
 #[tauri::command]
 async fn check_update_channel(
     app: tauri::AppHandle,
     channel: String,
 ) -> AppResult<Option<UpdateCheck>> {
     let updater = build_updater(&app, &channel)?;
-    let update = updater.check().await.map_err(|_| AppError {
-        code: "update_check",
-    })?;
+    let update = updater.check().await.map_err(updater_check_error)?;
     Ok(update.map(|value| UpdateCheck {
         version: value.version.clone(),
         date: value.date.map(|date| date.to_string()),
@@ -1756,9 +1987,7 @@ async fn check_update_channel(
 #[tauri::command]
 async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppResult<()> {
     let updater = build_updater(&app, &channel)?;
-    if let Some(update) = updater.check().await.map_err(|_| AppError {
-        code: "update_check",
-    })? {
+    if let Some(update) = updater.check().await.map_err(updater_check_error)? {
         let event_name = "update-download-progress";
         let progress_channel = channel.clone();
         let progress_bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -1800,9 +2029,7 @@ async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppRe
                 },
             )
             .await
-            .map_err(|_| AppError {
-                code: "update_install",
-            })?;
+            .map_err(updater_install_error)?;
     }
     Ok(())
 }
@@ -2114,6 +2341,7 @@ fn share_source(window: tauri::WebviewWindow, source: String) -> AppResult<()> {
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(WatchState::default())
+        .manage(PendingOpenPaths::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let request = parse_launch_request(args.into_iter().skip(1), Path::new(&cwd));
             if request.new_window {
@@ -2121,6 +2349,9 @@ pub fn run() {
                     let _ = open_document_window(app.clone(), entry.path);
                 }
             } else if !request.paths.is_empty() {
+                if let Some(state) = app.try_state::<PendingOpenPaths>() {
+                    enqueue_pending_open_paths(&state, request.paths.clone());
+                }
                 let _ = app.emit("open-paths", request.paths);
             }
         }))
@@ -2132,7 +2363,7 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_wdio::init())
         .plugin(tauri_plugin_wdio_webdriver::init());
-    builder
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Startup must stay non-blocking: the menu is built without the
@@ -2200,12 +2431,34 @@ pub fn run() {
                 if let Ok(mut watchers) = window.app_handle().state::<WatchState>().0.lock() {
                     watchers.remove(window.label());
                 }
+                if window.label() != "main" {
+                    let label = window.label().to_string();
+                    std::thread::spawn(move || {
+                        for _ in 0..10 {
+                            let _ = remove_session_window_from_manifest(&label);
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                    });
+                }
+            }
+            if let WindowEvent::CloseRequested { .. } = event
+                && window.label() != "main"
+            {
+                // CloseRequested is emitted before the frontend's
+                // preventDefault/async close handshake. Remove the native
+                // label immediately; waiting for the window to disappear
+                // would miss this event because the frontend temporarily
+                // keeps the window alive while saving.
+                let _ = remove_session_window_from_manifest(window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             resolve_open_path,
             startup_request,
+            drain_pending_open_paths,
+            #[cfg(feature = "e2e")]
+            test_open_path,
             write_text_file,
             save_export_bytes,
             save_pasted_image,
@@ -2227,13 +2480,41 @@ pub fn run() {
             share_source,
             load_settings,
             save_settings,
+            load_session_manifest,
+            save_session_snapshot,
+            remove_session_window,
+            remove_current_window_session,
+            open_session_window,
             watch_paths,
             open_external_application,
             show_in_file_manager,
             open_document_window
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running TextMark");
+        ]);
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building TextMark");
+    app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Opened { urls } = event {
+            let paths = urls
+                .into_iter()
+                .filter_map(|url| {
+                    if url.scheme() == "file" {
+                        url.to_file_path().ok()
+                    } else {
+                        None
+                    }
+                })
+                .filter_map(|path| resolve_open_path(path.to_string_lossy().to_string()).ok())
+                .collect::<Vec<_>>();
+            if !paths.is_empty() {
+                if let Some(state) = app.try_state::<PendingOpenPaths>() {
+                    enqueue_pending_open_paths(&state, paths.clone());
+                }
+                let _ = app.emit("open-paths", paths);
+            }
+        }
+    });
 }
 
 #[cfg(test)]
@@ -2264,6 +2545,104 @@ mod tests {
         assert!(is_markdown(Path::new("component.mdx")));
         assert!(is_markdown(Path::new("COMPONENT.MDX")));
         assert!(!is_markdown(Path::new("payload.html")));
+    }
+
+    #[test]
+    fn removing_one_session_window_preserves_other_windows_and_is_idempotent() {
+        let manifest = SessionManifest {
+            version: 1,
+            updated_at: 42,
+            windows: vec![
+                SessionWindowSnapshot {
+                    window_id: "main".into(),
+                    documents: vec!["/tmp/main.md".into()],
+                    active_index: 0,
+                    workspace_path: None,
+                    geometry: None,
+                },
+                SessionWindowSnapshot {
+                    window_id: "secondary-a".into(),
+                    documents: vec!["/tmp/a.md".into()],
+                    active_index: 0,
+                    workspace_path: None,
+                    geometry: None,
+                },
+                SessionWindowSnapshot {
+                    window_id: "secondary-b".into(),
+                    documents: vec!["/tmp/b.md".into()],
+                    active_index: 0,
+                    workspace_path: None,
+                    geometry: None,
+                },
+            ],
+        };
+
+        let removed = remove_window_from_manifest(manifest, "secondary-a");
+        assert_eq!(
+            removed
+                .windows
+                .iter()
+                .map(|window| window.window_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["main", "secondary-b"]
+        );
+
+        let unchanged = remove_window_from_manifest(removed.clone(), "missing");
+        assert_eq!(unchanged.windows.len(), removed.windows.len());
+        assert_eq!(unchanged.updated_at, 42);
+    }
+
+    #[test]
+    fn session_snapshot_deduplicates_documents_and_clamps_active_index() {
+        let snapshot = normalize_session_snapshot(SessionWindowSnapshot {
+            window_id: "secondary".into(),
+            documents: vec!["/tmp/a.md".into(), "/tmp/a.md".into(), "/tmp/b.md".into()],
+            active_index: 99,
+            workspace_path: None,
+            geometry: None,
+        })
+        .unwrap();
+        assert_eq!(snapshot.documents, vec!["/tmp/a.md", "/tmp/b.md"]);
+        assert_eq!(snapshot.active_index, 1);
+    }
+
+    #[test]
+    fn empty_session_snapshot_is_not_persisted() {
+        assert!(
+            normalize_session_snapshot(SessionWindowSnapshot {
+                window_id: "empty".into(),
+                documents: Vec::new(),
+                active_index: 0,
+                workspace_path: None,
+                geometry: None,
+            })
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn session_geometry_is_optional_for_legacy_snapshots() {
+        let snapshot: SessionWindowSnapshot = serde_json::from_str(
+            r#"{"windowId":"main","documents":["/tmp/readme.md"],"activeIndex":0,"workspacePath":null}"#,
+        )
+        .unwrap();
+        assert!(snapshot.geometry.is_none());
+    }
+
+    #[test]
+    fn pending_open_paths_are_deduplicated_and_drained_in_order() {
+        let state = PendingOpenPaths::default();
+        let first = OpenPathRequest {
+            path: "/tmp/one.md".into(),
+            is_directory: false,
+        };
+        let second = OpenPathRequest {
+            path: "/tmp/two.md".into(),
+            is_directory: false,
+        };
+        enqueue_pending_open_paths(&state, [first.clone(), second.clone(), first.clone()]);
+        let drained = state.0.lock().unwrap().drain(..).collect::<Vec<_>>();
+        assert_eq!(drained, vec![first, second]);
     }
 
     #[test]
