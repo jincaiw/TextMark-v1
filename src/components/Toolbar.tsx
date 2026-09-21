@@ -10,6 +10,7 @@ import {
   FileDown,
   FilePenLine,
   FolderOpen,
+  Folder,
   Info,
   Minus,
   MoreHorizontal,
@@ -113,6 +114,9 @@ export function Toolbar(props: ToolbarProps) {
   )
   const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
   const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget) ?? editorApps[0]
+  // Sidebar is a fixed leading control in the macOS-style layout. Keep the
+  // persisted item for customization compatibility, but render it only once.
+  const toolbarItems = useMemo(() => props.items.filter((item) => item !== 'sidebar'), [props.items])
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -172,7 +176,7 @@ export function Toolbar(props: ToolbarProps) {
       let used = 0
       let cut = slots.length
       for (let index = 0; index < slots.length; index += 1) {
-        const flexible = props.items[index] === 'flexibleSpace'
+        const flexible = toolbarItems[index] === 'flexibleSpace'
         const width = flexible ? 6 : slots[index].offsetWidth
         const extra = used > 0 ? gap : 0
         if (used + extra + width <= available) used += extra + width
@@ -191,11 +195,11 @@ export function Toolbar(props: ToolbarProps) {
     const observer = new ResizeObserver(compute)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [props.items, props.displayMode, props.searchQuery, props.zoom, props.viewMode])
+  }, [toolbarItems, props.displayMode, props.searchQuery, props.zoom, props.viewMode])
 
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`
-    const hidden = index >= props.items.length - hiddenCount
+    const hidden = index >= toolbarItems.length - hiddenCount
     const hiddenStyle = hidden ? { display: 'none' as const } : undefined
     const slot = (node: React.ReactNode) => (
       <span key={key} data-toolbar-item style={hiddenStyle}>
@@ -208,10 +212,10 @@ export function Toolbar(props: ToolbarProps) {
     if (item === 'navigation')
       return slot(
         <div className="history-buttons toolbar-navigation">
-          <button disabled={!props.canGoBack} aria-label="Back" onClick={props.onBack}>
+          <button disabled={!props.canGoBack} aria-label={tx('back')} title={tx('back')} onClick={props.onBack}>
             <ChevronLeft />
           </button>
-          <button disabled={!props.canGoForward} aria-label="Forward" onClick={props.onForward}>
+          <button disabled={!props.canGoForward} aria-label={tx('forward')} title={tx('forward')} onClick={props.onForward}>
             <ChevronRight />
           </button>
         </div>,
@@ -364,7 +368,7 @@ export function Toolbar(props: ToolbarProps) {
     return null
   }
 
-  const overflowItems = props.items.slice(props.items.length - hiddenCount).filter((item) => SIMPLE_ACTIONS[item] && item !== 'copy')
+  const overflowItems = toolbarItems.slice(toolbarItems.length - hiddenCount).filter((item) => SIMPLE_ACTIONS[item] && item !== 'copy')
 
   return (
     <header
@@ -382,11 +386,31 @@ export function Toolbar(props: ToolbarProps) {
           <button aria-label={tx('maximize')} onClick={() => windowAction('toggleMaximize')} />
         </div>
       </div>
+      <div className="toolbar-leading-actions" data-tauri-drag-region>
+        <button
+          className={props.sidebarVisible ? 'selected' : ''}
+          title={tx('toggleSidebar')}
+          aria-label={tx('toggleSidebar')}
+          onClick={props.onToggleSidebar}
+        >
+          <PanelLeft />
+        </button>
+        <details className="toolbar-leading-menu">
+          <summary title={tx('chooseSidebar')} aria-label={tx('chooseSidebar')}>
+            <Folder />
+            <ChevronDown />
+          </summary>
+          <div className="menu-popover sidebar-menu">
+            <button onClick={() => props.onSidebarModeChange('files')}>{tx('projectNavigator')}</button>
+            <button onClick={() => props.onSidebarModeChange('outline')}>{tx('tableOfContents')}</button>
+          </div>
+        </details>
+      </div>
       <div className="toolbar-document-context" data-tauri-drag-region title={props.fileName}>
         <span className="toolbar-document-name">{props.fileName}</span>
       </div>
       <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
-        {props.items.map(renderItem)}
+        {toolbarItems.map(renderItem)}
         <details className="more-menu">
           <summary title={tx('more')}>
             <MoreHorizontal />

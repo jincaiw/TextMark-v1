@@ -159,12 +159,13 @@ select:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--chrome);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--chrome) 92%, transparent);
   backdrop-filter: blur(28px) saturate(150%);
   user-select: none;
 }
 .window-leading,
+.toolbar-leading-actions,
 .native-actions,
 .toolbar-group,
 .sidebar-control {
@@ -175,6 +176,50 @@ select:focus-visible {
   flex: 0 0 auto;
   min-width: 58px;
   margin-right: 2px;
+}
+.toolbar-leading-actions {
+  flex: 0 0 auto;
+  gap: 2px;
+  height: var(--control-h-sm);
+}
+.toolbar-leading-actions > button,
+.toolbar-leading-actions summary {
+  width: 26px;
+  height: var(--control-h-sm);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  list-style: none;
+}
+.toolbar-leading-actions > button:hover,
+.toolbar-leading-actions summary:hover,
+.toolbar-leading-actions > button.selected {
+  background: var(--hover);
+}
+.toolbar-leading-actions > button.selected {
+  color: var(--accent);
+}
+.toolbar-leading-actions svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+}
+.toolbar-leading-menu {
+  position: relative;
+}
+.toolbar-leading-menu summary {
+  width: 34px;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+.toolbar-leading-menu summary svg:last-child {
+  width: 11px;
+  height: 11px;
 }
 .traffic-lights {
   display: flex;
@@ -268,11 +313,15 @@ select:focus-visible {
   width: 12px;
 }
 .toolbar-document-context {
+  position: absolute;
+  left: 50%;
   min-width: 0;
-  flex: 0 1 clamp(120px, 20vw, 260px);
+  width: min(34vw, 360px);
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  padding: 0 6px;
+  justify-content: center;
+  padding: 0 8px;
   color: var(--muted);
   pointer-events: none;
 }
@@ -287,7 +336,7 @@ select:focus-visible {
 .native-actions {
   flex: 1 1 auto;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .toolbar-hidden .native-actions {
@@ -335,8 +384,8 @@ select:focus-visible {
   color: white;
 }
 .toolbar-item-button svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   stroke-width: 1.7;
 }
 .toolbar-group {
@@ -417,18 +466,24 @@ select:focus-visible {
   height: 10px;
 }
 .document-search {
-  width: clamp(160px, 16vw, 240px);
+  width: 26px;
   height: var(--control-h-sm);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-3);
+  gap: 0;
+  padding: 0 5px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--hover);
+  background: transparent;
   box-shadow: none;
+  cursor: text;
+  transition: width 140ms ease, background 140ms ease;
 }
-.document-search:focus-within {
+.document-search:focus-within,
+.document-search:has(input:not(:placeholder-shown)) {
+  width: clamp(140px, 16vw, 220px);
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   background: var(--surface);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -438,13 +493,20 @@ select:focus-visible {
   color: var(--muted);
 }
 .document-search input {
-  width: 100%;
+  width: 0;
   min-width: 0;
+  flex: 1 1 auto;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
   font-size: var(--text-md);
+  opacity: 0;
+}
+.document-search:focus-within input,
+.document-search:has(input:not(:placeholder-shown)) input {
+  width: 100%;
+  opacity: 1;
 }
 .document-search input::placeholder {
   color: var(--muted);
@@ -557,9 +619,9 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 0 max(18px, calc((100% - 820px) / 2));
-  border-bottom: 1px solid var(--border);
-  background: var(--chrome);
+  padding: 0 max(12px, calc((100% - 820px) / 2));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--chrome) 92%, transparent);
 }
 .formatting-toolbar > span {
   width: 1px;
@@ -584,18 +646,22 @@ select:focus-visible {
   color: var(--text);
 }
 .formatting-toolbar button svg {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   stroke-width: 1.7;
 }
 .formatting-toolbar select {
-  height: 28px;
+  height: 26px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+.formatting-toolbar .formatting-heading {
+  width: 76px;
+  padding-inline: 6px;
 }
 .formatting-toolbar select:hover {
   background: var(--hover);
@@ -736,9 +802,9 @@ select:focus-visible {
   min-width: 0;
   display: flex;
   gap: 2px;
-  padding: 4px 8px 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--chrome);
+  padding: 3px 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--chrome) 92%, transparent);
   overflow-x: auto;
 }
 .document-tab {
@@ -753,7 +819,7 @@ select:focus-visible {
   color: var(--muted);
 }
 .document-tab.active {
-  border-color: var(--border);
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 -1px 0 color-mix(in srgb, var(--accent) 55%, transparent) inset;
@@ -844,7 +910,7 @@ select:focus-visible {
   background: var(--surface);
 }
 .document-workspace:has(.formatting-toolbar) {
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr);
 }
 
 .native-sidebar {
@@ -2997,7 +3063,7 @@ mark.search-match.active {
     --sidebar-width: 250px;
   }
   .toolbar-document-context {
-    flex-basis: 120px;
+    width: min(30vw, 300px);
   }
   .native-toolbar {
     gap: 4px;
@@ -3010,7 +3076,7 @@ mark.search-match.active {
     gap: 18px;
   }
   .document-search {
-    width: 36px;
+    width: 26px;
     justify-content: center;
     cursor: pointer;
   }
@@ -3023,7 +3089,7 @@ mark.search-match.active {
 }
 @media (max-width: 920px) {
   .toolbar-document-context {
-    flex-basis: 72px;
+    width: 24vw;
   }
   .toolbar-document-name {
     font-size: var(--text-xs);

@@ -6,7 +6,7 @@
 - **TextMark 基线**：当前已发布能力 `v0.9.8`；对标结论基于此前 `v0.9.7` 代码审查、`v0.9.8` 实施结果及本机 UI 调研
 - **文档版本**：实施方案 `v1.0`
 - **编制日期**：2026-09-18
-- **当前状态**：实施中；P0–P5 已完成，B11–B14 已进入可靠性收口，发布/推送仍按用户明确指令执行
+- **当前状态**：v0.10.1 已正式发布；P0–P5、B11–B14 代码与当前环境可验证项已完成，剩余为跨平台实机与像素级证据边界
 
 ---
 
@@ -874,4 +874,83 @@ npm audit：0 vulnerabilities
 发布契约测试：15 passed
 ```
 
-当前工作树仍未提交、未推送、未合并、未发布。代码级门禁已收口；本轮继续复验了 PDF capability/export 定向测试 10 项、异常退出会话清单保留探针和多文档标签恢复 E2E（1 passed）。这些结果分别证明 PDF 能力分支、异常退出 manifest 保留和同进程多文档标签恢复，不等价于跨进程重启后 UI 多文档恢复闭环。2026-09-21 曾通过两阶段真实重启验收确认主窗口恢复失败：第一阶段双文档 manifest 写入成功，第二阶段无启动参数重启后进入默认 README。根因是主窗口关闭流程调用 `saveSession(true)` 并删除 `main` 快照；已改为主窗口关闭时保存 `saveSession(false)`，保留可恢复的 main 快照，非主窗口继续由生命周期清理。修复后两次真实 `session-recovery.spec.mjs` 均通过，第二次无启动参数恢复双文档和活动标签；`sessionRestore.test.ts` 5 项、TypeScript、ESLint、format:check、git diff --check 通过。原有正常关闭测试的语义已同步为主窗口保留恢复快照，最终正常关闭 E2E 通过且 manifest 状态为 `preserved`。本轮定向恢复/PDF 测试共 15 项通过，TypeScript、ESLint、format:check、git diff --check 通过。2026-09-21 继续复跑完整门禁：Vitest 43 文件/360 项、Rust cargo test 20 项、bundle budget（main+worker 304 KiB gzip、native preview 71 KiB gzip）、生产 no-bundle 构建及运行时依赖审计均通过；`npm audit --omit=dev` 为 0 high/critical。稳定版 `v0.10.0` 与 beta 渠道线上资产已复核，包含 Universal DMG、ARM64 DMG、Universal updater 包及 stable/beta `latest.json`。通过 LaunchServices 运行中打开 `parity-fixture.md` 已验证 `RunEvent::Opened → single-instance → open-paths → drain → processOpenPaths` 的实际文档切换，窗口标题变为 `parity-fixture.md`。冷启动传参仍因 macOS LaunchServices 参数转发差异显示默认 README，已记录为启动参数验证边界；不据此修改产品布局。下一阶段仍只剩用户明确授权后的提交、推送、合并和正式发布，以及跨平台 PDF、多显示器几何、Finder 拖放和原生 titlebar 像素证据。
+当前工作树仍未提交、未推送、未合并、未发布。代码级门禁已收口；本轮继续复验了 PDF capability/export 定向测试 10 项、异常退出会话清单保留探针和多文档标签恢复 E2E（1 passed）。这些结果分别证明 PDF 能力分支、异常退出 manifest 保留和同进程多文档标签恢复，不等价于跨进程重启后 UI 多文档恢复闭环。2026-09-21 曾通过两阶段真实重启验收确认主窗口恢复失败：第一阶段双文档 manifest 写入成功，第二阶段无启动参数重启后进入默认 README。根因是主窗口关闭流程调用 `saveSession(true)` 并删除 `main` 快照；已改为主窗口关闭时保存 `saveSession(false)`，保留可恢复的 main 快照，非主窗口继续由生命周期清理。修复后两次真实 `session-recovery.spec.mjs` 均通过，第二次无启动参数恢复双文档和活动标签；`sessionRestore.test.ts` 5 项、TypeScript、ESLint、format:check、git diff --check 通过。原有正常关闭测试的语义已同步为主窗口保留恢复快照，最终正常关闭 E2E 通过且 manifest 状态为 `preserved`。本轮定向恢复/PDF 测试共 15 项通过，TypeScript、ESLint、format:check、git diff --check 通过。2026-09-21 继续复跑完整门禁：Vitest 43 文件/360 项、Rust cargo test 20 项、bundle budget（main+worker 304 KiB gzip、native preview 71 KiB gzip）、生产 no-bundle 构建及运行时依赖审计均通过；`npm audit --omit=dev` 为 0 high/critical。稳定版 `v0.10.0` 与 beta 渠道线上资产已复核，包含 Universal DMG、ARM64 DMG、Universal updater 包及 stable/beta `latest.json`。通过 LaunchServices 运行中打开 `parity-fixture.md` 已验证 `RunEvent::Opened → single-instance → open-paths → drain → processOpenPaths` 的实际文档切换，窗口标题变为 `parity-fixture.md`。冷启动传参仍因 macOS LaunchServices 参数转发差异显示默认 README，已记录为启动参数验证边界；不据此修改产品布局。v0.10.1 已完成正式发布收口：GitHub Actions run `35582167499` 全部成功；`v0.10.1` 为 `draft=false`、`prerelease=false`，于 2026-09-21 09:39:55Z 发布，标签指向 `16919d8`；`main` 与 `origin/main` 同步。stable 与 beta `latest.json` 均可在线获取，版本均为 `0.10.1`，包含 18 个平台键、签名和下载 URL；Release 已包含 Universal/ARM64 DMG、Universal updater archive 及签名、Windows ARM64/x64 安装包与 portable、Linux/Fedora 多架构资产、SHA256、SBOM、INSTALL、RELEASE_NOTES 和 THIRD_PARTY_NOTICES。当前工作树仅有本地 `.workbuddy/memory/2026-09-21.md` 改动。剩余事项不再阻塞本次发布，属于后续证据补强：跨平台 PDF、多显示器几何、Finder 拖放和原生 titlebar 像素级对标。
+
+## 9.16 第一批顶部区域对齐实施（2026-09-21）
+
+### 目标与证据边界
+
+本批次针对最新版 `pluk-inc/markdown-preview`（main，Release 0.0.59，提交 `c0681c0670fd457ecb6c65d69aa32daf0e5f8d5`）和本机顶部截图，先对齐可由 React/Tauri 控制的 Chrome，不宣称替代 AppKit 原生 `NSToolbar`、`NSWindow` tab group 或 macOS titlebar 的像素级行为。上游没有独立 path bar，因此本批次不新增 path bar；React tabs 暂保留，避免为视觉对齐引入跨平台窗口模型重写。
+
+### 已实施的 UI 调整
+
+| 项 | 处理 | 验收口径 |
+|---|---|---|
+| Toolbar 背景与边界 | chrome 背景和底边使用低对比度 `color-mix`，减少 Web 横条感 | 与 tabs、formatting row 共享轻量边界 |
+| 文档标题 | 标题区域改为 toolbar 中央绝对定位、居中、最大宽度 `min(34vw, 360px)`，避免随两侧动作数量漂移 | 文件名稳定显示并以省略号截断 |
+| 搜索入口 | 默认收敛为 26px 图标按钮，聚焦或已有查询时展开为 140–220px 输入框 | 不占用固定宽度，窄窗核心入口仍可达 |
+| 工具栏图标 | 普通 toolbar 图标收敛至 16px；组间 gap 收敛至 4px | 普通按钮维持 26px 控件基线 |
+| Formatting Toolbar | heading 控件显式命名并固定 76px；图标 15px；内容区高度由 44px 收敛至 40px | 顺序保持 Heading、粗体、斜体、删除线、列表、引用、代码、链接 |
+| Document Tabs | tab 容器加入拖拽区域标记；背景/边界与 toolbar 低对比融合；顶部 padding 收敛至 3px | 保留关闭、dirty、键盘导航与多文档条件渲染 |
+
+### 功能保持与未改动项
+
+- 默认 toolbar 顺序保持上游信息架构：sidebar、navigation、open actions、zoom、document actions、search；低频文件、保存、打印、导出、设置继续进入 More。
+- Open、Inspector、Share、Edit、Search、Zoom、Back/Forward、Sidebar 和 More 的既有回调与可访问名称未改动。
+- 不改变会话、滚动位置、编辑/阅读交接、窗口恢复和更新器实现。
+
+### 下一步验证计划
+
+1. 运行 TypeScript、Vitest、ESLint、format:check；
+2. 构建当前 macOS 验证包，读取 Toolbar、tabs、formatting row 的真实计算尺寸；
+3. 在固定逻辑窗口尺寸下采集宽屏、窄窗和编辑态截图；
+4. 逐项检查文档标题位置、按钮顺序、搜索展开、More 溢出、侧栏/Inspector 和拖拽区域；
+5. 只有通过代码门禁和运行时证据后，才进入提交、推送和新版本发布决策。
+
+### 9.17 顶部区域截图复核与结构收口（2026-09-21）
+
+本轮使用固定浏览器逻辑窗口采集并复核：
+
+```text
+宽屏预览：1440×900
+宽屏编辑：1440×900
+窄窗口预览：980×640
+深色主题预览：1440×900
+```
+
+四组截图均满足：
+
+```text
+ready=true
+renderer=worker
+failures=[]
+```
+
+根据参照截图进一步收口：
+
+- Sidebar 开关和文件夹/大纲选择入口前置到 Toolbar 左侧，靠近 macOS 交通灯；
+- 默认 Toolbar 保留 `sidebar → navigation → flexibleSpace → openActions → zoom → documentActions → search` 的信息架构；
+- 当用户自定义 Toolbar 已包含 `sidebar` 时，不重复渲染前置 Sidebar 入口；
+- 保留中央文档名稳定定位和窄窗口搜索收缩规则；
+- 保留 More 菜单、Open、Inspector、Share、Edit、Zoom 和导航功能；
+- 不添加上游不存在的独立 path bar，不修改 Markdown 内容区和会话状态协议。
+
+本轮新增/调整代码：
+
+```text
+src/components/Toolbar.tsx
+src/lib/settings.ts
+src/App.css
+```
+
+定向门禁：
+
+```text
+TypeScript：通过
+ESLint：通过
+format:check：通过
+组件/设置/样式测试：26 项通过
+git diff --check：通过
+```
+
+当前状态：顶部区域第一批代码和浏览器截图验证已完成；macOS 原生窗口实拍、原生 NSToolbar 行为、Finder 拖放和原生 titlebar 像素级对齐仍属于独立证据边界。尚未提交、推送或发布。

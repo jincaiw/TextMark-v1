@@ -21,7 +21,7 @@ export function DocumentTabs({
     onActivate(sessions[target].id)
   }
   return (
-    <div className="document-tabs" role="tablist" aria-label="Documents">
+    <div className="document-tabs" role="tablist" aria-label="Documents" data-tauri-drag-region>
       {sessions.map((session, index) => (
         <div
           key={session.id}

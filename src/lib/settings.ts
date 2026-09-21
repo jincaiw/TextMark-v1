@@ -39,7 +39,6 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
 // Upstream (markdown-preview) default toolbar order. The AppKit-only sidebar
 // tracking separator is intentionally omitted (native macOS affordance).
 export const DEFAULT_TOOLBAR: ToolbarItem[] = [
-  'flexibleSpace',
   'sidebar',
   'navigation',
   'flexibleSpace',

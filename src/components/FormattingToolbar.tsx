@@ -12,6 +12,7 @@ export function FormattingToolbar({ onFormat, locale }: FormattingToolbarProps) 
   return (
     <div className="formatting-toolbar" role="toolbar" aria-label={t(locale, 'formatting')}>
       <select
+        className="formatting-heading"
         aria-label="Text style"
         defaultValue="h0"
         onChange={(event) => {
