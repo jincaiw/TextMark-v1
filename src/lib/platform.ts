@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core'
-import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
+import {
+  availableMonitors,
+  currentMonitor,
+  getCurrentWindow,
+  primaryMonitor,
+  PhysicalPosition,
+  PhysicalSize,
+  type Monitor,
+} from '@tauri-apps/api/window'
 import { save } from '@tauri-apps/plugin-dialog'
 import type { AppError, AppSettings, ExternalApplication, FileNode, OpenPathRequest, StartupRequest, TextDocument } from '../types'
 
@@ -192,6 +200,12 @@ export interface SessionWindowGeometry {
   y: number
   width: number
   height: number
+  monitor?: {
+    name: string | null
+    position: { x: number; y: number }
+    workArea: { x: number; y: number; width: number; height: number }
+    scaleFactor: number
+  } | null
 }
 
 export interface SessionWindowSnapshot {
@@ -228,12 +242,44 @@ export async function currentWindowId(): Promise<string> {
   return getCurrentWindow().label
 }
 
+function monitorSnapshot(monitor: Monitor | null): NonNullable<SessionWindowGeometry['monitor']> | null {
+  if (!monitor) return null
+  return {
+    name: monitor.name,
+    position: { x: monitor.position.x, y: monitor.position.y },
+    workArea: {
+      x: monitor.workArea.position.x,
+      y: monitor.workArea.position.y,
+      width: monitor.workArea.size.width,
+      height: monitor.workArea.size.height,
+    },
+    scaleFactor: monitor.scaleFactor,
+  }
+}
+
+function monitorMatchesSnapshot(monitor: Monitor, snapshot: NonNullable<SessionWindowGeometry['monitor']>): boolean {
+  const samePosition = monitor.position.x === snapshot.position.x && monitor.position.y === snapshot.position.y
+  const sameName = snapshot.name !== null && monitor.name === snapshot.name
+  return samePosition && (sameName || monitor.workArea.position.x === snapshot.workArea.x)
+}
+
+export function clampSessionGeometry(
+  geometry: SessionWindowGeometry,
+  workArea: { x: number; y: number; width: number; height: number },
+): SessionWindowGeometry {
+  const width = Math.min(Math.max(geometry.width, 640), workArea.width)
+  const height = Math.min(Math.max(geometry.height, 480), workArea.height)
+  const x = Math.min(Math.max(geometry.x, workArea.x), workArea.x + workArea.width - width)
+  const y = Math.min(Math.max(geometry.y, workArea.y), workArea.y + workArea.height - height)
+  return { ...geometry, x, y, width, height }
+}
+
 export async function currentWindowGeometry(): Promise<SessionWindowGeometry | null> {
   if (!isTauri()) return null
   const window = getCurrentWindow()
   try {
-    const [position, size] = await Promise.all([window.outerPosition(), window.innerSize()])
-    return { x: position.x, y: position.y, width: size.width, height: size.height }
+    const [position, size, monitor] = await Promise.all([window.outerPosition(), window.innerSize(), currentMonitor()])
+    return { x: position.x, y: position.y, width: size.width, height: size.height, monitor: monitorSnapshot(monitor) }
   } catch {
     // A just-created secondary window can briefly reject geometry queries while
     // its native surface is attaching. Session persistence must not be lost
@@ -245,8 +291,22 @@ export async function currentWindowGeometry(): Promise<SessionWindowGeometry | n
 export async function restoreWindowGeometry(geometry: SessionWindowGeometry | null | undefined): Promise<void> {
   if (!isTauri() || !geometry) return
   const window = getCurrentWindow()
-  await window.setSize(new PhysicalSize(geometry.width, geometry.height))
-  await window.setPosition(new PhysicalPosition(geometry.x, geometry.y))
+  const monitors = await availableMonitors()
+  const savedMonitor = geometry.monitor
+  const target = savedMonitor
+    ? (monitors.find((monitor) => monitorMatchesSnapshot(monitor, savedMonitor)) ?? (await primaryMonitor()))
+    : null
+  const fallback = target ?? (await currentMonitor())
+  if (!fallback) return
+  const workArea = {
+    x: fallback.workArea.position.x,
+    y: fallback.workArea.position.y,
+    width: fallback.workArea.size.width,
+    height: fallback.workArea.size.height,
+  }
+  const safeGeometry = clampSessionGeometry(geometry, workArea)
+  await window.setSize(new PhysicalSize(safeGeometry.width, safeGeometry.height))
+  await window.setPosition(new PhysicalPosition(safeGeometry.x, safeGeometry.y))
 }
 
 export async function openSessionWindow(snapshot: SessionWindowSnapshot): Promise<void> {

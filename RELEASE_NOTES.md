@@ -1,3 +1,18 @@
+# TextMark v0.10.3
+
+TextMark 0.10.3 improves session window geometry recovery across multiple monitors by recording monitor metadata, preserving legacy snapshots, and safely clamping restored windows into an available work area.
+
+TextMark 0.10.3 改进多显示器场景下的会话窗口几何恢复：记录显示器元数据、兼容旧会话快照，并将恢复窗口安全限制在可用工作区内。
+
+## Highlights / 主要更新
+
+- 多显示器恢复：保存显示器位置、工作区、缩放比例和名称信息。
+- 安全回退：原显示器不可用时回退到主显示器，并防止窗口恢复到屏幕外或小于可用尺寸。
+- 兼容性：旧版本仅含 `x/y/width/height` 的会话快照继续可读取。
+- 回归保障：新增负坐标、超大窗口、显示器回退和旧快照兼容测试。
+
+---
+
 # TextMark v0.10.2
 
 TextMark 0.10.2 aligns the desktop toolbar and top-area interactions more closely with the latest Markdown Preview reference, while preserving cross-platform automation compatibility and release verification.

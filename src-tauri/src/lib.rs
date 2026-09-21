@@ -358,6 +358,31 @@ struct SessionWindowGeometry {
     y: i32,
     width: u32,
     height: u32,
+    #[serde(default)]
+    monitor: Option<SessionMonitorSnapshot>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionMonitorSnapshot {
+    name: Option<String>,
+    position: SessionPoint,
+    work_area: SessionWorkArea,
+    scale_factor: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct SessionPoint {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct SessionWorkArea {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2629,6 +2654,17 @@ mod tests {
         )
         .unwrap();
         assert!(snapshot.geometry.is_none());
+    }
+
+    #[test]
+    fn session_geometry_accepts_legacy_geometry_without_monitor_metadata() {
+        let snapshot: SessionWindowSnapshot = serde_json::from_str(
+            r#"{"windowId":"main","documents":["/tmp/readme.md"],"activeIndex":0,"workspacePath":null,"geometry":{"x":-1200,"y":40,"width":1000,"height":700}}"#,
+        )
+        .unwrap();
+        let geometry = snapshot.geometry.unwrap();
+        assert_eq!(geometry.x, -1200);
+        assert!(geometry.monitor.is_none());
     }
 
     #[test]

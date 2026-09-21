@@ -8,6 +8,7 @@ import {
   parentDirectory,
   resolveSiblingPath,
   shouldUseDedicatedSettingsWindow,
+  clampSessionGeometry,
 } from './platform'
 
 const mockUserAgent = (agent: string, platform = '') => {
@@ -71,6 +72,20 @@ describe('platform paths', () => {
   it('extracts serialized error codes without exposing text', () => {
     expect(errorCode('{"code":"not_found","detail":"secret"}')).toBe('not_found')
     expect(errorCode('arbitrary platform error')).toBeNull()
+  })
+})
+
+describe('window geometry recovery', () => {
+  it('clamps a saved window into the available work area', () => {
+    expect(
+      clampSessionGeometry({ x: -1400, y: 900, width: 2200, height: 1600, monitor: null }, { x: 0, y: 0, width: 1440, height: 900 }),
+    ).toMatchObject({ x: 0, y: 0, width: 1440, height: 900 })
+  })
+
+  it('preserves negative coordinates when the saved monitor is still valid', () => {
+    expect(
+      clampSessionGeometry({ x: -1200, y: 40, width: 1000, height: 700, monitor: null }, { x: -1920, y: 0, width: 1920, height: 1080 }),
+    ).toMatchObject({ x: -1200, y: 40, width: 1000, height: 700 })
   })
 })
 
