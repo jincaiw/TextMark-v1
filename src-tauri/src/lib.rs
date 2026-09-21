@@ -18,7 +18,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
-    Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 use tauri_plugin_updater::{Error as UpdaterError, UpdaterExt};
@@ -2494,8 +2494,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building TextMark");
     app.run(|app, event| {
+        #[cfg(not(target_os = "macos"))]
+        let _ = (&app, &event);
         #[cfg(target_os = "macos")]
-        if let RunEvent::Opened { urls } = event {
+        if let tauri::RunEvent::Opened { urls } = event {
             let paths = urls
                 .into_iter()
                 .filter_map(|url| {
