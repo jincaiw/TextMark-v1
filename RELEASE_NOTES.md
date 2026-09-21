@@ -1,3 +1,18 @@
+# TextMark v0.10.2
+
+TextMark 0.10.2 aligns the desktop toolbar and top-area interactions more closely with the latest Markdown Preview reference, while preserving cross-platform automation compatibility and release verification.
+
+TextMark 0.10.2 进一步对齐最新版 Markdown Preview 的桌面 Toolbar、顶部布局与交互体验，同时保留跨平台自动化兼容性并完成发布验证。
+
+## Highlights / 主要更新
+
+- 顶部桌面 UI：重排 Sidebar、文件夹/大纲入口、历史导航、文档标题、Open Actions、Zoom、Inspector、Share、Edit、Search 和 More 的信息架构。
+- 顶部交互：补齐固定侧栏入口、后退/前进操作、搜索图标态与展开态、窄窗口溢出，以及原有 E2E 选择器兼容。
+- 编辑体验：收敛 Formatting Toolbar、文档标签页和 Tauri 拖拽区域的尺寸与布局，覆盖阅读态、编辑态、深色主题和窄窗口。
+- 回归保障：修正跨平台原生窗口尺寸断言，避免把 macOS 可用桌面区域、Retina 缩放和窗口装饰差异误判为产品故障；CI 全部通过。
+
+---
+
 # TextMark v0.10.0
 
 TextMark 0.10.0 completes the Markdown Preview desktop parity pass and adds native GitHub project links plus separate Apple Silicon and Universal macOS DMG assets.
