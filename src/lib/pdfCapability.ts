@@ -1,9 +1,17 @@
 export type PdfCapability = 'native-vector' | 'browser-vector' | 'raster-fallback'
 
+export type PdfTextGuarantee = 'selectable-text' | 'rasterized'
+
 export interface PdfRuntime {
   tauri: boolean
   macos: boolean
   printAvailable: boolean
+}
+
+export interface PdfExportContract {
+  capability: PdfCapability
+  text: PdfTextGuarantee
+  vectorGraphics: boolean
 }
 
 /**
@@ -16,4 +24,19 @@ export function pdfCapability(runtime: PdfRuntime): PdfCapability {
   if (runtime.tauri && runtime.macos && runtime.printAvailable) return 'native-vector'
   if (!runtime.tauri && runtime.printAvailable) return 'browser-vector'
   return 'raster-fallback'
+}
+
+/**
+ * Documents the observable guarantees of the selected path. The jsPDF path is
+ * intentionally described as rasterized: it produces a reliable PDF file on
+ * every desktop target, but does not promise searchable text or vector output.
+ */
+export function pdfExportContract(runtime: PdfRuntime): PdfExportContract {
+  const capability = pdfCapability(runtime)
+  const vector = capability !== 'raster-fallback'
+  return {
+    capability,
+    text: vector ? 'selectable-text' : 'rasterized',
+    vectorGraphics: vector,
+  }
 }

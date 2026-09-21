@@ -571,7 +571,8 @@ function DocumentApp() {
     const previewReady = beginPreviewOutput(restoreEditMode)
     // macOS's print dialog provides the native “Save as PDF” workflow and
     // preserves selectable text/vector diagrams. Keep the byte-export path
-    // for browser and non-macOS desktop runtimes.
+    // for browser and non-macOS desktop runtimes; its raster contract is
+    // intentionally explicit until a platform-specific vector printer exists.
     try {
       const capability = pdfCapability({ tauri: isTauri(), macos: isMacos(), printAvailable: typeof window.print === 'function' })
       if (capability === 'native-vector') {

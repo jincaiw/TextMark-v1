@@ -1,3 +1,17 @@
+# TextMark v0.10.5
+
+TextMark 0.10.5 makes PDF export guarantees explicit across desktop targets: macOS native printing and browser printing preserve selectable text and vector graphics, while Windows/Linux desktop export remains a reliable rasterized PDF fallback.
+
+TextMark 0.10.5 明确跨平台 PDF 导出能力边界：macOS 原生打印和浏览器打印保留可选文字及矢量图形；Windows/Linux 桌面端继续提供可靠的栅格化 PDF 回退，不宣称可选文字矢量等价能力。
+
+## Highlights / 主要更新
+
+- PDF capability contract：新增可检测的文本可选性与矢量图形保证。
+- 跨平台边界：非 macOS Tauri 的 jsPDF 路径明确标记为 rasterized，避免误导用户。
+- 回归保障：覆盖原生打印、浏览器打印与桌面栅格回退三条契约分支。
+
+---
+
 # TextMark v0.10.4
 
 TextMark 0.10.4 clarifies desktop drag-and-drop behavior: it opens the first unique dropped file or folder, reports ignored additional paths, and gives explicit feedback when a drop contains no usable path.

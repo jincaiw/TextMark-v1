@@ -1021,3 +1021,27 @@ git diff --check：通过
 ```
 
 当前状态：顶部区域第一批代码和浏览器截图验证已完成，并已随 `v0.10.2` 提交、推送和正式发布；macOS 原生窗口实拍、原生 NSToolbar 行为、Finder 拖放和原生 titlebar 像素级对齐仍属于独立证据边界，不宣称已完全闭合。
+
+### 9.21 v0.10.5 跨平台 PDF 导出能力收口（2026-09-21）
+
+继续检查剩余任务后，确认 PDF 导出路径已经具备“可导出 PDF”的跨平台实现，但不同运行时的输出保证并不相同。本轮不引入未经验证的平台专用打印引擎，而是把 capability 和输出契约显式化：
+
+- macOS Tauri 且存在 `window.print()` 时使用原生 WebView 打印，保证可选文字和矢量图形；
+- 非 Tauri 浏览器使用浏览器打印，保证可选文字和矢量图形；
+- Windows/Linux Tauri 使用现有 `html-to-image` + `jsPDF` 分页栅格路径，保证可生成 PDF，但明确标记为 `rasterized`，不宣称可搜索文字或矢量图形等价能力；
+- 新增 `pdfExportContract()`，统一返回 `capability`、文本保证和矢量图形保证，新增三条契约分支测试；
+- 更新 v0.10.5 版本文件和发布说明，避免 UI 或帮助文案误导用户。
+
+门禁结果：
+
+```text
+TypeScript：通过
+Vitest：43 文件 / 364 项通过
+ESLint：通过
+format:check：通过
+git diff --check：通过
+生产构建：通过
+bundle budget：通过
+```
+
+当前结论：跨平台“可导出 PDF”已闭合；跨平台“所有平台均输出可选文字矢量 PDF”仍未承诺，需未来为 Windows/Linux 引入并实测平台专用打印或统一 HTML-to-PDF 引擎后再升级契约。
