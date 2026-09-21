@@ -23,7 +23,8 @@ test -s "$app/Contents/Resources/THIRD_PARTY_NOTICES.md"
 plutil -lint "$appex/Contents/Info.plist"
 codesign --verify --deep --strict "$app"
 codesign --verify --deep --strict "$appex"
-test "$(defaults read "$appex/Contents/Info" CFBundleShortVersionString)" = "0.3.0"
+app_version=$(defaults read "$app/Contents/Info" CFBundleShortVersionString)
+test "$(defaults read "$appex/Contents/Info" CFBundleShortVersionString)" = "$app_version"
 test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist")" = "com.apple.quicklook.preview"
 supported_types=$(plutil -extract NSExtension.NSExtensionAttributes.QLSupportedContentTypes json -o - "$appex/Contents/Info.plist")
 grep -q 'app.textmark.markdown-document' <<<"$supported_types"

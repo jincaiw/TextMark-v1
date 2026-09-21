@@ -1,3 +1,4 @@
+import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import { t } from '../lib/i18n'
 import type { Locale } from '../types'
 
@@ -18,9 +19,11 @@ export function UnsavedCloseDialog({
   onDiscard: () => void
   onCancel: () => void
 }) {
+  const backdropRef = useDialogAccessibility(true, onCancel)
   return (
-    <div className="dialog-backdrop">
+    <div className="dialog-backdrop" role="presentation" ref={backdropRef}>
       <section
+        onMouseDown={(event) => event.stopPropagation()}
         className="conflict-dialog"
         role="alertdialog"
         aria-modal="true"

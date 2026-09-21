@@ -2,6 +2,7 @@ export const UPSTREAM_DOCUMENT_TOKENS = Object.freeze({
   fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
   fontSize: 15,
   lineHeight: 1.52,
+  pageColumnWidth: 900,
   contentColumnWidth: 820,
   pagePaddingTop: 32,
   pagePaddingHorizontal: 40,
@@ -41,6 +42,7 @@ export function applyUpstreamDocumentTokens(
   root.style.setProperty('--document-code-font-size', documentFont === 'serif' ? '0.84em' : documentFont === 'monospace' ? '1em' : '0.88em')
   root.style.setProperty('--document-font-size', `${tokens.fontSize}px`)
   root.style.setProperty('--document-line-height', String(lineHeight))
+  root.style.setProperty('--document-page-width', `${tokens.pageColumnWidth}px`)
   root.style.setProperty('--document-column-width', `${tokens.contentColumnWidth}px`)
   root.style.setProperty('--document-page-padding-horizontal', `${pagePaddingHorizontal}px`)
   root.style.setProperty('--document-page-padding', `${tokens.pagePaddingTop}px ${pagePaddingHorizontal}px ${tokens.pagePaddingBottom}px`)

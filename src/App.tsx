@@ -5,6 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import './App.css'
 import type { EditorPaneHandle } from './components/EditorPane'
 import { ConflictDialog } from './components/ConflictDialog'
+import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
 import { ExportDialog } from './components/ExportDialog'
 import { FindBar } from './components/FindBar'
@@ -59,7 +60,8 @@ import { configureCrashReporting, crashReportingAvailable } from './lib/telemetr
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
-import type { ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
+import { pdfCapability } from './lib/pdfCapability'
+import type { EditorSessionState, ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
@@ -114,6 +116,7 @@ function DocumentApp() {
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
   const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
+  const [pendingEditorSelection, setPendingEditorSelection] = useState<EditorSessionState['selection'] | null>(null)
   const [pendingPreviewLine, setPendingPreviewLine] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [replacement, setReplacement] = useState('')
@@ -125,6 +128,7 @@ function DocumentApp() {
   const [applications, setApplications] = useState<ExternalApplication[]>([])
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
+  const editorState = documents.document.editorState
   const editorRef = useRef<EditorPaneHandle>(null)
   const allowCloseRef = useRef(false)
   const [closeGuard, setCloseGuard] = useState<{ dirty: number; canSaveAll: boolean } | null>(null)
@@ -140,6 +144,7 @@ function DocumentApp() {
   // The caret belongs to the editor, which is unmounted on every mode switch.
   // Remembering it on the way out is what lets an output action put it back.
   const editorExitRef = useRef<EditorExitCaret | null>(null)
+  const editorExitSelectionRef = useRef<EditorSessionState['selection'] | null>(null)
   const rendered = useMarkdownRenderer(documents.document.contents, settings.locale)
   useEffect(() => {
     localStorage.setItem('textmark.sidebarVisible', String(sidebarVisible))
@@ -270,7 +275,15 @@ function DocumentApp() {
     if (isTauri()) void getCurrentWindow().setTitle(title)
   }, [documents.document.name, documents.isDirty, settings.locale])
   useEffect(() => {
-    if (viewMode === 'edit') window.setTimeout(() => editorRef.current?.focus(), 0)
+    if (viewMode !== 'edit') return
+    const saved = documents.document.editorState
+    if (saved) {
+      setPendingEditorLine(saved.topLine)
+      setPendingScrollFraction(saved.scrollFraction)
+      setPendingEditorSelection(saved.selection)
+      setPendingEditorCursor(saved.selection.head)
+    }
+    window.setTimeout(() => editorRef.current?.focus(), 0)
   }, [documents.activeId, viewMode])
 
   const flash = (message: string) => {
@@ -324,12 +337,15 @@ function DocumentApp() {
       setPendingEditorLine(anchorLine)
       setPendingScrollFraction(previewFraction())
       setPendingEditorCursor(caretForReturnToEditor(anchorLine, editorExitRef.current))
+      setPendingEditorSelection(anchorLine != null && editorExitRef.current?.topLine === anchorLine ? editorExitSelectionRef.current : null)
     } else {
+      const currentEditorState = editorRef.current?.getState() ?? editorState
       editorExitRef.current = {
-        topLine: editorRef.current?.getTopLine() ?? null,
-        line: cursorRef.current.line,
-        column: cursorRef.current.column,
+        topLine: currentEditorState?.topLine ?? editorRef.current?.getTopLine() ?? null,
+        line: currentEditorState?.selection.head.line ?? cursorRef.current.line,
+        column: currentEditorState?.selection.head.column ?? cursorRef.current.column,
       }
+      editorExitSelectionRef.current = currentEditorState?.selection ?? null
       setPendingEditorLine(null)
       setPendingEditorCursor(null)
       setPendingPreviewLine(editorRef.current?.getTopLine() ?? null)
@@ -350,6 +366,7 @@ function DocumentApp() {
   const clearPendingEditorPosition = () => {
     setPendingEditorLine(null)
     setPendingEditorCursor(null)
+    setPendingEditorSelection(null)
     setPendingScrollFraction(null)
   }
   // Returning to the preview has to wait for the pane to be laid out, so the
@@ -428,9 +445,28 @@ function DocumentApp() {
     if (outcome === 'copied') flash(t(settings.locale, 'copied'))
   }
   const openWith = async (application = 'system') => {
+    if (!documents.document.path && documents.isDirty) {
+      flash(
+        settings.locale === 'zh-CN'
+          ? '请先保存未命名文稿，再使用外部编辑器打开。'
+          : 'Save the untitled document before opening it in another app.',
+      )
+      return
+    }
     if (!documents.document.path || !isTauri()) {
       flash(settings.locale === 'zh-CN' ? '请先保存文件，再使用外部编辑器打开。' : 'Save the file before opening it in another app.')
       return
+    }
+    if (documents.isDirty) {
+      const saved = await documents.saveFile()
+      if (!saved) {
+        flash(
+          settings.locale === 'zh-CN'
+            ? '文稿未保存，已取消打开外部编辑器。'
+            : 'The document was not saved; opening the external editor was cancelled.',
+        )
+        return
+      }
     }
     try {
       if (application === 'system') await openExternalPath(documents.document.path)
@@ -451,6 +487,13 @@ function DocumentApp() {
       )
   }
   const openInLlm = async (application: 'codex' | 'claude' | 'chatgpt') => {
+    if (documents.isDirty && documents.document.path) {
+      const saved = await documents.saveFile()
+      if (!saved) {
+        flash(settings.locale === 'zh-CN' ? '文稿未保存，已取消打开 LLM。' : 'The document was not saved; opening the LLM was cancelled.')
+        return
+      }
+    }
     const { buildLlmHandoff } = await import('./lib/llmHandoff')
     const handoff = buildLlmHandoff({
       target: application,
@@ -529,7 +572,8 @@ function DocumentApp() {
     // preserves selectable text/vector diagrams. Keep the byte-export path
     // for browser and non-macOS desktop runtimes.
     try {
-      if (isTauri() && isMacos()) {
+      const capability = pdfCapability({ tauri: isTauri(), macos: isMacos(), printAvailable: typeof window.print === 'function' })
+      if (capability === 'native-vector') {
         await printDocument(true)
         return
       }
@@ -918,10 +962,42 @@ function DocumentApp() {
     let disposed = false
     let unlisten: (() => void) | undefined
     void windowHandle
+      .onDragDropEvent((event) => {
+        if (event.payload.type !== 'drop') return
+        const paths = event.payload.paths
+        if (paths.length !== 1) {
+          setNotice(settings.locale === 'zh-CN' ? '一次只能打开一个文件或文件夹。' : 'Drop one file or folder at a time.')
+          return
+        }
+        void documentsRef.current.openPath(paths[0])
+      })
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isTauri()) return
+    const windowHandle = getCurrentWindow()
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void windowHandle
       .onCloseRequested((event) => {
         if (allowCloseRef.current) return
         const dirty = documentsRef.current.sessions.filter((session) => session.dirty)
-        if (!dirty.length) return
+        if (!dirty.length) {
+          event.preventDefault()
+          void documentsRef.current.saveSession(false).finally(async () => {
+            allowCloseRef.current = true
+            void getCurrentWindow().close()
+          })
+          return
+        }
         event.preventDefault()
         setCloseGuard({ dirty: dirty.length, canSaveAll: dirty.every((session) => Boolean(session.path)) })
       })
@@ -935,8 +1011,18 @@ function DocumentApp() {
     }
   }, [])
   const closeWindowNow = () => {
-    allowCloseRef.current = true
-    void getCurrentWindow().close()
+    void documentsRef.current.saveSession(false).finally(async () => {
+      allowCloseRef.current = true
+      void getCurrentWindow().close()
+    })
+  }
+  const requestClose = () => {
+    const dirty = documentsRef.current.sessions.filter((session) => session.dirty)
+    if (!dirty.length) {
+      closeWindowNow()
+      return
+    }
+    setCloseGuard({ dirty: dirty.length, canSaveAll: dirty.every((session) => Boolean(session.path)) })
   }
   const discardAndClose = () => {
     setCloseGuard(null)
@@ -1062,6 +1148,7 @@ function DocumentApp() {
         onExport={() => setExportOpen(true)}
         onSettings={openSettings}
         onCustomizeToolbar={() => setToolbarOpen(true)}
+        onClose={requestClose}
       />
       {findOpen ? (
         <FindBar
@@ -1131,6 +1218,7 @@ function DocumentApp() {
             {viewMode === 'edit' ? (
               <Suspense fallback={<div className="editor-loading" />}>
                 <EditorPane
+                  key={`${documents.document.id}:${documents.document.revision ?? 'memory'}`}
                   ref={editorRef}
                   value={documents.document.contents}
                   theme={resolvedTheme}
@@ -1140,7 +1228,9 @@ function DocumentApp() {
                   initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
                   initialLine={pendingEditorLine ?? undefined}
                   initialCursor={pendingEditorCursor}
+                  initialSelection={pendingEditorSelection}
                   onInitialPositionApplied={clearPendingEditorPosition}
+                  onStateChange={documents.reportEditorState}
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
                   onChange={documents.updateContents}
@@ -1215,6 +1305,14 @@ function DocumentApp() {
         </div>
       ) : null}
       <ConflictDialog change={documents.externalChange} locale={settings.locale} onResolve={documents.resolveExternal} />
+      {documents.pendingDraft ? (
+        <DraftRecoveryDialog
+          record={documents.pendingDraft.record}
+          locale={settings.locale}
+          onRestore={documents.restorePendingDraft}
+          onDiscard={documents.discardPendingDraft}
+        />
+      ) : null}
       {closeGuard ? (
         <UnsavedCloseDialog
           locale={settings.locale}

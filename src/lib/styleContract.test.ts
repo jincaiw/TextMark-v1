@@ -3,8 +3,9 @@ import { documentCss } from './export'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 describe('v0.0.49 visual and print contract', () => {
-  it('uses the frozen 820px content column and exact page gutters', () =>
+  it('uses the frozen 900px page, 820px content column and exact page gutters', () =>
     expect(UPSTREAM_DOCUMENT_TOKENS).toMatchObject({
+      pageColumnWidth: 900,
       contentColumnWidth: 820,
       pagePaddingTop: 32,
       pagePaddingHorizontal: 40,

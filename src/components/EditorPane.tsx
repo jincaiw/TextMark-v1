@@ -19,7 +19,7 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { caretToOffset } from '../lib/readingPosition'
 import { loadLocalAsset } from '../lib/platform'
 import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
-import type { ContentWidth, FormatCommand, SearchMode } from '../types'
+import type { ContentWidth, EditorSessionState, FormatCommand, SearchMode } from '../types'
 
 export interface EditorPaneHandle {
   focus: () => void
@@ -32,6 +32,7 @@ export interface EditorPaneHandle {
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
   getScrollFraction: () => number
+  getState: () => EditorSessionState | null
 }
 
 export interface ReplaceOptions {
@@ -52,6 +53,8 @@ interface EditorPaneProps {
    * scroll fraction because heading anchors survive the layout difference
    * between the preview and the editor. */
   initialLine?: number
+  /** Selection to put back when returning to the editor. */
+  initialSelection?: EditorSessionState['selection'] | null
   /** Caret to put back when returning to the editor, in source line/column.
    * Only honoured together with `initialLine`, and only when the reader did not
    * move while they were in the preview (see `caretForReturnToEditor`). */
@@ -69,6 +72,7 @@ interface EditorPaneProps {
   workspacePath?: string | null
   onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
+  onStateChange?: (state: EditorSessionState) => void
   /** Find-bar state. The preview pane highlights matches in rendered text;
    * the editor highlights the same matches in source text so the match
    * counter, the cycle order and “replace” stay in step while editing. */
@@ -100,6 +104,22 @@ function toggledInline(selected: string, wrapper: [string, string]) {
 
 const stripListMarker = (line: string) => line.replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
 const stripTaskMarker = (line: string) => line.replace(/^\s*(?:[-+*]\s+)?(?:\[[ xX]\]\s+)?/, '')
+
+function getEditorState(view: EditorView): EditorSessionState {
+  const position = (offset: number) => {
+    const line = view.state.doc.lineAt(offset)
+    return { line: line.number, column: offset - line.from + 1 }
+  }
+  const dom = view.scrollDOM
+  return {
+    selection: {
+      anchor: position(view.state.selection.main.anchor),
+      head: position(view.state.selection.main.head),
+    },
+    topLine: view.state.doc.lineAt(view.lineBlockAt(view.viewport.from).from).number,
+    scrollFraction: dom.scrollHeight <= dom.clientHeight ? 0 : clampScrollFraction(dom.scrollTop / (dom.scrollHeight - dom.clientHeight)),
+  }
+}
 
 function applyFormat(view: EditorView, command: FormatCommand) {
   const selection = view.state.selection.main
@@ -174,6 +194,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   onInitialPositionAppliedRef.current = props.onInitialPositionApplied
   const initialCursorRef = useRef(props.initialCursor)
   initialCursorRef.current = props.initialCursor
+  const initialSelectionRef = useRef(props.initialSelection)
+  initialSelectionRef.current = props.initialSelection
+  const onStateChangeRef = useRef(props.onStateChange)
+  onStateChangeRef.current = props.onStateChange
   const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
   const imagePasteExtension = useMemo(
     () =>
@@ -308,6 +332,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         if (!dom || dom.scrollHeight <= dom.clientHeight) return 0
         return clampScrollFraction(dom.scrollTop / (dom.scrollHeight - dom.clientHeight))
       },
+      getState: () => (viewRef.current ? getEditorState(viewRef.current) : null),
     }),
     [],
   )
@@ -326,14 +351,21 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       // switch, and leaving the selection at the document start put the caret
       // thousands of pixels above the line the reader had just come back to.
       // When the round trip ended where it started, put it back exactly.
-      const restored = caretToOffset(
-        initialCursorRef.current ?? null,
+      const initialSelection = initialSelectionRef.current
+      const restoredAnchor = caretToOffset(
+        initialSelection?.anchor ?? initialCursorRef.current ?? null,
+        (line) => view.state.doc.line(line).from,
+        (line) => view.state.doc.line(line).to,
+        view.state.doc.lines,
+      )
+      const restoredHead = caretToOffset(
+        initialSelection?.head ?? initialCursorRef.current ?? null,
         (line) => view.state.doc.line(line).from,
         (line) => view.state.doc.line(line).to,
         view.state.doc.lines,
       )
       view.dispatch({
-        selection: { anchor: restored ?? lineStart },
+        selection: { anchor: restoredAnchor ?? lineStart, head: restoredHead ?? restoredAnchor ?? lineStart },
         effects: EditorView.scrollIntoView(lineStart, { y: 'start' }),
       })
     } else {
@@ -417,6 +449,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             const line = view.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
+            onStateChangeRef.current?.(getEditorState(view))
             setReady(true)
           }}
           onChange={props.onChange}
@@ -426,6 +459,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             const line = update.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(update.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
+            onStateChangeRef.current?.(getEditorState(update.view))
           }}
           basicSetup={{
             lineNumbers: false,

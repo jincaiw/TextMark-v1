@@ -19,7 +19,9 @@ export function useDialogAccessibility(open: boolean, onClose: () => void) {
     const container = ref.current
     if (!container) return
     const focusable = () =>
-      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.offsetParent !== null)
+      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (element) => !element.hidden && getComputedStyle(element).display !== 'none',
+      )
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
     focusable()[0]?.focus()
     const onKeyDown = (event: KeyboardEvent) => {

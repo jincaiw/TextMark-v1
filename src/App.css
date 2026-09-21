@@ -77,6 +77,7 @@
   --toast-bg: rgba(25, 25, 28, 0.88);
   /* Layout: macOS desktop workspace baseline */
   --toolbar-height: 52px;
+  --document-page-width: 900px;
   --sidebar-width: 240px;
   --inspector-width: 270px;
   --sidebar-min-width: 230px;
@@ -201,8 +202,8 @@ select:focus-visible {
   gap: 2px;
 }
 .history-buttons button {
-  width: 32px;
-  height: var(--control-h-lg);
+  width: 26px;
+  height: var(--control-h-sm);
   display: grid;
   place-items: center;
   padding: 0;
@@ -225,14 +226,14 @@ select:focus-visible {
   stroke-width: 1.7;
 }
 .sidebar-control {
-  height: var(--control-h-lg);
+  height: var(--control-h-sm);
   border-radius: var(--radius-md);
   background: transparent;
 }
 .sidebar-control > button,
 .sidebar-control summary {
-  width: 32px;
-  height: var(--control-h-lg);
+  width: 26px;
+  height: var(--control-h-sm);
   display: grid;
   place-items: center;
   padding: 0;
@@ -253,7 +254,7 @@ select:focus-visible {
   position: relative;
 }
 .sidebar-control summary {
-  width: 20px;
+  width: 18px;
   list-style: none;
   border-left: 1px solid var(--border);
   border-radius: 0;
@@ -300,8 +301,8 @@ select:focus-visible {
   flex: 0 0 14px;
 }
 .toolbar-item-button {
-  width: 36px;
-  height: var(--control-h-lg);
+  width: 26px;
+  height: var(--control-h-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,8 +340,8 @@ select:focus-visible {
   stroke-width: 1.7;
 }
 .toolbar-group {
-  min-height: var(--control-h-lg);
-  height: var(--control-h-lg);
+  min-height: var(--control-h-sm);
+  height: var(--control-h-sm);
   border-radius: var(--radius-md);
   background: transparent;
   overflow: visible;
@@ -348,7 +349,7 @@ select:focus-visible {
 .toolbar-group button,
 .toolbar-group summary,
 .more-menu summary {
-  height: var(--control-h-lg);
+  height: var(--control-h-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,6 +367,8 @@ select:focus-visible {
 }
 .toolbar-group.document-actions {
   gap: 0;
+  min-height: var(--control-h-sm);
+  height: var(--control-h-sm);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -415,7 +418,7 @@ select:focus-visible {
 }
 .document-search {
   width: clamp(160px, 16vw, 240px);
-  height: var(--control-h-lg);
+  height: var(--control-h-sm);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -733,7 +736,7 @@ select:focus-visible {
   min-width: 0;
   display: flex;
   gap: 2px;
-  padding: 5px 8px 0;
+  padding: 4px 8px 0;
   border-bottom: 1px solid var(--border);
   background: var(--chrome);
   overflow-x: auto;
@@ -778,8 +781,8 @@ select:focus-visible {
   cursor: pointer;
 }
 .document-tab .tab-close {
-  width: 25px;
-  height: 25px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -798,13 +801,13 @@ select:focus-visible {
   width: 13px;
 }
 .document-shell.with-sidebar {
-  grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) 6px minmax(420px, 1fr);
 }
 .document-shell.with-inspector {
-  grid-template-columns: minmax(0, 1fr) 6px var(--inspector-width);
+  grid-template-columns: minmax(420px, 1fr) 6px var(--inspector-width);
 }
 .document-shell.with-sidebar.with-inspector {
-  grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr) 6px var(--inspector-width);
+  grid-template-columns: var(--sidebar-width) 6px minmax(420px, 1fr) 6px var(--inspector-width);
 }
 .panel-resizer {
   position: relative;
@@ -848,7 +851,7 @@ select:focus-visible {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 40px minmax(0, 1fr);
+  grid-template-rows: 38px minmax(0, 1fr);
   border-right: 1px solid var(--border);
   background: var(--sidebar);
   overflow: hidden;
@@ -858,7 +861,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 10px 4px 14px;
+  padding: 5px 10px 3px 14px;
 }
 .sidebar-section-title strong {
   min-width: 0;
@@ -1022,7 +1025,7 @@ select:focus-visible {
   overflow: auto;
 }
 .inspector-panel header {
-  height: 52px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1075,7 +1078,7 @@ select:focus-visible {
   color: var(--accent);
 }
 .inspector-tab {
-  padding-top: 14px;
+  padding-top: 12px;
 }
 .inspector-file {
   display: flex;
@@ -1249,7 +1252,7 @@ select:focus-visible {
 }
 .editor-page {
   position: relative;
-  width: min(820px, 100%);
+  width: min(var(--document-page-width, 900px), 100%);
   height: 100%;
   margin: 0 auto;
 }
@@ -1314,6 +1317,16 @@ select:focus-visible {
 }
 .editor-pane .cm-selectionBackground {
   background: color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+.editor-pane .cm-md-syntax-marker,
+.editor-pane .cm-md-task-marker,
+.editor-pane .cm-md-fence-marker,
+.editor-pane .cm-md-table-marker {
+  color: color-mix(in srgb, var(--muted) 62%, transparent);
+  opacity: 0.72;
+}
+.editor-pane .cm-md-task-marker {
+  color: color-mix(in srgb, var(--accent) 72%, var(--muted));
 }
 .editor-pane .cm-md-image-preview {
   display: inline-flex;
@@ -1396,6 +1409,20 @@ select:focus-visible {
   color: var(--muted);
   background: color-mix(in srgb, var(--document-grid) 34%, transparent);
 }
+.editor-pane .cm-md-mermaid-fence {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  font-weight: 650;
+}
+.editor-pane .cm-md-math {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+.editor-pane .cm-md-table {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--document-grid) 26%, transparent);
+}
 .editor-pane .cm-md-rule {
   color: transparent;
   position: relative;
@@ -1454,7 +1481,8 @@ select:focus-visible {
 }
 
 .markdown-body {
-  width: min(var(--document-column-width, 820px), 100%);
+  width: min(var(--document-page-width, 900px), 100%);
+  max-width: var(--document-page-width, 900px);
   min-height: 100%;
   margin: 0 auto;
   padding: var(--document-page-padding, 32px 40px 48px);
@@ -3026,7 +3054,9 @@ mark.search-match.active {
   .traffic-lights {
     display: none;
   }
-  .document-shell.with-sidebar {
+  .document-shell.with-sidebar,
+  .document-shell.with-inspector,
+  .document-shell.with-sidebar.with-inspector {
     grid-template-columns: minmax(0, 1fr);
   }
   .native-sidebar {

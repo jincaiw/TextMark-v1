@@ -71,6 +71,7 @@ interface ToolbarProps {
   onExport: () => void
   onSettings: () => void
   onCustomizeToolbar: () => void
+  onClose: () => void
 }
 
 const SIMPLE_ACTIONS: Partial<
@@ -98,7 +99,7 @@ export function Toolbar(props: ToolbarProps) {
   const windowAction = (action: 'close' | 'minimize' | 'toggleMaximize') => {
     if (!isTauri()) return
     const window = getCurrentWindow()
-    if (action === 'close') void window.close()
+    if (action === 'close') props.onClose()
     else if (action === 'minimize') void window.minimize()
     else void window.toggleMaximize()
   }

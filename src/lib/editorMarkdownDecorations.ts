@@ -6,10 +6,13 @@ import { markdownImageReferences } from './pastedImages'
 const lineClass = (line: string) => {
   if (/^(---|\+\+\+)$/.test(line)) return 'cm-md-frontmatter-boundary'
   if (/^[A-Za-z][\w-]*:\s/.test(line)) return 'cm-md-frontmatter-value'
-  if (/^\s*(`{3,}|~{3,})/.test(line)) return 'cm-md-code-fence'
+  const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?/)
+  if (fence) return fence[2]?.toLowerCase() === 'mermaid' ? 'cm-md-mermaid-fence' : 'cm-md-code-fence'
+  if (/^\s*(?:\$\$|\\\[|\\\])\s*$/.test(line)) return 'cm-md-math'
+  if (/^\s*(?:[-+*]|\d+[.)])\s+\[[ xX]\]\s+/.test(line)) return 'cm-md-task'
+  if (/^\s*\|.*\|\s*$/.test(line) && /\|\s*:?-{3,}:?\s*(?:\||$)/.test(line)) return 'cm-md-table'
   if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) return 'cm-md-rule'
   if (/^\s*>/.test(line)) return 'cm-md-quote'
-  if (/^\s*(?:[-+*]|\d+[.)])\s+\[[ xX]\]\s+/.test(line)) return 'cm-md-task'
   if (/^\s*(?:[-+*]|\d+[.)])\s+/.test(line)) return 'cm-md-list'
   return ''
 }
@@ -18,6 +21,40 @@ const lineClass = (line: string) => {
  * viewport, keeping large Markdown files responsive. */
 export function markdownLineClass(line: string) {
   return lineClass(line)
+}
+
+export interface MarkdownSyntaxMarker {
+  from: number
+  to: number
+  className: string
+}
+
+/** Returns only structural Markdown punctuation, so inactive source can be
+ * visually quieter without hiding the content itself. Offsets are line-local. */
+export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
+  const markers: MarkdownSyntaxMarker[] = []
+  const add = (from: number, to: number, className = 'cm-md-syntax-marker') => {
+    if (to > from) markers.push({ from, to, className })
+  }
+  const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)|^(\s*)(>)(?=\s?)/)
+  if (prefix) {
+    const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? prefix[5]?.length ?? 0
+    const marker = prefix[2] ?? prefix[4] ?? prefix[6] ?? ''
+    add(markerStart, markerStart + marker.length)
+  }
+  const task = line.match(/^(\s*)(?:[-+*]|\d+[.)])\s+(\[[ xX]\])/)
+  if (task)
+    add(
+      task[1].length + line.slice(task[1].length).search(/\[/),
+      task[1].length + line.slice(task[1].length).search(/\[/) + task[2].length,
+      'cm-md-task-marker',
+    )
+  const fence = line.match(/^(\s*)(`{3,}|~{3,})(?:\s*[^\s]*)?\s*$/)
+  if (fence) add(fence[1].length, fence[1].length + fence[2].length, 'cm-md-fence-marker')
+  if (/^\s*\|.*\|\s*$/.test(line)) {
+    for (const match of line.matchAll(/\|/g)) add(match.index ?? 0, (match.index ?? 0) + 1, 'cm-md-table-marker')
+  }
+  return markers.sort((left, right) => left.from - right.from || left.to - right.to)
 }
 
 const inlinePattern = /`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\[[^\]\n]+\]\([^\)\n]+\)/g
@@ -85,6 +122,10 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
       const line = view.state.doc.line(number)
       const className = lineClass(line.text)
       if (className) builder.add(line.from, line.from, Decoration.line({ class: className }))
+      const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
+      if (!activeLine)
+        for (const marker of markdownSyntaxMarkers(line.text))
+          builder.add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
       inlinePattern.lastIndex = 0
       for (const match of line.text.matchAll(inlinePattern)) {
         const value = match[0]

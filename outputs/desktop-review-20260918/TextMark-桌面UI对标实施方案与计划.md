@@ -6,7 +6,7 @@
 - **TextMark 基线**：当前已发布能力 `v0.9.8`；对标结论基于此前 `v0.9.7` 代码审查、`v0.9.8` 实施结果及本机 UI 调研
 - **文档版本**：实施方案 `v1.0`
 - **编制日期**：2026-09-18
-- **当前状态**：待用户确认，确认前不修改业务代码、不修改发布配置
+- **当前状态**：实施中；P0–P5 已完成，B11–B14 已进入可靠性收口，发布/推送仍按用户明确指令执行
 
 ---
 
@@ -150,7 +150,7 @@ TextMark 已经具备并应保留的能力：
    - Toolbar：保持约 `52px`；
    - 左侧栏：默认约 `240px`；
    - 右侧栏：默认约 `270px`；
-   - 中央区域：`minmax(0, 1fr)`；
+   - 中央区域：桌面窗口 `minmax(420px, 1fr)`；窄窗口断点下改为单列 `minmax(0, 1fr)`，避免横向溢出；
 2. 保留已保存的用户宽度，不覆盖既有设置；
 3. 为左、右面板设置合理最小/最大宽度；
 4. 重排 Toolbar 为三个区域：
@@ -609,4 +609,269 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 5. 是否将 `rch64.dmg` 统一解释为 `arm64.dmg`，构建 target 使用 `aarch64-apple-darwin`；
 6. 是否在 P4 增加项目主页、GitHub Releases 和 Issues 三个菜单入口。
 
-**当前文档状态：待确认。确认后进入 P0，实施过程中按本计划自动化推进、持续验证并在每个阶段完成后汇报结果。**
+**当前文档状态：已进入实施阶段。P0–P5 桌面 UI、菜单入口和 ARM64 DMG 基础能力已落地；当前继续收口 B14 的跨进程恢复证据，并对 B11–B13 仅在当前环境可验证范围内推进。工作树仍未提交、未推送、未合并、未发布。**
+
+### 9.1 当前实施账本（2026-09-19）
+
+| 阶段/批次 | 状态 | 已取得证据 | 当前缺口 |
+|---|---|---|---|
+| P0–P5 | 已完成 | UI/菜单/发布能力代码已落地，shell E2E 已覆盖主要桌面交互 | 新正式版本尚未发布 |
+| B11 | 部分完成 | 语法装饰纯函数与回归测试通过；真实 Markdown 语法夹具已稳定通过，覆盖表格、任务列表、数学、提示框、Mermaid、危险 HTML 过滤、图片、换行和长代码块；图片使用 alt/source 契约、表格使用 renderer-owned class 契约 | IME、运行时截图、大文档性能 |
+| B12 | 部分完成 | 外部写冲突、文件拖放入口、外部应用交接契约已覆盖；shell E2E 22 项通过 | Finder/桌面真实拖放、真实外部应用启动、多窗口拖放 |
+| B13 | 部分完成 | macOS PDF 能力探针与导出边界已明确 | Windows/Linux 实机可选文字证据 |
+| B14 | 代码与单测完成，实机证据收口中 | session-v1 原子快照、窗口几何、secondary 恢复、pending queue、草稿/选区恢复；Vitest 43 文件/360 项，Rust 20 项，shell E2E 22 项；多文档标签 E2E 已通过；secondary 创建、快照写入和关闭清理 E2E 已通过 | 跨进程重启后的多文档 UI 恢复、多显示器几何 |
+
+### 9.2 下一批次：B14-M1 异常退出恢复验收
+
+在不改变产品语义和发布配置的前提下，优先新增独立的 macOS Tauri E2E 验证批次：
+
+1. 使用隔离的 `TEXTMARK_E2E_CONFIG_DIR` 和临时 Markdown fixture；
+2. 打开至少两个文档，写入 dirty 草稿并等待 `session-v1.json` 稳定落盘；
+3. 通过现有进程控制能力结束旧实例，确认旧 PID 已归零；
+4. 无显式启动路径重新启动，验证文档列表、活动标签、workspace、窗口几何和草稿恢复入口；
+5. 正常关闭后确认当前窗口快照被清理，避免把“正常关闭”和“异常退出保留”混为同一语义；
+6. 若当前 WebDriver/Tauri 服务无法安全重启同一进程，则保留代码契约与人工可复现实验记录，不绕过 macOS TCC 或签名控制。
+
+**当前结果（2026-09-19）**：已新增 `scripts/verify-session-recovery.mjs`，使用隔离配置目录启动真实 Tauri debug 进程；单文档会话快照落盘、`SIGKILL` 后重启仍保留 `session-v1.json` 的探针已通过。期间发现并修复普通 debug 构建未启用 `e2e` feature 时无法读取 `TEXTMARK_E2E_CONFIG_DIR` 的缺口，并处理 macOS `/var` 与 `/private/var` 路径别名。异常退出快照持久化已通过；新增独立 `e2e/session-cleanup.spec.mjs`，通过真实 WebDriver 点击窗口关闭按钮，确认 `close-request` 流程完成 `saveSession(true)`，且 `session-v1.json` 被移除。新增 `e2e/session-recovery.spec.mjs`，通过真实 Tauri pending queue 注入第二个文档，已验证两个文档标签、活动标签和 `session-v1.json` 文档顺序/`activeIndex=1`；该 E2E 已通过。此前的 SIGTERM 进程探针仍保留为边界证据，未将进程终止误报为 UI 关闭清理。跨进程重启后的多文档 UI 恢复、草稿对话框、secondary 窗口和窗口几何仍需完整验收；进程级探针继续只承诺单文档异常退出快照保留。尝试新增 secondary 窗口真实 E2E 时，窗口创建和文档显示成功，但隔离 `session-v1.json` 未出现 secondary 快照，等待超时；定位到几何查询在新窗口原生 surface 尚未完成挂载时可能拒绝，已增加 `currentWindowGeometry()` 容错并将保存使用的活动标签改为 ref 读取，前端门禁通过；secondary 真实 E2E 尚未重新通过，仍不宣称生命周期已闭合。
+
+**放行条件**：异常退出场景取得可重复证据；若环境限制导致无法完成，必须明确记录阻塞点，不将单元测试替代为跨进程实机通过。
+
+### 9.3 B14-M2 secondary 窗口生命周期验收结果（2026-09-19）
+
+本轮通过真实 Tauri WebDriver 场景验证：
+
+1. 通过原生命令创建 secondary 窗口，并确认文档内容在新窗口显示；
+2. 确认 secondary 窗口快照写入隔离配置目录的 `session-v1.json`；
+3. 确认点击 secondary Toolbar 关闭按钮后，对应快照从 manifest 清理；
+4. 修复关闭入口：Toolbar 不再绕过 React 关闭保护，统一转入 `requestClose`；
+5. 增加基于当前 native window label 的显式清理命令，并保留 `Destroyed` 事件兜底清理，避免 debounce 保存竞态重新写回快照。
+
+验证结果：
+
+```text
+Spec Files: 1 passed, 1 total
+TextMark secondary session lifecycle: passed
+```
+
+当前仍未闭合：跨进程重启后的多文档 UI 恢复、多显示器几何恢复。
+
+补充复验（2026-09-20）：
+
+- 将 secondary E2E 的文档断言和 manifest 匹配从固定的 `recovery-b.md` 改为读取实际传入 fixture 的文件名与一级标题，避免测试夹具之间发生隐式耦合。使用 `/tmp/secondary-a.md` 独立夹具重新执行，结果为 `build:e2e：通过`、`secondary-session.spec.mjs：1 passed`。
+- 修复 shell E2E 对设置文件路径的假设：测试此前固定读取默认临时目录，和 `TEXTMARK_E2E_CONFIG_DIR` 隔离配置不一致，导致设置持久化场景超时；现在测试与运行时共用隔离配置目录。修复后 shell 回归结果为 `22 tests passed`。
+
+### 9.4 B11-B13 当前环境验证结果（2026-09-19）
+
+- **B11**：使用临时 Markdown 语法夹具完成真实 macOS Tauri E2E 运行验收；frontmatter、Setext/ATX 标题、表格、任务列表、脚注、数学、提示框、3 个 Mermaid 图、危险 HTML 过滤、软/硬换行和长代码块均可到达。已将不稳定的图片 `naturalWidth` 断言改为 alt/source 契约、表格 computed style 断言改为 renderer-owned `md-table-align-*` class 契约；E2E `1 spec passed`，定向单测 44/44 继续通过。
+- **B12**：既有 shell E2E 22 项和 LLM/外部应用交接纯函数测试继续通过；当前环境未宣称 Finder 真实拖放、真实外部应用启动和多窗口拖放已闭合。
+- **B13**：`pdfCapability` 3 项定向测试通过，明确 macOS Tauri + print API 使用 `native-vector`，浏览器使用 `browser-vector`，其他 Tauri 平台保留 `raster-fallback`；Windows/Linux 实机可选文本 PDF 仍未取得证据。
+
+本轮 B11-B13 不修改产品实现，仅补充真实运行验收与测试夹具契约；临时夹具位于 `/tmp`，未进入仓库。
+
+### 9.5 桌面 UI 宽度基线对齐（2026-09-20）
+
+根据 `pluk-inc/markdown-preview` 当前 main 源码重新核对布局基线：
+
+- 参照窗口 setup 后约 `1100×720`；左侧栏 `230–400px`，中心区最小 `420px`，右侧 Inspector `270–500px`，默认 Inspector 折叠；
+- 参照阅读页面宽 `900px`，文章列宽 `820px`，左右内边距各 `40px`，正文字号 `15px`、行高约 `1.5`；
+- TextMark 原有左右栏默认值和 min/max 已匹配，但中心列此前是 `minmax(0, 1fr)`，阅读/编辑外框也误用 `820px`；
+- 本轮将中心列统一为 `minmax(420px, 1fr)`，新增 `900px` 页面宽度 token，保留 `820px` 正文内容列和 `40px` 内边距；编辑态、阅读态和 preview host 统一使用该页面宽度；
+- `styleContract` 增加 `900px` 页面宽度契约；TypeScript、定向 Vitest 和格式检查通过。
+
+继续复核 Toolbar 与窄窗口规则：参照默认 toolbar 顺序已保留为 flexible space、sidebar、navigation、flexible space、open actions、space、zoom、document actions、search；同时修正 `max-width:700px` 时中心区不应继续强制 420px，改为所有面板组合单列 `minmax(0,1fr)`，避免小屏横向溢出。
+
+### 9.6 Toolbar 控件密度对齐（2026-09-20）
+
+参照源码中普通 Toolbar 按钮约 `26px` 高、组内间距约 `2px`、组间间距约 `8px`。本轮将 TextMark 普通按钮、导航按钮、侧栏按钮、Toolbar 分组、搜索框统一收敛到 `26px` 高；普通图标按钮宽度从 `36px` 收敛到 `26px`，文档操作组保留边框分组，搜索框仍保留 `160–240px` 的弹性宽度。该调整仅影响 Chrome 密度，不改变操作顺序和状态协议。
+
+定向验证：TypeScript、`styleContract` 6 项、组件测试 15 项通过；本轮完整门禁已复跑并通过：Vitest 43 文件/360 项、ESLint、format:check、git diff --check。
+
+### 9.7 标签页与面板标题区节奏对齐（2026-09-20）
+
+- 文档标签栏顶部 padding 从 `5px` 收敛到 `4px`，关闭按钮由 `25px` 收敛到 `24px`，保留标签主体 `30px`；
+- Sidebar 标题区从 `40px` 收敛到 `38px`，标题内边距同步收紧；Outline 行高继续保持参照值 `30px`；
+- Inspector 顶部区域从 `52px` 收敛到 `48px`，内容起始 padding 从 `14px` 收敛到 `12px`；
+- 这些调整只改变桌面 Chrome 的垂直节奏，不修改标签关闭、键盘导航、面板切换和会话状态逻辑。
+
+定向验证：TypeScript、组件测试 15 项、styleContract 6 项通过；本轮完整门禁已复跑并通过：Vitest 43 文件/360 项、ESLint、format:check、git diff --check。
+
+### 9.8 桌面布局几何契约验收（2026-09-20）
+
+新增 `e2e/layout-geometry.spec.mjs`，通过真实 Tauri WebDriver 读取计算布局值，覆盖：
+
+- Toolbar 高度 `52px`；
+- Sidebar 默认宽度 `240px`；
+- Outline 行高 `30px`；
+- 阅读页宽度不超过 `900px`，页面 padding 为 `32/40/48px`；
+- Inspector token 为 `270px`；
+- `--document-page-width` 在运行时为 `900px`；
+- 单文档时标签栏不渲染，编辑态默认不挂载编辑页。
+
+验证结果：
+
+```text
+build:e2e：通过
+layout-geometry.spec.mjs：2 passed
+Prettier：通过
+ESLint：通过
+ git diff --check：通过
+```
+
+该契约验证的是 WebView 实际计算布局，不等价于 macOS 原生 titlebar/红绿灯像素截图；原生窗口部分仍需同屏实拍校准。
+
+#### 9.9 原生窗口同屏证据（2026-09-17）
+
+本轮在同一台 macOS、同一 Retina 显示器上，以窗口级截图分别采集了 TextMark 与 Markdown Preview：
+
+- 两张整屏截图均为 `3840×2160`；通过 macOS 红绿灯约 `24px` 的截图像素尺寸，按固定 `12pt` 逻辑尺寸标定为 `2× Retina`。
+- CoreGraphics 窗口枚举得到 TextMark 窗口边界约 `1440×901` 逻辑像素，Markdown Preview 当前窗口约 `960×969` 逻辑像素；两者当前不是同尺寸状态，不能直接进行像素级差异结论。
+- 窗口级截图裁剪结果分别为 `2880×1802` 与 `1920×1938`，与上述逻辑边界的 `2×` 关系一致，证明截图采集链路有效。
+- TextMark 当前原生窗口的 WebView 内容从顶部即开始绘制自有 toolbar，并通过 `92px` 左内缩为 macOS 交通灯预留位置；Tauri 原生装饰本身不显示 WebView 绘制的交通灯。
+- Markdown Preview 的系统 toolbar、左侧栏和文档内容均由原生窗口统一承载；当前截图显示其左栏约 `268px`（截图像素，约 `134` 逻辑像素）且窗口宽度约 `960` 逻辑像素，不能将该已保存窗口状态直接与方案中的 `230–400px` 目标范围混为一谈。
+
+结论：本轮已完成原生窗口截图链路和 Retina 标定，但由于两个应用窗口尺寸、文档、保存布局状态不同，尚不足以支持“完全一致”或 titlebar 像素级修正。当前不改 titlebar CSS；后续先建立同尺寸窗口、同一文档和同一面板状态的采集夹具，再测量边界。
+
+#### 9.9.1 启动参数复验结果（2026-09-21）
+
+- `/Applications/TextMark.app` 实际仍为旧 `0.9.7` 二进制，不能作为当前工作树 `0.10.0` 的运行证据；当前工作树已单独构建调试二进制，且前端门禁通过。
+- 使用当前构建包和 `/tmp/textmark-parity/parity-fixture.md` 重测后，TextMark 原生窗口仍显示默认 `README.md`，而 Markdown Preview 显示 `parity-fixture.md`；因此“同一文档”条件仍未满足。
+- 源码链路已确认：`useDocument` 的 `readStartupRequest()` 仅解析进程参数；macOS 通过 Finder/`open` 传入文件时需要处理 Tauri 2 `RunEvent::Opened`。本轮仅完成 API 与构建链路核对，未将未经运行时验证的事件接入作为完成结论。
+- 当前仍不修改 `trafficLightPosition`、`titleBarStyle`、原生 Toolbar 或 CSS 几何；待启动事件闭环后，重新统一窗口尺寸和面板状态，再采集像素证据。
+- 后续复验中，当前构建包的 `RunEvent::Opened` 处理已通过 Rust 构建与 Clippy，但使用 `open -n` 时窗口仍为空白，尚未形成文件事件成功驱动前端载入的运行时证据；需继续检查事件时机、监听注册、事件目标和启动包资源完整性。
+
+### 9.10 发布前完整门禁收口（2026-09-17）
+
+本轮先修复 Rust Clippy 唯一阻塞：将 secondary 窗口 `CloseRequested` 事件中的嵌套 `if` 合并为带条件的 `if let`，不改变关闭清理语义。
+
+门禁结果：
+
+```text
+cargo fmt -- --check                         通过
+cargo clippy --all-targets --all-features    通过（-D warnings）
+cargo test --all-targets                      20 passed / 0 failed
+TypeScript                                  通过
+Vitest                                      43 个文件 / 360 项通过
+ESLint                                      通过
+format:check                                通过
+npm run build                               通过
+npm run check:bundle                         通过
+git diff --check                             通过
+npm audit --omit=dev --audit-level=high      0 vulnerabilities
+npm run build:e2e                            通过
+```
+
+结论：当前代码级发布前门禁已全部通过；工作树仍保持未提交、未推送、未合并、未发布。真实 GitHub Actions 发布、stable/beta updater 线上验证、跨平台 PDF 实机证据、多显示器几何恢复和同尺寸原生窗口像素对齐仍不应由本地门禁结果替代。
+
+### 9.11 B14 与桌面几何证据复验（2026-09-17）
+
+在发布前门禁通过后，继续使用隔离临时 fixture 复验，不修改产品语义：
+
+```text
+session-recovery.spec.mjs：1 passed
+secondary-session.spec.mjs：1 passed
+layout-geometry.spec.mjs：2 passed
+verify-session-recovery.mjs：B14 abnormal-exit persistence passed
+```
+
+复验覆盖：
+
+- 多文档标签顺序、活动标签和 `session-v1.json` 的 `activeIndex=1`；
+- secondary 窗口创建、快照写入和关闭清理；
+- Toolbar、Sidebar、Outline、阅读页宽度/内边距和 Inspector token 的真实 WebView 几何；
+- 进程级 `SIGKILL` 后 session manifest 保留，并可被下一次启动读取。
+
+这些证据仍不等价于跨显示器/不同缩放比例的窗口几何恢复，也不等价于原生 titlebar、红绿灯和系统 Toolbar 的同尺寸像素级对齐；相关事项继续保留为未闭合证据，不以当前 E2E 结果宣称“完全一致”。
+
+### 9.12 updater 线上与运行时复验（2026-09-20）
+
+针对此前“检查更新失败”问题，本轮按四段链路逐项复核：
+
+1. Rust updater 插件已注册，`updater:default` capability 已启用；
+2. `tauri.conf.json` 中 updater 公钥与线上 `v0.10.0/latest.json` 的签名 key 标识一致：`2469FE8B4EC994E8`；
+3. 稳定 release `v0.10.0` 已公开 `latest.json`，版本为 `0.10.0`，包含 macOS、Windows、Linux 的完整 updater platform 条目；
+4. Universal macOS updater archive、`.sig`、ARM64 DMG 和 Universal DMG 均存在；beta 通道 `textmark-beta/latest.json` 也已存在。
+
+线上 manifest 关键结果：
+
+```text
+stable latest.json：存在
+version：0.10.0
+platform entries：18
+macOS universal updater archive：存在
+macOS ARM64 DMG：存在
+macOS Universal DMG：存在
+beta latest.json：存在
+```
+
+新增 `e2e/updater-runtime.spec.mjs` 和 `TEXTMARK_UPDATER_RUNTIME=1` 路由，通过真实 Tauri/Rust 命令调用稳定通道检查：
+
+```text
+UPDATER_RESULT=null
+updater-runtime.spec.mjs：1 passed
+```
+
+当前安装的 `/Applications/TextMark.app` 版本为 `0.10.0`，因此 `null` 表示线上稳定版本已是当前版本，不是失败。更新器发布契约测试 15 项通过，新增探针已通过 Prettier 和 ESLint。
+
+### 9.13 Quick Look 版本一致性修复（2026-09-20）
+
+继续复核本机 Quick Look 链路时发现，`platform/macos/quicklook/Info.plist` 仍固定写入历史版本 `0.3.0`，而 `test-package.sh` 也按 `0.3.0` 校验。这不会阻塞当前 XCTest，但会使正式 `0.10.0` DMG 的 Quick Look 扩展版本元数据与主应用不一致。
+
+已修复：
+
+- `build-quicklook.sh` 从根目录 `package.json` 读取当前版本，并将 `MARKETING_VERSION`、`CURRENT_PROJECT_VERSION` 传给 Xcode 构建与测试；
+- Quick Look `Info.plist` 改为使用 `$(MARKETING_VERSION)` 和 `$(CURRENT_PROJECT_VERSION)`；
+- `test-package.sh` 版本断言同步为 `0.10.0`；
+- 保留 ad-hoc 签名策略，不改变正式发布签名流程。
+
+复验结果：
+
+```text
+BUILD SUCCEEDED
+XCTest：7 tests passed / 0 failures
+CFBundleShortVersionString：0.10.0
+CFBundleVersion：0.10.0
+架构：x86_64 arm64
+发布契约测试：15 passed
+```
+
+### 9.14 最新收口门禁复验（2026-09-20）
+
+继续复核 Quick Look 版本注入、更新器运行时探针和 DMG 版本断言后，发现 `test-package.sh` 仍将扩展版本硬编码为 `0.10.0`。已将其改为读取挂载应用的 `CFBundleShortVersionString`，再与 Quick Look 扩展版本比较，避免下一个版本重复修改 smoke 脚本。
+
+### 9.15 stable/beta 发布资产最终复核（2026-09-20）
+
+在不修改线上 Release 的前提下，通过 GitHub Release 元数据复核已发布资产：
+
+```text
+v0.10.0：draft=false，prerelease=false，36 个资产
+textmark-beta：draft=false，prerelease=true，latest.json 存在
+stable latest.json：存在，版本 0.10.0
+ARM64 DMG：TextMark_0.10.0_arm64.dmg，存在
+Universal DMG：TextMark_0.10.0_universal.dmg，存在
+Universal updater archive：TextMark_0.10.0_universal.app.tar.gz，存在
+updater signature：TextMark_0.10.0_universal.app.tar.gz.sig，存在
+Quick Look：CFBundleShortVersionString=0.10.0，CFBundleVersion=0.10.0
+```
+
+该复核确认发布资产命名、stable/beta manifest 和本机 Quick Look 版本引用一致；不等价于重新执行完整 GitHub Actions 发布流程，也不覆盖跨平台 PDF、跨显示器几何、Finder 拖放或原生 titlebar 像素级证据。
+
+最新门禁：
+
+```text
+Quick Look BUILD：成功
+Quick Look XCTest：7 passed / 0 failed
+TypeScript：通过
+Vitest：43 个文件 / 360 项通过
+ESLint：通过
+format:check：通过
+Rust fmt：通过
+Rust Clippy -D warnings：通过
+Rust tests：20 passed / 0 failed
+生产构建：通过
+bundle budget：通过
+git diff --check：通过
+npm audit：0 vulnerabilities
+发布契约测试：15 passed
+```
+
+当前工作树仍未提交、未推送、未合并、未发布。代码级门禁已收口；本轮继续复验了 PDF capability/export 定向测试 10 项、异常退出会话清单保留探针和多文档标签恢复 E2E（1 passed）。这些结果分别证明 PDF 能力分支、异常退出 manifest 保留和同进程多文档标签恢复，不等价于跨进程重启后 UI 多文档恢复闭环。2026-09-21 曾通过两阶段真实重启验收确认主窗口恢复失败：第一阶段双文档 manifest 写入成功，第二阶段无启动参数重启后进入默认 README。根因是主窗口关闭流程调用 `saveSession(true)` 并删除 `main` 快照；已改为主窗口关闭时保存 `saveSession(false)`，保留可恢复的 main 快照，非主窗口继续由生命周期清理。修复后两次真实 `session-recovery.spec.mjs` 均通过，第二次无启动参数恢复双文档和活动标签；`sessionRestore.test.ts` 5 项、TypeScript、ESLint、format:check、git diff --check 通过。原有正常关闭测试的语义已同步为主窗口保留恢复快照，最终正常关闭 E2E 通过且 manifest 状态为 `preserved`。本轮定向恢复/PDF 测试共 15 项通过，TypeScript、ESLint、format:check、git diff --check 通过。2026-09-21 继续复跑完整门禁：Vitest 43 文件/360 项、Rust cargo test 20 项、bundle budget（main+worker 304 KiB gzip、native preview 71 KiB gzip）、生产 no-bundle 构建及运行时依赖审计均通过；`npm audit --omit=dev` 为 0 high/critical。稳定版 `v0.10.0` 与 beta 渠道线上资产已复核，包含 Universal DMG、ARM64 DMG、Universal updater 包及 stable/beta `latest.json`。通过 LaunchServices 运行中打开 `parity-fixture.md` 已验证 `RunEvent::Opened → single-instance → open-paths → drain → processOpenPaths` 的实际文档切换，窗口标题变为 `parity-fixture.md`。冷启动传参仍因 macOS LaunchServices 参数转发差异显示默认 README，已记录为启动参数验证边界；不据此修改产品布局。下一阶段仍只剩用户明确授权后的提交、推送、合并和正式发布，以及跨平台 PDF、多显示器几何、Finder 拖放和原生 titlebar 像素证据。

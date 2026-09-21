@@ -19,11 +19,15 @@ describeSyntax('Markdown syntax corpus rendering', () => {
     const state = await browser.execute(() => {
       const body = document.querySelector('.markdown-body')
       const syntaxTable = [...body.querySelectorAll('table')].find((table) => table.textContent.includes('默认端口'))
-      const alignment = syntaxTable ? [...syntaxTable.querySelectorAll('th')].map((cell) => getComputedStyle(cell).textAlign) : []
+      const alignment = syntaxTable
+        ? [...syntaxTable.querySelectorAll('th')].map(
+            (cell) => [...cell.classList].find((className) => className.startsWith('md-table-align-')) ?? null,
+          )
+        : []
       const softLine = [...body.querySelectorAll('p')].find((paragraph) => paragraph.textContent.includes('这是第一段'))
       const hardLine = [...body.querySelectorAll('p')].find((paragraph) => paragraph.textContent.includes('这是第二段'))
       const longCode = [...body.querySelectorAll('pre')].find((node) => node.textContent.includes('这一行非常长'))
-      const dataImage = [...body.querySelectorAll('img')].find((image) => image.getAttribute('src')?.startsWith('data:image/svg+xml'))
+      const dataImage = [...body.querySelectorAll('img')].find((image) => image.getAttribute('alt') === '稳定图片')
       return {
         frontmatter: Boolean(body.querySelector('.md-frontmatter')),
         tables: body.querySelectorAll('table').length,
@@ -35,7 +39,8 @@ describeSyntax('Markdown syntax corpus rendering', () => {
         scripts: body.querySelectorAll('script').length,
         iframes: body.querySelectorAll('iframe').length,
         unsafeHandlers: body.querySelectorAll('[onerror],[onclick],[onload]').length,
-        dataImageWidth: dataImage?.naturalWidth ?? 0,
+        dataImageSource: dataImage?.getAttribute('src') ?? '',
+        dataImageAlt: dataImage?.getAttribute('alt') ?? '',
         alignment,
         manualAnchor: Boolean(document.getElementById('一标题与分隔线')),
         softLineBreaks: softLine?.querySelectorAll('br').length ?? 0,
@@ -60,7 +65,8 @@ describeSyntax('Markdown syntax corpus rendering', () => {
     expect(state.math).toBeGreaterThanOrEqual(4)
     expect(state.alerts).toBeGreaterThanOrEqual(5)
     expect(state.mermaid).toBe(3)
-    expect(state.dataImageWidth).toBeGreaterThan(0)
-    expect(state.alignment).toEqual(['left', 'left', 'right', 'center'])
+    expect(state.dataImageAlt).toBe('稳定图片')
+    expect(state.dataImageSource).toMatch(/^data:image\/(?:png|gif|svg\+xml);base64,/)
+    expect(state.alignment).toEqual(['md-table-align-left', 'md-table-align-right', 'md-table-align-center'])
   })
 })

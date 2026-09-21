@@ -18,6 +18,15 @@ import {
   scanFolder,
   watchPaths,
   writeDocument,
+  loadSessionManifest,
+  saveSessionSnapshot,
+  currentWindowId,
+  currentWindowGeometry,
+  drainPendingOpenPaths,
+  openSessionWindow,
+  removeSessionWindow,
+  restoreWindowGeometry,
+  type SessionManifest,
 } from '../lib/platform'
 import type {
   DiskChangeEvent,
@@ -31,6 +40,8 @@ import type {
 } from '../types'
 import { pastedImageRenameTarget, replacePastedImageReferences } from '../lib/pastedImages'
 import { canReplaceBootstrapDocument, shouldOpenDocumentInCurrentWindow } from '../lib/documentPresentation'
+import { listDraftRecords, removeDraftRecord, restoreDraftDocument, saveDraftRecord, type DraftRecord } from '../lib/draftRecovery'
+import { planRestoredSession, sessionWindowById } from '../lib/sessionRestore'
 
 const sessionId = () => globalThis.crypto?.randomUUID?.() ?? `document-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -65,6 +76,7 @@ const messages = {
     renameImagePrompt: '输入图片名称（仅字母、数字、- 和 _）：',
     imageReferenceMissing: '当前文稿中找不到该图片引用。',
     closeDirty: '此文档有未保存的更改，仍要关闭吗？',
+    draftFound: '发现上次未恢复的本地草稿，已载入当前文稿。',
   },
   en: {
     invalid_document: 'This is not a supported Markdown or text document.',
@@ -81,6 +93,7 @@ const messages = {
     renameImagePrompt: 'Enter an image name (letters, numbers, - and _ only):',
     imageReferenceMissing: 'This image reference is no longer present in the document.',
     closeDirty: 'This document has unsaved changes. Close it anyway?',
+    draftFound: 'A local draft from the previous session was restored.',
   },
 } as const
 
@@ -118,6 +131,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   const openDocumentsInTabs = options.openDocumentsInTabs ?? false
   const [sessions, setSessions] = useState<DocumentSession[]>([initialSession])
   const [activeId, setActiveId] = useState(initialSession.id)
+  const [pendingDraft, setPendingDraft] = useState<{ record: DraftRecord; sessionId: string } | null>(null)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [files, setFiles] = useState<FileNode[]>([])
   const [busy, setBusy] = useState(false)
@@ -125,11 +139,35 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   const [externalChange, setExternalChange] = useState<ExternalDocumentChange | null>(null)
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
+  const activeIdRef = useRef(activeId)
+  activeIdRef.current = activeId
   const undoRef = useRef(new Map<string, { undo: string[]; redo: string[] }>())
   const pendingRenameRef = useRef<{ originalPath: string; candidate: string | null } | null>(null)
   const startupLoadedRef = useRef(false)
+  const sessionRestoreDoneRef = useRef(false)
+  const pendingActivePathRef = useRef<string | null>(null)
+  const windowIdRef = useRef('main')
   const autoSaveInFlightRef = useRef(false)
+  const sessionClosingRef = useRef(false)
+  const openPathsQueueRef = useRef(Promise.resolve())
   const active = sessions.find((session) => session.id === activeId) ?? sessions[0]
+
+  useEffect(() => {
+    if (!isTauri()) return
+    for (const session of sessions) {
+      if (session.dirty) saveDraftRecord(session)
+      else if (!pendingDraft || pendingDraft.sessionId !== session.id) removeDraftRecord(session.path)
+    }
+  }, [pendingDraft, sessions])
+
+  useEffect(() => {
+    const path = pendingActivePathRef.current
+    if (!path) return
+    const restored = sessions.find((session) => session.path === path)
+    if (!restored) return
+    setActiveId(restored.id)
+    pendingActivePathRef.current = null
+  }, [sessions])
 
   const updateActive = useCallback(
     (update: (session: DocumentSession) => DocumentSession) => {
@@ -146,23 +184,26 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     [locale],
   )
 
-  const applyDocument = useCallback((next: TextDocument, newTab = true) => {
-    setExternalChange(null)
-    setNotice(null)
-    setSessions((current) => {
-      const existing = next.path ? current.find((session) => session.path === next.path) : undefined
-      if (existing) {
-        setActiveId(existing.id)
-        // Reopening an existing tab must only focus it. Reloading here would
-        // silently discard any unsaved editor contents in that session.
-        return current
-      }
-      const session = makeSession(next)
-      setActiveId(session.id)
-      if (!newTab && current.length === 1 && !current[0].path && !current[0].dirty) return [session]
-      return [...current, session]
-    })
-  }, [])
+  const applyDocument = useCallback(
+    (next: TextDocument, newTab = true, draft?: DraftRecord) => {
+      setExternalChange(null)
+      setNotice(null)
+      setSessions((current) => {
+        const existing = next.path ? current.find((session) => session.path === next.path) : undefined
+        if (existing) {
+          setActiveId(existing.id)
+          return current
+        }
+        const session = makeSession(next)
+        setActiveId(session.id)
+        const matchingDraft = draft && next.path ? restoreDraftDocument(next, draft) : null
+        if (matchingDraft) setPendingDraft({ record: draft!, sessionId: session.id })
+        if (!newTab && current.length === 1 && !current[0].path && !current[0].dirty) return [session]
+        return [...current, session]
+      })
+    },
+    [locale],
+  )
 
   const openFolderPath = useCallback(
     async (path: string) => {
@@ -180,41 +221,16 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
       const first = firstFile(nextFiles)
       if (first) {
         const replaceBootstrap = canReplaceBootstrapDocument(sessionsRef.current)
-        applyDocument(await readDocument(first.path), replaceBootstrap ? false : openDocumentsInTabs)
+        const document = await readDocument(first.path)
+        applyDocument(
+          document,
+          replaceBootstrap ? false : openDocumentsInTabs,
+          listDraftRecords().find((record) => record.path === document.path),
+        )
       }
     },
     [applyDocument, openDocumentsInTabs],
   )
-
-  useEffect(() => {
-    if (startupLoadedRef.current) return
-    startupLoadedRef.current = true
-    const parameters = new URLSearchParams(window.location.search)
-    const requestedFile = parameters.get('open')
-    const requestedFolder = parameters.get('folder')
-    if (requestedFile && isTauri()) {
-      void readDocument(requestedFile)
-        .then((document) => applyDocument(document, false))
-        .catch(showError)
-      return
-    }
-    if (requestedFolder && isTauri()) {
-      void openFolderPath(requestedFolder).catch(showError)
-      return
-    }
-    void readStartupRequest()
-      .then(async (startup) => {
-        for (const [index, entry] of startup.paths.entries()) {
-          if (!entry.isDirectory && index > 0 && (startup.newWindow || !openDocumentsInTabs)) {
-            await openDocumentWindow(entry.path)
-            continue
-          }
-          if (entry.isDirectory) await openFolderPath(entry.path)
-          else applyDocument(await readDocument(entry.path), openDocumentsInTabs && index > 0)
-        }
-      })
-      .catch(showError)
-  }, [applyDocument, openDocumentsInTabs, openFolderPath, showError])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -310,7 +326,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         if (entry.isDirectory) await openFolderPath(entry.path)
         else if (shouldOpenDocumentInCurrentWindow(sessionsRef.current, openDocumentsInTabs, newTab)) {
           const replaceBootstrap = !newTab && canReplaceBootstrapDocument(sessionsRef.current)
-          applyDocument(await readDocument(entry.path), replaceBootstrap ? false : newTab || openDocumentsInTabs)
+          const document = await readDocument(entry.path)
+          applyDocument(
+            document,
+            replaceBootstrap ? false : newTab || openDocumentsInTabs,
+            listDraftRecords().find((record) => record.path === document.path),
+          )
         } else await openDocumentWindow(entry.path)
       } catch (error) {
         showError(error)
@@ -320,6 +341,161 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     },
     [applyDocument, openDocumentsInTabs, openFolderPath, showError],
   )
+
+  const restoreSessionWindow = useCallback(
+    async (snapshot: SessionManifest['windows'][number]) => {
+      const validPaths = snapshot.documents.filter((path) => typeof path === 'string' && path.length > 0)
+      const readableDocuments: { manifestIndex: number; path: string }[] = []
+      for (const [manifestIndex, path] of validPaths.entries()) {
+        try {
+          const document = await readDocument(path)
+          const resolvedPath = document.path ?? path
+          readableDocuments.push({ manifestIndex, path: resolvedPath })
+          applyDocument(
+            document,
+            readableDocuments.length > 1,
+            listDraftRecords().find((record) => record.path === resolvedPath),
+          )
+        } catch {
+          // A document may have been moved or deleted since the previous run.
+        }
+      }
+      pendingActivePathRef.current = planRestoredSession(snapshot, readableDocuments).activePath
+      setWorkspacePath(snapshot.workspacePath ?? null)
+      if (snapshot.workspacePath) {
+        try {
+          setFiles(await scanFolder(snapshot.workspacePath))
+        } catch {
+          setWorkspacePath(null)
+        }
+      }
+    },
+    [applyDocument],
+  )
+
+  const saveSession = useCallback(
+    async (removeAfterSave = false) => {
+      if (!isTauri()) return
+      if (removeAfterSave) sessionClosingRef.current = true
+      else if (sessionClosingRef.current) return
+      if (windowIdRef.current === 'browser') return
+      const activeIndex = Math.max(
+        0,
+        sessionsRef.current.findIndex((session) => session.id === activeIdRef.current),
+      )
+      const documents = sessionsRef.current.map((session) => session.path).filter((path): path is string => Boolean(path))
+      if (!documents.length || removeAfterSave) {
+        await removeSessionWindow(windowIdRef.current)
+        return
+      }
+      await saveSessionSnapshot({
+        windowId: windowIdRef.current,
+        documents,
+        activeIndex,
+        workspacePath,
+        geometry: await currentWindowGeometry(),
+      })
+    },
+    [activeId, workspacePath],
+  )
+
+  const processOpenPaths = useCallback(
+    async (entries: OpenPathRequest[]) => {
+      const replaceFirst = canReplaceBootstrapDocument(sessionsRef.current)
+      for (const [index, entry] of entries.entries()) {
+        if (entry.isDirectory) await openFolderPath(entry.path)
+        else if (openDocumentsInTabs || (replaceFirst && index === 0)) {
+          const document = await readDocument(entry.path)
+          applyDocument(
+            document,
+            openDocumentsInTabs && !(replaceFirst && index === 0),
+            listDraftRecords().find((record) => record.path === document.path),
+          )
+        } else await openDocumentWindow(entry.path)
+      }
+    },
+    [applyDocument, openDocumentsInTabs, openFolderPath],
+  )
+
+  const enqueueOpenPathDrain = useCallback(() => {
+    openPathsQueueRef.current = openPathsQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const pending = await drainPendingOpenPaths()
+        if (pending.length) await processOpenPaths(pending)
+      })
+    return openPathsQueueRef.current
+  }, [processOpenPaths])
+
+  useEffect(() => {
+    if (startupLoadedRef.current) return
+    startupLoadedRef.current = true
+    void (async () => {
+      windowIdRef.current = await currentWindowId()
+      const parameters = new URLSearchParams(window.location.search)
+      const requestedFile = parameters.get('open')
+      const requestedFolder = parameters.get('folder')
+      const restoreWindowId = parameters.get('restoreWindowId')
+      if (restoreWindowId) {
+        // The native window label is intentionally new on every restore, but
+        // the session manifest must keep using its stable logical window ID.
+        windowIdRef.current = restoreWindowId
+        const manifest = await loadSessionManifest()
+        const restoredWindow = sessionWindowById(manifest, restoreWindowId)
+        if (restoredWindow) {
+          await restoreWindowGeometry(restoredWindow.geometry)
+          await restoreSessionWindow(restoredWindow)
+        }
+      } else if (requestedFile && isTauri()) {
+        const document = await readDocument(requestedFile)
+        applyDocument(
+          document,
+          false,
+          listDraftRecords().find((record) => record.path === document.path),
+        )
+      } else if (requestedFolder && isTauri()) {
+        await openFolderPath(requestedFolder)
+      } else {
+        const startup = await readStartupRequest()
+        if (startup.paths.length) {
+          for (const [index, entry] of startup.paths.entries()) {
+            if (!entry.isDirectory && index > 0 && (startup.newWindow || !openDocumentsInTabs)) await openDocumentWindow(entry.path)
+            else if (entry.isDirectory) await openFolderPath(entry.path)
+            else {
+              const document = await readDocument(entry.path)
+              applyDocument(
+                document,
+                openDocumentsInTabs && index > 0,
+                listDraftRecords().find((record) => record.path === document.path),
+              )
+            }
+          }
+        } else {
+          const manifest = await loadSessionManifest()
+          const currentWindow = sessionWindowById(manifest, windowIdRef.current)
+          const mainWindow = sessionWindowById(manifest, 'main')
+          if (currentWindow) {
+            await restoreWindowGeometry(currentWindow.geometry)
+            await restoreSessionWindow(currentWindow)
+          } else if (windowIdRef.current === 'main' && mainWindow) {
+            await restoreWindowGeometry(mainWindow.geometry)
+            await restoreSessionWindow(mainWindow)
+            for (const window of manifest?.windows ?? []) {
+              if (window.windowId !== 'main' && window.documents.length) await openSessionWindow(window)
+            }
+          }
+        }
+      }
+      sessionRestoreDoneRef.current = true
+      await enqueueOpenPathDrain()
+    })().catch(showError)
+  }, [applyDocument, enqueueOpenPathDrain, openDocumentsInTabs, openFolderPath, restoreSessionWindow, showError])
+
+  useEffect(() => {
+    if (!sessionRestoreDoneRef.current || !isTauri() || sessionClosingRef.current) return
+    const timer = window.setTimeout(() => void saveSession(), 350)
+    return () => window.clearTimeout(timer)
+  }, [activeId, saveSession, sessions, workspacePath])
 
   const confirmLeaveActive = useCallback(() => {
     const current = sessionsRef.current.find((session) => session.id === activeId)
@@ -398,25 +574,24 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     if (!isTauri()) return
     let disposed = false
     let unlisten: (() => void) | undefined
-    void listen<OpenPathRequest[]>('open-paths', (event) => {
-      void (async () => {
-        const replaceFirst = canReplaceBootstrapDocument(sessionsRef.current)
-        for (const [index, entry] of event.payload.entries()) {
-          if (entry.isDirectory) await openFolderPath(entry.path)
-          else if (openDocumentsInTabs || (replaceFirst && index === 0))
-            applyDocument(await readDocument(entry.path), openDocumentsInTabs && !(replaceFirst && index === 0))
-          else await openDocumentWindow(entry.path)
-        }
-      })().catch(showError)
+    void listen<OpenPathRequest[]>('open-paths', () => {
+      if (!sessionRestoreDoneRef.current) return
+      void enqueueOpenPathDrain().catch(showError)
     }).then((dispose) => {
-      if (disposed) dispose()
-      else unlisten = dispose
+      if (disposed) {
+        dispose()
+        return
+      }
+      unlisten = dispose
+      if (sessionRestoreDoneRef.current) {
+        void enqueueOpenPathDrain().catch(showError)
+      }
     })
     return () => {
       disposed = true
       unlisten?.()
     }
-  }, [applyDocument, openDocumentsInTabs, openFolderPath, showError])
+  }, [enqueueOpenPathDrain, showError])
 
   const openFile = useCallback(
     async (newTab = false) => {
@@ -433,7 +608,12 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         for (const [index, path] of paths.entries()) {
           if (newTab || openDocumentsInTabs || (replaceFirst && index === 0)) {
             const replaceBootstrap = !newTab && replaceFirst && index === 0
-            applyDocument(await readDocument(path), replaceBootstrap ? false : newTab || openDocumentsInTabs || index > 0)
+            const document = await readDocument(path)
+            applyDocument(
+              document,
+              replaceBootstrap ? false : newTab || openDocumentsInTabs || index > 0,
+              listDraftRecords().find((record) => record.path === document.path),
+            )
           } else await openDocumentWindow(path)
         }
       } catch (error) {
@@ -462,41 +642,46 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     }
   }, [locale, openFolderPath, showError])
 
-  const saveAs = useCallback(async () => {
-    if (!active) return
+  const saveAs = useCallback(async (): Promise<boolean> => {
+    if (!active) return false
     if (!isTauri()) {
       browserSave(active.name, active.contents)
       updateActive((current) => ({ ...current, savedContents: current.contents, diskContents: current.contents, dirty: false }))
-      return
+      return true
     }
     setBusy(true)
     try {
       const selected = await save({ defaultPath: active.path ?? active.name, filters: MARKDOWN_FILTERS })
-      if (typeof selected !== 'string') return
+      if (typeof selected !== 'string') return false
       const saved = await writeDocument(selected, active.contents, undefined, true)
       updateActive((current) => ({ ...current, ...saved, savedContents: saved.contents, diskContents: saved.contents, dirty: false }))
+      removeDraftRecord(saved.path)
       setExternalChange(null)
+      return true
     } catch (error) {
       showError(error)
+      return false
     } finally {
       setBusy(false)
     }
   }, [active, showError, updateActive])
 
   const saveFile = useCallback(
-    async (force = false, automatic = false) => {
+    async (force = false, automatic = false): Promise<boolean> => {
       if (!active?.path || !isTauri()) return saveAs()
-      if (automatic && autoSaveInFlightRef.current) return
+      if (automatic && autoSaveInFlightRef.current) return false
       if (automatic) autoSaveInFlightRef.current = true
       else setBusy(true)
       try {
         const saved = await writeDocument(active.path, active.contents, active.revision, force)
         updateActive((current) => ({ ...current, ...saved, savedContents: saved.contents, diskContents: saved.contents, dirty: false }))
+        removeDraftRecord(active.path)
         setExternalChange(null)
         if (!automatic) {
           setNotice(messages[locale].saved)
           window.setTimeout(() => setNotice(null), 1400)
         }
+        return true
       } catch (error) {
         if (errorCode(error) === 'save_conflict') {
           try {
@@ -506,6 +691,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
             else showError(error)
           }
         } else showError(error)
+        return false
       } finally {
         if (automatic) autoSaveInFlightRef.current = false
         else setBusy(false)
@@ -531,6 +717,13 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   const updateContents = useCallback(
     (contents: string) => {
       updateActive((current) => ({ ...current, contents, dirty: contents !== current.savedContents }))
+    },
+    [updateActive],
+  )
+
+  const reportEditorState = useCallback(
+    (editorState: NonNullable<DocumentSession['editorState']>) => {
+      updateActive((current) => ({ ...current, editorState }))
     },
     [updateActive],
   )
@@ -662,6 +855,26 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     [activeId, locale, sessions],
   )
 
+  const restorePendingDraft = useCallback(() => {
+    if (!pendingDraft) return
+    setSessions((current) =>
+      current.map((session) => {
+        if (session.id !== pendingDraft.sessionId) return session
+        const restored = restoreDraftDocument(session, pendingDraft.record)
+        return restored
+          ? { ...session, contents: restored.contents, dirty: true, scrollTop: restored.scrollTop, editorState: restored.editorState }
+          : session
+      }),
+    )
+    setPendingDraft(null)
+  }, [pendingDraft])
+
+  const discardPendingDraft = useCallback(() => {
+    if (!pendingDraft) return
+    removeDraftRecord(pendingDraft.record.path)
+    setPendingDraft(null)
+  }, [pendingDraft])
+
   const resolveExternal = useCallback(
     (choice: ExternalChangeResolution) => {
       if (choice === 'reload' && externalChange && externalChange.kind !== 'deleted') {
@@ -709,12 +922,16 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     busy,
     notice,
     externalChange,
+    pendingDraft,
+    restorePendingDraft,
+    discardPendingDraft,
     activate,
     closeSession,
     newDocument,
     revertDocument,
     resolveExternal,
     updateContents,
+    reportEditorState,
     pasteImage,
     renamePastedImage: renamePastedImageReference,
     applyEdit,
@@ -731,5 +948,6 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     goForward: (scrollTop?: number, force = false) => moveNavigation(1, scrollTop, force),
     saveFile,
     saveAs,
+    saveSession,
   }
 }

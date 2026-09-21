@@ -75,12 +75,29 @@ export interface AppSettings {
   lastUpdateCheckAt: number | null
 }
 
+export interface SourcePosition {
+  line: number
+  column: number
+}
+
+export interface EditorSelectionState {
+  anchor: SourcePosition
+  head: SourcePosition
+}
+
+export interface EditorSessionState {
+  selection: EditorSelectionState
+  topLine: number | null
+  scrollFraction: number
+}
+
 export interface DocumentSession extends TextDocument {
   id: string
   savedContents: string
   diskContents: string
   dirty: boolean
   scrollTop: number
+  editorState?: EditorSessionState
   history: NavigationEntry[]
   historyIndex: number
 }

@@ -1,3 +1,4 @@
+import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import { t } from '../lib/i18n'
 import type { ExternalChangeResolution, ExternalDocumentChange, Locale } from '../types'
 
@@ -10,12 +11,14 @@ export function ConflictDialog({
   locale: Locale
   onResolve: (choice: ExternalChangeResolution) => void
 }) {
+  const backdropRef = useDialogAccessibility(Boolean(change), () => onResolve('cancel'))
   if (!change) return null
   const title = change.kind === 'deleted' ? 'deletedTitle' : change.kind === 'renamed' ? 'renamedTitle' : 'conflictTitle'
   const body = change.kind === 'deleted' ? 'deletedBody' : change.kind === 'renamed' ? 'renamedBody' : 'conflictBody'
   return (
-    <div className="dialog-backdrop">
+    <div className="dialog-backdrop" role="presentation" ref={backdropRef}>
       <section
+        onMouseDown={(event) => event.stopPropagation()}
         className="conflict-dialog"
         role="alertdialog"
         aria-modal="true"

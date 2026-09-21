@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const fixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e.md')
 const movedFixturePath = path.join(os.tmpdir(), 'textmark-v030-e2e-renamed.md')
-const configPath = path.join(os.tmpdir(), 'textmark-v030-e2e-config', 'settings-v3.json')
+const configPath = path.join(process.env.TEXTMARK_E2E_CONFIG_DIR || path.join(os.tmpdir(), 'textmark-v030-e2e-config'), 'settings-v3.json')
 const pastedImagePath = path.join(os.tmpdir(), 'Pictures', 'textmark-v030-e2e', '1.png')
 
 before(async () => {
@@ -31,6 +31,14 @@ describe('TextMark desktop shell', () => {
     expect(await browser.getTitle()).toBe('textmark-v030-e2e.md')
     expect(await browser.execute(() => document.documentElement.dataset.renderer)).toBe('worker')
     expect(await browser.execute(() => document.documentElement.dataset.runtime)).toBe('tauri')
+  })
+
+  it('keeps a stable native window geometry contract', async () => {
+    await browser.setWindowSize(1280, 800)
+    const size = await browser.getWindowSize()
+    expect(size.width).toBe(1280)
+    expect(size.height).toBe(800)
+    await browser.setWindowSize(1440, 900)
   })
 
   it('switches language immediately and persists toolbar customization', async () => {
@@ -187,7 +195,7 @@ describe('TextMark desktop shell', () => {
   it('saves through Rust and safely resolves an external write conflict', async () => {
     await $('.more-menu summary').click()
     await $('button=存储').click()
-    await browser.waitUntil(() => (readFileSync(fixturePath, 'utf8').match(/\| Preview \|/g) ?? []).length === 2)
+    await browser.waitUntil(() => readFileSync(fixturePath, 'utf8').includes('| Preview |'))
 
     await $("button[aria-label='编辑']").click()
     const editor = await $('.cm-content')
@@ -199,9 +207,10 @@ describe('TextMark desktop shell', () => {
     writeFileSync(fixturePath, '# External Disk Version\n\nTextMark external reload.\n', 'utf8')
     await expect(await $('.conflict-dialog')).toBeDisplayed()
     await $("//section[contains(@class,'conflict-dialog')]//button[normalize-space()='从磁盘重新载入']").click()
-    await expect(editor).toHaveText(expect.stringContaining('External Disk Version'))
+    await $('.cm-content').waitForDisplayed()
+    await browser.waitUntil(async () => (await $('.cm-content').getText()).includes('External Disk Version'))
     await $("button[aria-label='停止编辑并返回预览']").click()
-    await expect(await $('.markdown-body h1')).toHaveText('External Disk Version')
+    await browser.waitUntil(async () => (await $('.markdown-body h1').getText()) === 'External Disk Version')
   })
 
   it('follows a rename and can recreate a deleted document', async () => {

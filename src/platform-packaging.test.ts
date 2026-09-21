@@ -61,6 +61,7 @@ describe('native desktop package integration', () => {
   it('strictly validates Quick Look metadata while accounting for ad-hoc signing', () => {
     expect(macosConfig.bundle.macOS.signingIdentity).toBe('-')
     expect(macosPackageTest).toContain('NSExtension.NSExtensionPointIdentifier')
+    expect(macosPackageTest).toContain('CFBundleShortVersionString')
     expect(macosPackageTest).toContain('QLSupportedContentTypes')
     expect(macosPackageTest).toContain('Signature=adhoc')
     expect(macosPackageTest).toContain('Developer ID Quick Look extension was not accepted by PlugInKit.')

@@ -80,7 +80,8 @@ export function useUpdater(channel: 'stable' | 'beta', autoCheck: boolean, onChe
       setStatus(update ? { state: 'available', version: update.version } : { state: 'current' })
       onCheckedRef.current?.(Date.now())
     } catch (error) {
-      const errorCode = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined
+      const errorCode =
+        typeof error === 'string' ? error : typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined
       setStatus({ state: 'error', errorCode })
     } finally {
       checkInFlightRef.current = false

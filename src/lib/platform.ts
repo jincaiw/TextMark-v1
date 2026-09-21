@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { save } from '@tauri-apps/plugin-dialog'
 import type { AppError, AppSettings, ExternalApplication, FileNode, OpenPathRequest, StartupRequest, TextDocument } from '../types'
 
@@ -184,6 +185,83 @@ export async function shareSourceNatively(source: string): Promise<void> {
 export async function loadNativeSettings(): Promise<unknown | null> {
   if (!isTauri()) return null
   return invoke<unknown | null>('load_settings')
+}
+
+export interface SessionWindowGeometry {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface SessionWindowSnapshot {
+  windowId: string
+  documents: string[]
+  activeIndex: number
+  workspacePath: string | null
+  geometry?: SessionWindowGeometry | null
+}
+
+export interface SessionManifest {
+  version: 1
+  updatedAt: number
+  windows: SessionWindowSnapshot[]
+}
+
+export async function loadSessionManifest(): Promise<SessionManifest | null> {
+  if (!isTauri()) return null
+  return invoke<SessionManifest | null>('load_session_manifest')
+}
+
+export async function saveSessionSnapshot(snapshot: SessionWindowSnapshot): Promise<void> {
+  if (!isTauri()) return
+  await invoke('save_session_snapshot', { snapshot })
+}
+
+export async function drainPendingOpenPaths(): Promise<OpenPathRequest[]> {
+  if (!isTauri()) return []
+  return invoke<OpenPathRequest[]>('drain_pending_open_paths')
+}
+
+export async function currentWindowId(): Promise<string> {
+  if (!isTauri()) return 'browser'
+  return getCurrentWindow().label
+}
+
+export async function currentWindowGeometry(): Promise<SessionWindowGeometry | null> {
+  if (!isTauri()) return null
+  const window = getCurrentWindow()
+  try {
+    const [position, size] = await Promise.all([window.outerPosition(), window.innerSize()])
+    return { x: position.x, y: position.y, width: size.width, height: size.height }
+  } catch {
+    // A just-created secondary window can briefly reject geometry queries while
+    // its native surface is attaching. Session persistence must not be lost
+    // merely because geometry is temporarily unavailable.
+    return null
+  }
+}
+
+export async function restoreWindowGeometry(geometry: SessionWindowGeometry | null | undefined): Promise<void> {
+  if (!isTauri() || !geometry) return
+  const window = getCurrentWindow()
+  await window.setSize(new PhysicalSize(geometry.width, geometry.height))
+  await window.setPosition(new PhysicalPosition(geometry.x, geometry.y))
+}
+
+export async function openSessionWindow(snapshot: SessionWindowSnapshot): Promise<void> {
+  if (!isTauri()) return
+  await invoke('open_session_window', { snapshot })
+}
+
+export async function removeSessionWindow(windowId: string): Promise<void> {
+  if (!isTauri()) return
+  await invoke('remove_session_window', { windowId })
+}
+
+export async function removeCurrentWindowSession(): Promise<void> {
+  if (!isTauri()) return
+  await invoke('remove_current_window_session')
 }
 
 export async function saveNativeSettings(settings: AppSettings): Promise<void> {

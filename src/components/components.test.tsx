@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { ConflictDialog } from './ConflictDialog'
+import { DraftRecoveryDialog } from './DraftRecoveryDialog'
 import { DocumentTabs } from './DocumentTabs'
 import { FindBar } from './FindBar'
 import { ToolbarCustomizer } from './ToolbarCustomizer'
@@ -103,6 +104,62 @@ describe('localized desktop components', () => {
     expect(html).toContain('开头为')
     expect(html).toContain('第 1 项，共 2 项')
   })
+  it('offers explicit restore and discard choices for a local draft', () => {
+    const html = renderToStaticMarkup(
+      <DraftRecoveryDialog
+        locale="zh-CN"
+        record={{
+          version: 1,
+          path: '/tmp/guide.md',
+          name: 'guide.md',
+          contents: 'draft',
+          diskContents: 'disk',
+          diskRevision: 'r1',
+          scrollTop: 24,
+          updatedAt: 0,
+        }}
+        onRestore={vi.fn()}
+        onDiscard={vi.fn()}
+      />,
+    )
+    expect(html).toContain('发现本地草稿')
+    expect(html).toContain('恢复草稿')
+    expect(html).toContain('放弃草稿')
+  })
+  it('lets the draft recovery dialog discard on Escape and traps focus', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onDiscard = vi.fn()
+    await act(async () => {
+      root.render(
+        <DraftRecoveryDialog
+          locale="en"
+          record={{
+            version: 1,
+            path: '/tmp/guide.md',
+            name: 'guide.md',
+            contents: 'draft',
+            diskContents: 'disk',
+            diskRevision: 'r1',
+            scrollTop: 24,
+            updatedAt: 0,
+          }}
+          onRestore={vi.fn()}
+          onDiscard={onDiscard}
+        />,
+      )
+    })
+    const buttons = host.querySelectorAll<HTMLButtonElement>('button')
+    expect(document.activeElement).toBe(buttons[0])
+    await act(async () =>
+      host.querySelector<HTMLElement>('.conflict-dialog')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    )
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   it('offers save, discard and cancel when closing with unsaved documents', () => {
     const html = renderToStaticMarkup(
       <UnsavedCloseDialog locale="zh-CN" dirtyCount={2} canSaveAll onSave={vi.fn()} onDiscard={vi.fn()} onCancel={vi.fn()} />,

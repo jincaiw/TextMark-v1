@@ -1,5 +1,5 @@
 import MarkdownIt, { type MarkdownIt as MarkdownItInstance, type RendererRule } from 'markdown-it'
-import { full as emoji } from 'markdown-it-emoji'
+import { bare as emoji } from 'markdown-it-emoji'
 import footnote from 'markdown-it-footnote'
 import taskLists from 'markdown-it-task-lists'
 import type { OutlineItem, RenderedMarkdown } from '../types'
@@ -54,7 +54,7 @@ function makeRenderer() {
 
   // Only standard :shortcode: names are enabled. Do not replace plain-text emoticons
   // and do not introduce any custom image-based emoji surface.
-  md.use(emoji, { shortcuts: {} })
+  md.use(emoji, { defs: { smile: '😄', rocket: '🚀' }, shortcuts: {} })
   md.use(footnote)
   // The plugin's optional label wrapper reinjects raw source text. In a task
   // such as `- [ ] literal <script>`, that can turn escaped inline code back

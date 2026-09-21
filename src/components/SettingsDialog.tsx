@@ -76,6 +76,22 @@ export function SettingsDialog(props: SettingsDialogProps) {
   }
   const backdropRef = useDialogAccessibility(props.open, close)
   if (!props.open) return null
+  const updateErrorKey =
+    props.updateStatus.errorCode === 'update_install'
+      ? 'updateInstallError'
+      : props.updateStatus.errorCode === 'update_release_not_found'
+        ? 'updateReleaseNotFound'
+        : props.updateStatus.errorCode === 'update_unsupported_platform'
+          ? 'updateUnsupportedPlatform'
+          : props.updateStatus.errorCode === 'update_target_not_found'
+            ? 'updateTargetNotFound'
+            : props.updateStatus.errorCode === 'update_signature'
+              ? 'updateSignature'
+              : props.updateStatus.errorCode === 'update_network'
+                ? 'updateNetwork'
+                : props.updateStatus.errorCode === 'update_invalid_manifest'
+                  ? 'updateInvalidManifest'
+                  : 'updateError'
   const updateText =
     props.updateStatus.state === 'checking'
       ? t(props.locale, 'checking')
@@ -86,7 +102,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           : props.updateStatus.state === 'downloading'
             ? t(props.locale, 'downloadingUpdate', { progress: props.updateStatus.progress ?? 0 })
             : props.updateStatus.state === 'error'
-              ? t(props.locale, props.updateStatus.errorCode === 'update_install' ? 'updateInstallError' : 'updateError')
+              ? t(props.locale, updateErrorKey)
               : ''
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={close} ref={backdropRef}>
