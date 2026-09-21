@@ -1,3 +1,17 @@
+# TextMark v0.10.6
+
+TextMark 0.10.6 updates the Windows Explorer preview workflow to `NuGet/setup-nuget@v3`, removing the GitHub Actions Node.js 20 runtime deprecation warning while keeping the Windows x64/ARM64 preview builds unchanged.
+
+TextMark 0.10.6 将 Windows Explorer Preview 工作流升级至 `NuGet/setup-nuget@v3`，消除 GitHub Actions 的 Node.js 20 运行时弃用警告，同时保持 Windows x64/ARM64 预览构建行为不变。
+
+## Highlights / 主要更新
+
+- CI 与 Release 工作流统一使用支持 Node.js 24 的 `NuGet/setup-nuget@v3`。
+- 不改变 Explorer Preview 编译、安装、宿主测试和发布资产结构。
+- 继续覆盖 Windows x64 与 ARM64 构建。
+
+---
+
 # TextMark v0.10.5
 
 TextMark 0.10.5 makes PDF export guarantees explicit across desktop targets: macOS native printing and browser printing preserve selectable text and vector graphics, while Windows/Linux desktop export remains a reliable rasterized PDF fallback.

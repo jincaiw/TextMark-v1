@@ -180,7 +180,7 @@ jobs:
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@1.88.0
         with: { targets: '${{ matrix.target }}' }
-      - uses: NuGet/setup-nuget@v2
+      - uses: NuGet/setup-nuget@v3
       - run: npm ci --include=dev
       - name: Build and host-test the Explorer preview handler
         shell: pwsh

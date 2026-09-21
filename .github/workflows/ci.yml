@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: NuGet/setup-nuget@v2
+      - uses: NuGet/setup-nuget@v3
       - run: npm ci --include=dev
       - name: Build, unit-test and host-test the COM preview handler
         shell: pwsh
