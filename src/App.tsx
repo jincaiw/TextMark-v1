@@ -54,6 +54,7 @@ import {
   tempExportPath,
   writeExportBytes,
 } from './lib/platform'
+import { partitionDroppedPaths } from './lib/documentPresentation'
 import { editMarkdownTable } from './lib/table'
 import { setTaskChecked } from './lib/task'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
@@ -964,12 +965,19 @@ function DocumentApp() {
     void windowHandle
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return
-        const paths = event.payload.paths
-        if (paths.length !== 1) {
-          setNotice(settings.locale === 'zh-CN' ? '一次只能打开一个文件或文件夹。' : 'Drop one file or folder at a time.')
+        const { first, extras } = partitionDroppedPaths(event.payload.paths)
+        if (!first) {
+          setNotice(settings.locale === 'zh-CN' ? '未检测到可打开的文件或文件夹。' : 'No openable file or folder was dropped.')
           return
         }
-        void documentsRef.current.openPath(paths[0])
+        if (extras.length) {
+          setNotice(
+            settings.locale === 'zh-CN'
+              ? `已打开第一个路径，忽略另外 ${extras.length} 个路径。`
+              : `Opened the first path and ignored ${extras.length} additional path${extras.length === 1 ? '' : 's'}.`,
+          )
+        }
+        void documentsRef.current.openPath(first)
       })
       .then((stop) => {
         if (disposed) stop()

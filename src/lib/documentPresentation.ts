@@ -10,3 +10,8 @@ export function canReplaceBootstrapDocument(sessions: DocumentSession[]) {
 export function shouldOpenDocumentInCurrentWindow(sessions: DocumentSession[], openDocumentsInTabs: boolean, explicitTab: boolean) {
   return explicitTab || openDocumentsInTabs || canReplaceBootstrapDocument(sessions)
 }
+
+export function partitionDroppedPaths(paths: string[]): { first: string | null; extras: string[] } {
+  const unique = [...new Set(paths.filter((path) => path.trim().length > 0))]
+  return { first: unique[0] ?? null, extras: unique.slice(1) }
+}

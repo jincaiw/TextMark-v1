@@ -1,3 +1,18 @@
+# TextMark v0.10.4
+
+TextMark 0.10.4 clarifies desktop drag-and-drop behavior: it opens the first unique dropped file or folder, reports ignored additional paths, and gives explicit feedback when a drop contains no usable path.
+
+TextMark 0.10.4 明确桌面拖放行为：打开第一个唯一的文件或文件夹，提示被忽略的额外路径，并在拖放内容不包含可用路径时给出明确反馈。
+
+## Highlights / 主要更新
+
+- Finder/桌面拖放：支持空路径过滤和重复路径去重。
+- 多路径拖放：保留首个可用路径并明确提示额外路径未打开，避免静默失败。
+- 错误反馈：空拖放或无可用路径时显示中英文提示。
+- 回归保障：新增拖放路径策略测试，保留目录和文件的现有打开流程。
+
+---
+
 # TextMark v0.10.3
 
 TextMark 0.10.3 improves session window geometry recovery across multiple monitors by recording monitor metadata, preserving legacy snapshots, and safely clamping restored windows into an available work area.

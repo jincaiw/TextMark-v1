@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentSession } from '../types'
-import { canReplaceBootstrapDocument, shouldOpenDocumentInCurrentWindow } from './documentPresentation'
+import { canReplaceBootstrapDocument, partitionDroppedPaths, shouldOpenDocumentInCurrentWindow } from './documentPresentation'
 
 const session = (path: string | null, dirty = false): DocumentSession => ({
   id: path ?? 'blank',
@@ -28,5 +28,13 @@ describe('document presentation policy', () => {
     expect(shouldOpenDocumentInCurrentWindow(current, false, false)).toBe(false)
     expect(shouldOpenDocumentInCurrentWindow(current, true, false)).toBe(true)
     expect(shouldOpenDocumentInCurrentWindow(current, false, true)).toBe(true)
+  })
+
+  it('deduplicates dropped paths and keeps the first usable path', () => {
+    expect(partitionDroppedPaths(['', '/tmp/one.md', '/tmp/one.md', '/tmp/two.md'])).toEqual({
+      first: '/tmp/one.md',
+      extras: ['/tmp/two.md'],
+    })
+    expect(partitionDroppedPaths([])).toEqual({ first: null, extras: [] })
   })
 })
