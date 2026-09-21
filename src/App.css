@@ -183,7 +183,9 @@ select:focus-visible {
   height: var(--control-h-sm);
 }
 .toolbar-leading-actions > button,
-.toolbar-leading-actions summary {
+.toolbar-leading-actions summary,
+.toolbar-leading-actions .sidebar-control > button,
+.toolbar-leading-actions .sidebar-control summary {
   width: 26px;
   height: var(--control-h-sm);
   display: grid;
@@ -197,13 +199,18 @@ select:focus-visible {
 }
 .toolbar-leading-actions > button:hover,
 .toolbar-leading-actions summary:hover,
-.toolbar-leading-actions > button.selected {
+.toolbar-leading-actions .sidebar-control > button:hover,
+.toolbar-leading-actions .sidebar-control summary:hover,
+.toolbar-leading-actions > button.selected,
+.toolbar-leading-actions .sidebar-control > button.selected {
   background: var(--hover);
 }
-.toolbar-leading-actions > button.selected {
+.toolbar-leading-actions > button.selected,
+.toolbar-leading-actions .sidebar-control > button.selected {
   color: var(--accent);
 }
-.toolbar-leading-actions svg {
+.toolbar-leading-actions svg,
+.toolbar-leading-actions .sidebar-control svg {
   width: 16px;
   height: 16px;
   stroke-width: 1.7;
@@ -220,6 +227,10 @@ select:focus-visible {
 .toolbar-leading-menu summary svg:last-child {
   width: 11px;
   height: 11px;
+}
+.toolbar-leading-actions .sidebar-control {
+  height: var(--control-h-sm);
+  background: transparent;
 }
 .traffic-lights {
   display: flex;
@@ -477,7 +488,9 @@ select:focus-visible {
   background: transparent;
   box-shadow: none;
   cursor: text;
-  transition: width 140ms ease, background 140ms ease;
+  transition:
+    width 140ms ease,
+    background 140ms ease;
 }
 .document-search:focus-within,
 .document-search:has(input:not(:placeholder-shown)) {

@@ -212,10 +212,10 @@ export function Toolbar(props: ToolbarProps) {
     if (item === 'navigation')
       return slot(
         <div className="history-buttons toolbar-navigation">
-          <button disabled={!props.canGoBack} aria-label={tx('back')} title={tx('back')} onClick={props.onBack}>
+          <button disabled={!props.canGoBack} aria-label="Back" title={tx('back')} onClick={props.onBack}>
             <ChevronLeft />
           </button>
-          <button disabled={!props.canGoForward} aria-label={tx('forward')} title={tx('forward')} onClick={props.onForward}>
+          <button disabled={!props.canGoForward} aria-label="Forward" title={tx('forward')} onClick={props.onForward}>
             <ChevronRight />
           </button>
         </div>,
@@ -387,24 +387,27 @@ export function Toolbar(props: ToolbarProps) {
         </div>
       </div>
       <div className="toolbar-leading-actions" data-tauri-drag-region>
-        <button
-          className={props.sidebarVisible ? 'selected' : ''}
-          title={tx('toggleSidebar')}
-          aria-label={tx('toggleSidebar')}
-          onClick={props.onToggleSidebar}
-        >
-          <PanelLeft />
-        </button>
-        <details className="toolbar-leading-menu">
-          <summary title={tx('chooseSidebar')} aria-label={tx('chooseSidebar')}>
-            <Folder />
-            <ChevronDown />
-          </summary>
-          <div className="menu-popover sidebar-menu">
-            <button onClick={() => props.onSidebarModeChange('files')}>{tx('projectNavigator')}</button>
-            <button onClick={() => props.onSidebarModeChange('outline')}>{tx('tableOfContents')}</button>
-          </div>
-        </details>
+        <div className="sidebar-control">
+          <button
+            className={props.sidebarVisible ? 'selected' : ''}
+            title={tx('toggleSidebar')}
+            aria-label={tx('toggleSidebar')}
+            onClick={props.onToggleSidebar}
+          >
+            <PanelLeft />
+          </button>
+          <details>
+            <summary title={tx('chooseSidebar')} aria-label={tx('chooseSidebar')}>
+              <Folder />
+              <ChevronDown />
+            </summary>
+            <div className="menu-popover sidebar-menu">
+              <button onClick={props.onToggleSidebar}>{tx('hideSidebar')}</button>
+              <button onClick={() => props.onSidebarModeChange('outline')}>{tx('tableOfContents')}</button>
+              <button onClick={() => props.onSidebarModeChange('files')}>{tx('projectNavigator')}</button>
+            </div>
+          </details>
+        </div>
       </div>
       <div className="toolbar-document-context" data-tauri-drag-region title={props.fileName}>
         <span className="toolbar-document-name">{props.fileName}</span>
