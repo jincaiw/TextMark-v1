@@ -3,10 +3,10 @@
 - **项目**：TextMark-v1
 - **参照应用**：本机 `/Applications/Markdown Preview.app`
 - **参照版本**：Markdown Preview `0.0.58`，Build `62`
-- **TextMark 基线**：当前已发布能力 `v0.9.8`；对标结论基于此前 `v0.9.7` 代码审查、`v0.9.8` 实施结果及本机 UI 调研
+- **TextMark 基线**：当前已发布能力 `v0.10.2`；对标结论基于此前 `v0.9.7` 代码审查、`v0.9.8` 实施结果及本机 UI 调研
 - **文档版本**：实施方案 `v1.0`
 - **编制日期**：2026-09-18
-- **当前状态**：v0.10.1 已正式发布；P0–P5、B11–B14 代码与当前环境可验证项已完成，剩余为跨平台实机与像素级证据边界
+- **当前状态**：v0.10.2 已正式发布；P0–P5、B11–B14 代码与当前环境可验证项已完成，剩余为跨平台实机与像素级证据边界
 
 ---
 
@@ -609,13 +609,13 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 5. 是否将 `rch64.dmg` 统一解释为 `arm64.dmg`，构建 target 使用 `aarch64-apple-darwin`；
 6. 是否在 P4 增加项目主页、GitHub Releases 和 Issues 三个菜单入口。
 
-**当前文档状态：已进入实施阶段。P0–P5 桌面 UI、菜单入口和 ARM64 DMG 基础能力已落地；当前继续收口 B14 的跨进程恢复证据，并对 B11–B13 仅在当前环境可验证范围内推进。工作树仍未提交、未推送、未合并、未发布。**
+**当前文档状态：v0.10.2 已正式发布。P0–P5 桌面 UI、菜单入口、ARM64 DMG 基础能力及顶部区域第一批对齐已落地；B11–B14 代码与当前环境可验证项已完成。剩余为跨平台实机与像素级证据边界，不阻塞本版本发布。**
 
 ### 9.1 当前实施账本（2026-09-19）
 
 | 阶段/批次 | 状态 | 已取得证据 | 当前缺口 |
 |---|---|---|---|
-| P0–P5 | 已完成 | UI/菜单/发布能力代码已落地，shell E2E 已覆盖主要桌面交互 | 新正式版本尚未发布 |
+| P0–P5 | 已完成 | UI/菜单/发布能力代码已落地，shell E2E 已覆盖主要桌面交互 | v0.10.2 已正式发布；剩余为跨平台实机与像素级证据补强 |
 | B11 | 部分完成 | 语法装饰纯函数与回归测试通过；真实 Markdown 语法夹具已稳定通过，覆盖表格、任务列表、数学、提示框、Mermaid、危险 HTML 过滤、图片、换行和长代码块；图片使用 alt/source 契约、表格使用 renderer-owned class 契约 | IME、运行时截图、大文档性能 |
 | B12 | 部分完成 | 外部写冲突、文件拖放入口、外部应用交接契约已覆盖；shell E2E 22 项通过 | Finder/桌面真实拖放、真实外部应用启动、多窗口拖放 |
 | B13 | 部分完成 | macOS PDF 能力探针与导出边界已明确 | Windows/Linux 实机可选文字证据 |
@@ -907,6 +907,28 @@ npm audit：0 vulnerabilities
 4. 逐项检查文档标题位置、按钮顺序、搜索展开、More 溢出、侧栏/Inspector 和拖拽区域；
 5. 只有通过代码门禁和运行时证据后，才进入提交、推送和新版本发布决策。
 
+### 9.18 v0.10.2 顶部 UI 对齐版本发布收口（2026-09-21）
+
+顶部区域第一批对齐改动已完成版本发布：
+
+```text
+版本：v0.10.2
+提交：0f8f160 chore(release): prepare v0.10.2
+发布工作流：35612476507
+发布结果：success
+```
+
+本轮同步更新：
+
+- `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json` 版本为 `0.10.2`；
+- `RELEASE_NOTES.md` 增加顶部 Toolbar、布局、搜索、Sidebar、Formatting Toolbar、标签页和跨平台 E2E 兼容说明；
+- 推送 `main` 并创建、推送 `v0.10.2` 标签；
+- Release 首轮 Linux ARM64 AppImage 的 `linuxdeploy` 构建出现偶发失败，重试失败作业后全量通过，未修改产品代码；
+- 正式 Release 已为 `draft=false`、`prerelease=false`，stable/beta `latest.json` 均为 `0.10.2`，包含 18 个平台键；
+- 已核验 macOS ARM64 DMG、Universal DMG、Universal updater archive、Windows ARM64/x64、Linux/Fedora 多架构资产及签名文件、SHA256、SBOM 和发布文档。
+
+结论：顶部 UI 第一批实现已完成代码、测试、CI、发布和 updater 资产闭环；原生 NSToolbar、NSWindow tab group、Finder 拖放、跨显示器几何和 titlebar 像素级对齐仍属于后续证据补强，不以本版本发布结果宣称完全一致。
+
 ### 9.17 顶部区域截图复核与结构收口（2026-09-21）
 
 本轮使用固定浏览器逻辑窗口采集并复核：
@@ -953,4 +975,4 @@ format:check：通过
 git diff --check：通过
 ```
 
-当前状态：顶部区域第一批代码和浏览器截图验证已完成；macOS 原生窗口实拍、原生 NSToolbar 行为、Finder 拖放和原生 titlebar 像素级对齐仍属于独立证据边界。尚未提交、推送或发布。
+当前状态：顶部区域第一批代码和浏览器截图验证已完成，并已随 `v0.10.2` 提交、推送和正式发布；macOS 原生窗口实拍、原生 NSToolbar 行为、Finder 拖放和原生 titlebar 像素级对齐仍属于独立证据边界，不宣称已完全闭合。
