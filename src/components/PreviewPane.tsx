@@ -167,7 +167,8 @@ export function PreviewPane(props: PreviewPaneProps) {
     let frame = 0
     const update = () => {
       frame = 0
-      const top = pane.getBoundingClientRect().top + 28
+      const overlay = parseFloat(getComputedStyle(pane).getPropertyValue('--document-tools-height')) || 0
+      const top = pane.getBoundingClientRect().top + overlay + 28
       let active: string | null = null
       for (const heading of root.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')) {
         if (heading.getBoundingClientRect().top <= top) active = heading.id

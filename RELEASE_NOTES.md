@@ -1,3 +1,18 @@
+# TextMark v0.10.7
+
+TextMark 0.10.7 refines the desktop toolbar and document workspace against the latest Markdown Preview reference, improves editor and preview position handoff, and makes the default external-editor action safely fall back to the system handler.
+
+TextMark 0.10.7 继续对标最新版 Markdown Preview 优化桌面工具栏与文档工作区，改进编辑器和预览位置交接，并修复默认外部编辑器目标安全回退到系统处理器。
+
+## Highlights / 主要更新
+
+- 工具栏：支持自定义顺序和紧凑溢出布局，收敛重复的侧边栏模式入口，并增加外观快捷面板。
+- 文档工作区：查找与格式工具改为内容覆盖层；改进编辑、预览和标签切换时的位置恢复。
+- 外部打开：系统默认、未知或不可用默认目标均安全路由；补充 macOS 应用映射与非法输入回归测试。
+- 验收：前端 46 个测试文件、420 项测试，TypeScript、ESLint、格式检查、Rust 格式/测试/Clippy 均通过；macOS 原生窗口、打印和编辑器启动验收由用户实机确认。
+
+---
+
 # TextMark v0.10.6
 
 TextMark 0.10.6 updates the Windows Explorer preview workflow to `NuGet/setup-nuget@v3`, removing the GitHub Actions Node.js 20 runtime deprecation warning while keeping the Windows x64/ARM64 preview builds unchanged.

@@ -12,6 +12,8 @@ import {
   FolderOpen,
   Folder,
   Info,
+  ListTree,
+  ALargeSmall,
   Minus,
   MoreHorizontal,
   PanelLeft,
@@ -28,17 +30,24 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isTauri } from '../lib/platform'
 import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
-import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, ToolbarItem, ViewMode } from '../types'
+import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, ToolbarItem, ViewMode, ThemeMode, ThemePreset } from '../types'
+import { ToolbarAppearance } from './ToolbarAppearance'
 
 interface ToolbarProps {
   fileName: string
   busy: boolean
   viewMode: ViewMode
   sidebarVisible: boolean
+  sidebarWidth: number
   sidebarMode: SidebarMode
   inspectorVisible: boolean
   alwaysOnTop: boolean
   zoom: number
+  theme: ThemeMode
+  themePreset: ThemePreset
+  onThemeChange: (theme: ThemeMode) => void
+  onThemePresetChange: (preset: ThemePreset) => void
+  onCustomizeAppearance: () => void
   searchQuery: string
   locale: Locale
   items: ToolbarItem[]
@@ -95,7 +104,7 @@ const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameter
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key)
   const [copiedFlash, setCopiedFlash] = useState(false)
-  const [hiddenCount, setHiddenCount] = useState(0)
+  const [hiddenIndexes, setHiddenIndexes] = useState<number[]>([])
   const actionsRef = useRef<HTMLDivElement>(null)
   const windowAction = (action: 'close' | 'minimize' | 'toggleMaximize') => {
     if (!isTauri()) return
@@ -113,10 +122,18 @@ export function Toolbar(props: ToolbarProps) {
     [props.applications],
   )
   const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
-  const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget) ?? editorApps[0]
-  // Sidebar is a fixed leading control in the macOS-style layout. Keep the
-  // persisted item for customization compatibility, but render it only once.
-  const toolbarItems = useMemo(() => props.items.filter((item) => item !== 'sidebar'), [props.items])
+  // `system` is a valid default target but is intentionally filtered out of
+  // editorApps (it has kind="system"). Never silently substitute a different
+  // editor for the user's configured target.
+  const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget)
+  const effectiveDefaultTarget = defaultEditor?.id ?? 'system'
+  // Keep the user's ordered layout, including duplicate spacing items. Like
+  // AppKit, navigation is absent until there is a destination in either direction.
+  const toolbarItems = useMemo(
+    () => props.items.filter((item) => item !== 'navigation' || props.canGoBack || props.canGoForward),
+    [props.items, props.canGoBack, props.canGoForward],
+  )
+  const titleSlot = toolbarItems.indexOf('flexibleSpace')
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -128,15 +145,15 @@ export function Toolbar(props: ToolbarProps) {
     <button key={application.id} onClick={() => props.onOpenWith(application.id)}>
       <span className="app-badge">{application.name.slice(0, 1).toUpperCase()}</span>
       <span>{application.kind === 'system' ? tx('systemDefault') : application.name}</span>
-      {application.id === props.defaultOpenTarget ? <Check className="check" /> : null}
+      {application.id === effectiveDefaultTarget ? <Check className="check" /> : null}
     </button>
   ))
-  const defaultEditorButton = defaultEditor ? (
-    <button onClick={() => props.onOpenWith(defaultEditor.id)}>
+  const defaultEditorButton = (
+    <button onClick={() => props.onOpenWith(effectiveDefaultTarget)}>
       <AppWindow />
       <span>{tx('openWithDefault')}</span>
     </button>
-  ) : null
+  )
   const llmButtons = llmApps.map((application) => (
     <button
       key={application.id}
@@ -157,9 +174,8 @@ export function Toolbar(props: ToolbarProps) {
     </button>
   )
 
-  // Measure which trailing items overflow the available toolbar width and hide
-  // them (they remain reachable from the app menu bar and, for simple actions,
-  // from the overflow "more" menu). flexibleSpace collapses first.
+  // Measure the available toolbar width and hide the trailing customized items;
+  // keep hidden actions reachable from the app menu bar or the overflow menu.
   useLayoutEffect(() => {
     const container = actionsRef.current
     if (!container) return
@@ -170,45 +186,81 @@ export function Toolbar(props: ToolbarProps) {
       // and would be mistaken for "fits", un-hiding everything again.
       slots.forEach((slot) => {
         slot.style.display = ''
+        slot.style.removeProperty('width')
+        slot.removeAttribute('data-sidebar-tracking')
       })
-      const gap = 8
-      const available = container.clientWidth - (more?.offsetWidth ?? 0) - gap
-      let used = 0
-      let cut = slots.length
-      for (let index = 0; index < slots.length; index += 1) {
-        const flexible = toolbarItems[index] === 'flexibleSpace'
-        const width = flexible ? 6 : slots[index].offsetWidth
-        const extra = used > 0 ? gap : 0
-        if (used + extra + width <= available) used += extra + width
-        else {
-          cut = index
-          break
+      const style = getComputedStyle(container)
+      const gap = Number.parseFloat(style.columnGap) || 0
+      const available = container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      // Track only a leading sidebar slot; never move a customized item back
+      // to the front. If the whole row cannot fit, release the tracking space
+      // before overflowing actions. The 3px anchor is the 6px divider's centre.
+      const moreWidth = more?.getBoundingClientRect().width ?? 0
+      const minimumWidths = slots.map((slot, index) => (toolbarItems[index] === 'flexibleSpace' ? 0 : slot.getBoundingClientRect().width))
+      if (toolbarItems[0] === 'sidebar' && props.sidebarVisible && window.innerWidth > 700) {
+        const targetWidth = props.sidebarWidth + 3 - container.getBoundingClientRect().left
+        const required = moreWidth + minimumWidths.reduce((sum, width) => sum + width, 0) + slots.length * gap
+        if (targetWidth >= minimumWidths[0] + 10 && required + targetWidth - minimumWidths[0] <= available + 0.5) {
+          slots[0].setAttribute('data-sidebar-tracking', 'true')
+          slots[0].style.width = `${targetWidth}px`
         }
       }
+      // The container has an independent grid track; hiding children must not
+      // shrink the budget itself. Flexible slots have zero minimum width.
+      const hidden = new Set<number>()
+      const rowWidth = () => {
+        const visibleIndexes = slots.map((_slot, index) => index).filter((index) => !hidden.has(index))
+        return (
+          visibleIndexes.reduce(
+            (sum, index) => sum + (toolbarItems[index] === 'flexibleSpace' ? 0 : slots[index].getBoundingClientRect().width),
+            0,
+          ) +
+          Math.max(0, visibleIndexes.length - 1) * gap +
+          (visibleIndexes.length > 0 ? gap : 0)
+        )
+      }
+      // Keep the customized prefix visible, overflowing from the end one slot
+      // at a time; explicit indexes keep rendering and the More menu in sync.
+      while (rowWidth() + moreWidth > available + 0.5) {
+        let index = slots.length - 1
+        while (index >= 0 && hidden.has(index)) index -= 1
+        if (index < 0) break
+        hidden.add(index)
+      }
+      const hiddenList = [...hidden].sort((a, b) => a - b)
       // Apply hiding synchronously to avoid a crowded flash before React re-renders.
       slots.forEach((slot, index) => {
-        if (index >= cut) slot.style.display = 'none'
+        if (hidden.has(index)) slot.style.display = 'none'
       })
-      setHiddenCount(slots.length - cut)
+      setHiddenIndexes(hiddenList)
     }
     compute()
     const observer = new ResizeObserver(compute)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [toolbarItems, props.displayMode, props.searchQuery, props.zoom, props.viewMode])
+  }, [toolbarItems, props.displayMode, props.searchQuery, props.zoom, props.viewMode, props.sidebarVisible, props.sidebarWidth])
 
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`
-    const hidden = index >= toolbarItems.length - hiddenCount
+    const hidden = hiddenIndexes.includes(index)
     const hiddenStyle = hidden ? { display: 'none' as const } : undefined
     const slot = (node: React.ReactNode) => (
-      <span key={key} data-toolbar-item style={hiddenStyle}>
+      <span key={key} data-toolbar-item={item} style={hiddenStyle}>
         {node}
       </span>
     )
     if (item === 'flexibleSpace')
-      return <span key={key} data-toolbar-item data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
-    if (item === 'space') return <span key={key} data-toolbar-item data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
+      return (
+        <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle}>
+          {index === titleSlot ? (
+            <span className="toolbar-document-context" title={props.fileName}>
+              <span className="toolbar-document-name">{props.fileName}</span>
+            </span>
+          ) : null}
+        </span>
+      )
+    if (item === 'space')
+      return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
     if (item === 'navigation')
       return slot(
         <div className="history-buttons toolbar-navigation">
@@ -223,24 +275,35 @@ export function Toolbar(props: ToolbarProps) {
     if (item === 'sidebar')
       return slot(
         <div className="sidebar-control">
+          <div className="sidebar-mode-picker" role="group" aria-label={tx('chooseSidebar')}>
+            {(['outline', 'files'] as const).map((mode) => {
+              const label = mode === 'outline' ? 'tableOfContents' : 'projectNavigator'
+              const selected = props.sidebarVisible && props.sidebarMode === mode
+              return (
+                <button
+                  key={mode}
+                  className={selected ? 'selected' : ''}
+                  title={tx(label)}
+                  aria-label={tx(label)}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    props.onSidebarModeChange(mode)
+                  }}
+                >
+                  {withLabel(mode === 'outline' ? <ListTree /> : <Folder />, label)}
+                </button>
+              )
+            })}
+          </div>
           <button
             className={props.sidebarVisible ? 'selected' : ''}
             title={tx('toggleSidebar')}
             aria-label={tx('toggleSidebar')}
+            aria-pressed={props.sidebarVisible}
             onClick={props.onToggleSidebar}
           >
             {withLabel(<PanelLeft />, 'sidebar')}
           </button>
-          <details>
-            <summary aria-label={tx('chooseSidebar')}>
-              <ChevronDown />
-            </summary>
-            <div className="menu-popover sidebar-menu">
-              <button onClick={props.onToggleSidebar}>{tx('hideSidebar')}</button>
-              <button onClick={() => props.onSidebarModeChange('outline')}>{tx('tableOfContents')}</button>
-              <button onClick={() => props.onSidebarModeChange('files')}>{tx('projectNavigator')}</button>
-            </div>
-          </details>
         </div>,
       )
     if (item === 'openActions')
@@ -302,44 +365,59 @@ export function Toolbar(props: ToolbarProps) {
           </button>
         </div>,
       )
+    if (item === 'themesAndSettings')
+      return slot(
+        <ToolbarAppearance
+          locale={props.locale}
+          zoom={props.zoom}
+          theme={props.theme}
+          themePreset={props.themePreset}
+          onZoomChange={props.onZoomChange}
+          onThemeChange={props.onThemeChange}
+          onThemePresetChange={props.onThemePresetChange}
+          onCustomizeAppearance={props.onCustomizeAppearance}
+        >
+          {withLabel(<ALargeSmall />, 'themesAndSettings')}
+        </ToolbarAppearance>,
+      )
     if (item === 'documentActions')
-      return (() => {
-        const editTitle = props.viewMode === 'edit' ? 'stopEditing' : 'edit'
-        return slot(
-          <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
-            <button
-              className={props.inspectorVisible ? 'selected' : ''}
-              title={tx('getInfo')}
-              aria-label={tx('getInfo')}
-              onClick={props.onToggleInspector}
-            >
-              {withLabel(<Info />, 'getInfo')}
-            </button>
-            <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
-              {withLabel(<Share />, 'shareSource')}
-            </button>
-            <button
-              className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
-              title={tx(editTitle)}
-              aria-label={tx(editTitle)}
-              onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
-            >
-              {withLabel(<FilePenLine />, editTitle)}
-            </button>
-          </div>,
-        )
-      })()
+      return slot(
+        <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
+          <button
+            className={props.inspectorVisible ? 'selected' : ''}
+            title={tx('getInfo')}
+            aria-label={tx('getInfo')}
+            onClick={props.onToggleInspector}
+          >
+            {withLabel(<Info />, 'getInfo')}
+          </button>
+          <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
+            {withLabel(<Share />, 'shareSource')}
+          </button>
+          <button
+            className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
+            title={tx(props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
+            aria-label={tx(props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
+            onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
+          >
+            {withLabel(<FilePenLine />, props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
+          </button>
+        </div>,
+      )
     if (item === 'search')
       return slot(
-        <label className="document-search" onClick={props.onSearchOpen}>
-          <Search />
+        <div className="document-search">
+          <button className="search-trigger" title={tx('search')} aria-label={tx('search')} onClick={props.onSearchOpen}>
+            <Search />
+          </button>
           <input
+            aria-label={tx('search')}
             value={props.searchQuery}
             onFocus={props.onSearchOpen}
             onChange={(event) => props.onSearchQueryChange(event.target.value)}
             placeholder={tx('search')}
           />
-        </label>,
+        </div>,
       )
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
@@ -368,13 +446,16 @@ export function Toolbar(props: ToolbarProps) {
     return null
   }
 
-  const overflowItems = toolbarItems.slice(toolbarItems.length - hiddenCount).filter((item) => SIMPLE_ACTIONS[item] && item !== 'copy')
+  const overflowItems = hiddenIndexes
+    .map((index) => toolbarItems[index])
+    .filter((item) => item !== 'space' && item !== 'flexibleSpace' && item !== 'copy')
 
   return (
     <header
       className="native-toolbar"
       data-tauri-drag-region
       onClick={(event) => {
+        if ((event.target as HTMLElement).closest('.appearance-popover')) return
         const details = (event.target as HTMLElement).closest('.menu-popover button')?.closest('details')
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}
@@ -386,32 +467,6 @@ export function Toolbar(props: ToolbarProps) {
           <button aria-label={tx('maximize')} onClick={() => windowAction('toggleMaximize')} />
         </div>
       </div>
-      <div className="toolbar-leading-actions" data-tauri-drag-region>
-        <div className="sidebar-control">
-          <button
-            className={props.sidebarVisible ? 'selected' : ''}
-            title={tx('toggleSidebar')}
-            aria-label={tx('toggleSidebar')}
-            onClick={props.onToggleSidebar}
-          >
-            <PanelLeft />
-          </button>
-          <details>
-            <summary title={tx('chooseSidebar')} aria-label={tx('chooseSidebar')}>
-              <Folder />
-              <ChevronDown />
-            </summary>
-            <div className="menu-popover sidebar-menu">
-              <button onClick={props.onToggleSidebar}>{tx('hideSidebar')}</button>
-              <button onClick={() => props.onSidebarModeChange('outline')}>{tx('tableOfContents')}</button>
-              <button onClick={() => props.onSidebarModeChange('files')}>{tx('projectNavigator')}</button>
-            </div>
-          </details>
-        </div>
-      </div>
-      <div className="toolbar-document-context" data-tauri-drag-region title={props.fileName}>
-        <span className="toolbar-document-name">{props.fileName}</span>
-      </div>
       <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
         {toolbarItems.map(renderItem)}
         <details className="more-menu">
@@ -419,11 +474,55 @@ export function Toolbar(props: ToolbarProps) {
             <MoreHorizontal />
           </summary>
           <div className="menu-popover align-right">
-            {overflowItems.map((item) => {
-              const meta = SIMPLE_ACTIONS[item]!
+            {overflowItems.map((item, index) => {
+              const meta = SIMPLE_ACTIONS[item]
+              if (item === 'documentActions')
+                return (
+                  <div key={`overflow-${index}`} className="toolbar-overflow-controls">
+                    {renderItem(item, -1)}
+                  </div>
+                )
+              if (!meta) {
+                if (item === 'openActions')
+                  return (
+                    <div key={`overflow-${index}`}>
+                      {defaultEditorButton}
+                      {llmButtons}
+                      {editorButtons}
+                    </div>
+                  )
+                if (item === 'openWith')
+                  return (
+                    <div key={`overflow-${index}`}>
+                      {defaultEditorButton}
+                      {editorButtons}
+                    </div>
+                  )
+                if (item === 'openInLlm') return <div key={`overflow-${index}`}>{llmButtons}</div>
+                return (
+                  <div key={`overflow-${index}`} className="toolbar-overflow-controls">
+                    {item === 'themesAndSettings' ? (
+                      <ToolbarAppearance
+                        locale={props.locale}
+                        zoom={props.zoom}
+                        theme={props.theme}
+                        themePreset={props.themePreset}
+                        onZoomChange={props.onZoomChange}
+                        onThemeChange={props.onThemeChange}
+                        onThemePresetChange={props.onThemePresetChange}
+                        onCustomizeAppearance={props.onCustomizeAppearance}
+                      >
+                        {withLabel(<ALargeSmall />, 'themesAndSettings')}
+                      </ToolbarAppearance>
+                    ) : (
+                      renderItem(item, -1)
+                    )}
+                  </div>
+                )
+              }
               const title = actionTitle(item, props, meta.title)
               return (
-                <button key={`overflow-${item}`} onClick={() => meta.action(props)}>
+                <button key={`overflow-${item}-${index}`} onClick={() => meta.action(props)}>
                   {meta.icon}
                   {tx(title)}
                 </button>

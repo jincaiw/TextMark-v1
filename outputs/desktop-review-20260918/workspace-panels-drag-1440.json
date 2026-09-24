@@ -1,0 +1,539 @@
+{
+  "output": "outputs/desktop-review-20260918/workspace-panels-drag-1440.png",
+  "scenario": "workspace-panels-drag",
+  "ready": true,
+  "scenarioReady": true,
+  "title": "README.md",
+  "language": "zh-CN",
+  "renderer": "worker",
+  "theme": "light",
+  "htmlBytes": 21296,
+  "geometry": {
+    "elements": {
+      ".native-toolbar": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 52,
+        "display": "grid",
+        "gap": "normal 8px",
+        "padding": "0px 10px",
+        "justifyContent": "normal"
+      },
+      ".window-leading": {
+        "x": 10,
+        "y": 18.5,
+        "width": 60,
+        "height": 14,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".toolbar-leading-actions": null,
+      ".toolbar-document-context": {
+        "x": 605.5,
+        "y": 18,
+        "width": 360,
+        "height": 15,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px 8px",
+        "justifyContent": "center"
+      },
+      ".native-actions": {
+        "x": 78,
+        "y": 12.5,
+        "width": 1352,
+        "height": 26,
+        "display": "flex",
+        "gap": "4px",
+        "padding": "0px",
+        "justifyContent": "flex-start"
+      },
+      ".more-menu": {
+        "x": 1398,
+        "y": 12.5,
+        "width": 32,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-tabs": null,
+      ".document-shell": {
+        "x": 0,
+        "y": 52,
+        "width": 1440,
+        "height": 848,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-workspace": {
+        "x": 406,
+        "y": 52,
+        "width": 528,
+        "height": 848,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".formatting-toolbar": null,
+      ".editor-pane": null,
+      ".cm-content": null,
+      ".cm-editor": null,
+      ".sidebar-mode-picker": {
+        "x": 78,
+        "y": 10.5,
+        "width": 64,
+        "height": 30,
+        "display": "flex",
+        "gap": "2px",
+        "padding": "2px",
+        "justifyContent": "normal"
+      },
+      ".search-trigger": {
+        "x": 1374,
+        "y": 13.5,
+        "width": 16,
+        "height": 24,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".find-bar": null,
+      ".inspector-panel": {
+        "x": 940,
+        "y": 52,
+        "width": 500,
+        "height": 848,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px 18px 28px",
+        "justifyContent": "normal"
+      }
+    },
+    "buttonCenters": [
+      {
+        "label": "关闭",
+        "x": 17,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "最小化",
+        "x": 40,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "缩放",
+        "x": 63,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "大纲",
+        "x": 94.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 125.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "显示或隐藏边栏",
+        "x": 379,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "打开",
+        "x": 1193.5,
+        "y": 25.5,
+        "width": 51
+      },
+      {
+        "label": "外观与设置",
+        "x": 1257.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "显示简介",
+        "x": 1291,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "共享 Markdown 源文件",
+        "x": 1321,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "编辑",
+        "x": 1351,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "在文稿中搜索",
+        "x": 1382,
+        "y": 25.5,
+        "width": 16
+      },
+      {
+        "label": "更多",
+        "x": 1414,
+        "y": 25.5,
+        "width": 32
+      }
+    ],
+    "visibleSlots": [
+      {
+        "index": 0,
+        "item": "sidebar",
+        "x": 78,
+        "y": 12.5,
+        "width": 325,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px 10px 0px 0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 1,
+        "item": "flexibleSpace",
+        "x": 407,
+        "y": 18,
+        "width": 757,
+        "height": 15,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 2,
+        "item": "openActions",
+        "x": 1168,
+        "y": 12.5,
+        "width": 51,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 3,
+        "item": "space",
+        "x": 1223,
+        "y": 25,
+        "width": 14,
+        "height": 1,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 4,
+        "item": "themesAndSettings",
+        "x": 1241,
+        "y": 12.5,
+        "width": 33,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 5,
+        "item": "inspector",
+        "x": 1278,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 6,
+        "item": "share",
+        "x": 1308,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 7,
+        "item": "edit",
+        "x": 1338,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 8,
+        "item": "search",
+        "x": 1368,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      }
+    ],
+    "visibleSlotOrder": [
+      "sidebar",
+      "flexibleSpace",
+      "openActions",
+      "space",
+      "themesAndSettings",
+      "inspector",
+      "share",
+      "edit",
+      "search"
+    ],
+    "searchVisible": true,
+    "sidebarModePicker": [
+      {
+        "label": "大纲",
+        "x": 94.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 125.5,
+        "y": 25.5,
+        "width": 29
+      }
+    ],
+    "documentTabCount": 0,
+    "visibleDocumentTabCount": 0,
+    "editorVisible": false,
+    "pageWidth": 1440,
+    "scrollWidth": 1440,
+    "overlaps": [],
+    "assertions": {
+      "searchVisibleAtDesktopWidth": true,
+      "sidebarModePickerAligned": true,
+      "noPageHorizontalOverflow": true,
+      "majorSlotsDoNotOverlap": true
+    }
+  },
+  "tools": {
+    "rects": {
+      "tabs": null,
+      "sidebar": {
+        "x": 0,
+        "y": 52,
+        "width": 400,
+        "height": 848,
+        "top": 52,
+        "right": 400,
+        "bottom": 900,
+        "left": 0
+      },
+      "workspace": {
+        "x": 406,
+        "y": 52,
+        "width": 528,
+        "height": 848,
+        "top": 52,
+        "right": 934,
+        "bottom": 900,
+        "left": 406
+      },
+      "editor": null,
+      "scroller": null,
+      "tools": {
+        "x": 406,
+        "y": 52,
+        "width": 528,
+        "height": 0,
+        "top": 52,
+        "right": 934,
+        "bottom": 52,
+        "left": 406
+      },
+      "find": null,
+      "formatting": null
+    },
+    "height": 0,
+    "cssHeight": "",
+    "cssHeightPx": 0,
+    "position": "absolute",
+    "padding": {
+      "tools": "0px",
+      "content": null,
+      "contentTop": null,
+      "scroller": null,
+      "preview": "0px",
+      "previewBeforeHeight": "0px"
+    },
+    "focus": {
+      "tag": "body",
+      "id": "",
+      "className": "",
+      "label": "README.md使用默认编辑器打开AI 应用CodexClaudeChatGPT编辑器S系统默认编辑器外观与设置AA100%AaNormalAaCharcoa",
+      "inFind": false,
+      "inEditor": false
+    },
+    "heightChain": [],
+    "scrollTop": null,
+    "scrollContainer": {
+      "tag": "section",
+      "id": "",
+      "className": "preview-pane",
+      "label": "Rendered Markdown preview",
+      "rect": {
+        "x": 406,
+        "y": 52,
+        "width": 528,
+        "height": 848,
+        "top": 52,
+        "right": 934,
+        "bottom": 900,
+        "left": 406
+      },
+      "scrollTop": 0,
+      "scrollLeft": 0,
+      "scrollHeight": 1344,
+      "clientHeight": 848,
+      "scrollWidth": 528,
+      "clientWidth": 528,
+      "overflowX": "auto",
+      "overflowY": "auto",
+      "padding": "0px",
+      "scrollPaddingTop": "0px"
+    },
+    "scrollContainers": [
+      {
+        "tag": "div",
+        "id": "",
+        "className": "document-workspace",
+        "label": "Welcome to TextMark\nCross-platform Markdown, beautifully rendered.\nTextMark is a",
+        "rect": {
+          "x": 406,
+          "y": 52,
+          "width": 528,
+          "height": 848,
+          "top": 52,
+          "right": 934,
+          "bottom": 900,
+          "left": 406
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 1345,
+        "clientHeight": 848,
+        "scrollWidth": 528,
+        "clientWidth": 528,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "padding": "0px",
+        "scrollPaddingTop": "auto"
+      },
+      {
+        "tag": "section",
+        "id": "",
+        "className": "preview-pane",
+        "label": "Rendered Markdown preview",
+        "rect": {
+          "x": 406,
+          "y": 52,
+          "width": 528,
+          "height": 848,
+          "top": 52,
+          "right": 934,
+          "bottom": 900,
+          "left": 406
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 1344,
+        "clientHeight": 848,
+        "scrollWidth": 528,
+        "clientWidth": 528,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px",
+        "scrollPaddingTop": "0px"
+      }
+    ],
+    "activeTab": null,
+    "visibleTabCount": 0,
+    "controls": [],
+    "overflowingControls": []
+  },
+  "workspacePanels": {
+    "assertions": {
+      "openInspector.controlFound": true,
+      "sidebarDragAdds50": true,
+      "inspectorDragAdds60": true,
+      "sidebarDragClampsAtMax": true,
+      "inspectorDragClampsAtMax": true,
+      "sidebarMaxClampAndStorage": true,
+      "inspectorMaxClampAndStorage": true
+    },
+    "actions": [
+      {
+        "selector": ".panel-resizer-sidebar",
+        "before": 240,
+        "delta": 50,
+        "after": 290
+      },
+      {
+        "selector": ".panel-resizer-inspector",
+        "before": 270,
+        "delta": 60,
+        "after": 330
+      },
+      {
+        "selector": ".panel-resizer-sidebar",
+        "before": 290,
+        "delta": 1000,
+        "after": 400
+      },
+      {
+        "selector": ".panel-resizer-inspector",
+        "before": 330,
+        "delta": 1000,
+        "after": 500
+      }
+    ],
+    "final": {
+      "sidebar": 400,
+      "inspector": 500,
+      "sidebarStored": 400,
+      "inspectorStored": 500
+    }
+  },
+  "failures": []
+}

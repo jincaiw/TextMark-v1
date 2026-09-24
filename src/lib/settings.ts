@@ -22,6 +22,7 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'openWith',
   'openInLlm',
   'zoom',
+  'themesAndSettings',
   'documentActions',
   'inspector',
   'alwaysOnTop',
@@ -44,7 +45,20 @@ export const DEFAULT_TOOLBAR: ToolbarItem[] = [
   'flexibleSpace',
   'openActions',
   'space',
-  'zoom',
+  'themesAndSettings',
+  'inspector',
+  'share',
+  'edit',
+  'search',
+]
+
+const LEGACY_COMBINED_DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'openActions',
+  'space',
+  'themesAndSettings',
   'documentActions',
   'search',
 ]
@@ -99,11 +113,12 @@ export function normalizeSettings(value: unknown): AppSettings {
   // is now the dedicated "openActions" item. Preserve existing user layouts.
   const storedSchemaVersion = (stored as { schemaVersion?: number }).schemaVersion
   const toolbar =
-    storedSchemaVersion === 4 || storedSchemaVersion === 5
+    typeof storedSchemaVersion === 'number' && storedSchemaVersion >= 4
       ? rawToolbar
       : rawToolbar.map((item) => (item === 'openWith' ? ('openActions' as ToolbarItem) : item))
-  const usesPriorDefault =
-    rawToolbar.length === V5_DEFAULT_TOOLBAR.length && rawToolbar.every((item, index) => item === V5_DEFAULT_TOOLBAR[index])
+  const matchesToolbar = (expected: ToolbarItem[]) =>
+    rawToolbar.length === expected.length && rawToolbar.every((item, index) => item === expected[index])
+  const usesPriorDefault = matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR)
   return {
     schemaVersion: 7,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),

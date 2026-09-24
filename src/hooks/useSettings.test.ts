@@ -23,6 +23,15 @@ describe('settings migration', () => {
     expect(normalizeSettings({ schemaVersion: 3, toolbar: ['openWith', 'zoom'] }).toolbar).toEqual(['openActions', 'zoom'])
     expect(normalizeSettings({ schemaVersion: 4, toolbar: ['openWith', 'openInLlm'] }).toolbar).toEqual(['openWith', 'openInLlm'])
   })
+  it('preserves dedicated openWith in every modern schema', () => {
+    for (const schemaVersion of [4, 5, 6, 7]) {
+      expect(normalizeSettings({ schemaVersion, toolbar: ['openWith', 'space', 'openInLlm'] }).toolbar).toEqual([
+        'openWith',
+        'space',
+        'openInLlm',
+      ])
+    }
+  })
   it('recovers from invalid JSON', () => expect(readSettings(storage({ 'textmark.settings.v2': '{' }))).toEqual(DEFAULT_SETTINGS))
   it('rejects unknown locale, theme, and width values', () =>
     expect(normalizeSettings({ locale: 'fr', theme: 'neon', contentWidth: 'wide' })).toMatchObject({
@@ -58,9 +67,10 @@ describe('settings migration', () => {
     expect(normalizeSettings({ crashReports: 'yes' }).crashReports).toBe(false)
     expect(normalizeSettings({ crashReports: true }).crashReports).toBe(true)
   })
-  it('upgrades the previous default toolbar to grouped document actions without rewriting custom layouts', () => {
+  it('upgrades previous default toolbar layouts while preserving custom layouts', () => {
     expect(
       normalizeSettings({
+        schemaVersion: 5,
         toolbar: [
           'flexibleSpace',
           'sidebar',
@@ -75,7 +85,13 @@ describe('settings migration', () => {
           'search',
         ],
       }).toolbar,
-    ).toContain('documentActions')
+    ).toEqual(DEFAULT_SETTINGS.toolbar)
+    expect(
+      normalizeSettings({
+        schemaVersion: 7,
+        toolbar: ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'documentActions', 'search'],
+      }).toolbar,
+    ).toEqual(DEFAULT_SETTINGS.toolbar)
     expect(normalizeSettings({ toolbar: ['inspector', 'search'] }).toolbar).toEqual(['inspector', 'search'])
   })
   it('migrates document lifecycle preferences with safe defaults and bounds', () => {

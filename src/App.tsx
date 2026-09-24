@@ -9,6 +9,7 @@ import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
 import { ExportDialog } from './components/ExportDialog'
 import { FindBar } from './components/FindBar'
+import { DocumentTools } from './components/DocumentTools'
 import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
@@ -276,16 +277,24 @@ function DocumentApp() {
     if (isTauri()) void getCurrentWindow().setTitle(title)
   }, [documents.document.name, documents.isDirty, settings.locale])
   useEffect(() => {
-    if (viewMode !== 'edit') return
+    // When a tab changes while the editor is visible, restore that session's
+    // saved editor position. Do not key this effect on viewMode: entering edit
+    // from preview already staged a live preview anchor in switchViewMode, and
+    // replaying editorState here would overwrite the reader's newer position.
+    if (viewModeRef.current !== 'edit') return
     const saved = documents.document.editorState
     if (saved) {
       setPendingEditorLine(saved.topLine)
       setPendingScrollFraction(saved.scrollFraction)
       setPendingEditorSelection(saved.selection)
       setPendingEditorCursor(saved.selection.head)
+    } else {
+      setPendingEditorLine(null)
+      setPendingScrollFraction(0)
+      setPendingEditorSelection(null)
+      setPendingEditorCursor(null)
     }
-    window.setTimeout(() => editorRef.current?.focus(), 0)
-  }, [documents.activeId, viewMode])
+  }, [documents.activeId])
 
   const flash = (message: string) => {
     setNotice(message)
@@ -370,24 +379,34 @@ function DocumentApp() {
     setPendingEditorSelection(null)
     setPendingScrollFraction(null)
   }
-  // Returning to the preview has to wait for the pane to be laid out, so the
-  // source line is re-expanded into a pixel offset on the next frame.
+  // Returning to the preview has to wait for the pane to be laid out and for
+  // async images/diagrams to settle. A single next-frame restore can be
+  // overwritten by Mermaid or a decoded image changing the anchor offsets.
   useEffect(() => {
     if (viewMode !== 'preview' || pendingPreviewLine == null) return
-    const frame = requestAnimationFrame(() => {
-      const pane = document.querySelector<HTMLElement>('.preview-pane')
-      const anchors = previewAnchors()
-      if (pane && anchors.length) {
-        const offset = offsetForLine(
-          { lines: anchors.map((anchor) => anchor.line), offsets: anchors.map((anchor) => anchor.top) },
-          pendingPreviewLine,
-        )
-        if (offset != null) pane.scrollTop = offset
-      }
-      setPendingPreviewLine(null)
+    let cancelled = false
+    let frame = 0
+    void previewHydrationRef.current!.wait(previewRenderKey).then(() => {
+      if (cancelled) return
+      frame = requestAnimationFrame(() => {
+        if (cancelled) return
+        const pane = document.querySelector<HTMLElement>('.preview-pane')
+        const anchors = previewAnchors()
+        if (pane && anchors.length) {
+          const offset = offsetForLine(
+            { lines: anchors.map((anchor) => anchor.line), offsets: anchors.map((anchor) => anchor.top) },
+            pendingPreviewLine,
+          )
+          if (offset != null) pane.scrollTop = offset
+        }
+        setPendingPreviewLine(null)
+      })
     })
-    return () => cancelAnimationFrame(frame)
-  }, [pendingPreviewLine, viewMode])
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+    }
+  }, [pendingPreviewLine, previewRenderKey, viewMode])
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
@@ -404,7 +423,9 @@ function DocumentApp() {
     // Use the already-loaded document WebView on Windows. On some WebView2
     // runtimes a freshly-created secondary settings window can show only a
     // blank surface, making Settings and menu commands appear broken.
-    if (shouldUseDedicatedSettingsWindow()) {
+    // The dedicated window currently has no pane-routing contract. Keep a
+    // direct appearance request in this WebView rather than opening General.
+    if (pane !== 'appearance' && shouldUseDedicatedSettingsWindow()) {
       void openSettingsWindow().catch(() => setSettingsOpen(true))
       return
     }
@@ -773,6 +794,26 @@ function DocumentApp() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const activateDocumentTab = (id: string) => {
+    if (id === documents.activeId) return
+    const target = documents.sessions.find((session) => session.id === id)
+    if (viewModeRef.current === 'edit') {
+      const saved = target?.editorState
+      setPendingEditorLine(saved?.topLine ?? null)
+      setPendingScrollFraction(saved?.scrollFraction ?? 0)
+      setPendingEditorSelection(saved?.selection ?? null)
+      setPendingEditorCursor(saved?.selection.head ?? null)
+    } else {
+      setPendingEditorLine(null)
+      setPendingEditorCursor(null)
+      setPendingEditorSelection(null)
+      setPendingScrollFraction(null)
+    }
+    editorExitRef.current = null
+    editorExitSelectionRef.current = null
+    documents.activate(id, previewScrollTop())
+  }
+
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey
@@ -1101,6 +1142,10 @@ function DocumentApp() {
     setTabCloseGuard(null)
   }
 
+  const chooseThemePreset = (themePreset: keyof typeof THEME_PRESETS) => {
+    const flavor = THEME_PRESETS[themePreset].flavor
+    patch({ themePreset, theme: flavor, themeColors: {} })
+  }
   const chooseSidebarMode = (mode: SidebarMode) => {
     setSidebarMode(mode)
     setSidebarVisible(true)
@@ -1121,6 +1166,7 @@ function DocumentApp() {
         onBack={() => requestNavigation(-1)}
         onForward={() => requestNavigation(1)}
         sidebarVisible={sidebarVisible}
+        sidebarWidth={sidebarWidth}
         sidebarMode={sidebarMode}
         inspectorVisible={inspectorVisible}
         alwaysOnTop={alwaysOnTop}
@@ -1155,39 +1201,21 @@ function DocumentApp() {
         onExportPng={() => void exportDocument('png')}
         onExportPdf={() => exportPdf()}
         onExport={() => setExportOpen(true)}
-        onSettings={openSettings}
+        theme={settings.theme}
+        themePreset={settings.themePreset}
+        onThemeChange={setTheme}
+        onThemePresetChange={chooseThemePreset}
+        onCustomizeAppearance={() => openSettings('appearance')}
+        onSettings={() => openSettings()}
         onCustomizeToolbar={() => setToolbarOpen(true)}
         onClose={requestClose}
       />
-      {findOpen ? (
-        <FindBar
-          locale={settings.locale}
-          query={searchQuery}
-          current={searchIndex}
-          count={searchCount}
-          matchCase={matchCase}
-          mode={searchMode}
-          replacement={replacement}
-          onReplacementChange={setReplacement}
-          onReplace={replaceCurrent}
-          onReplaceAll={replaceAll}
-          onQueryChange={(value) => {
-            setSearchQuery(value)
-            setSearchIndex(0)
-          }}
-          onPrevious={() => nextMatch(-1)}
-          onNext={() => nextMatch(1)}
-          onMatchCaseChange={setMatchCase}
-          onModeChange={setSearchMode}
-          onClose={() => setFindOpen(false)}
-        />
-      ) : null}
       <div className="workspace-stack">
         <DocumentTabs
           sessions={documents.sessions}
           activeId={documents.activeId}
           locale={settings.locale}
-          onActivate={(id) => documents.activate(id, previewScrollTop())}
+          onActivate={activateDocumentTab}
           onClose={requestTabClose}
         />
         <div
@@ -1208,7 +1236,6 @@ function DocumentApp() {
                 activeHeading={activeHeading}
                 applications={applications}
                 defaultOpenTarget={settings.defaultOpenTarget}
-                onModeChange={chooseSidebarMode}
                 onOpenFolder={() => void documents.openFolder()}
                 onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
                 onOpenFileInTab={(path) => void documents.openPath(path, true)}
@@ -1223,7 +1250,32 @@ function DocumentApp() {
             </>
           ) : null}
           <div className="document-workspace">
-            {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
+            <DocumentTools>
+              {findOpen ? (
+                <FindBar
+                  locale={settings.locale}
+                  query={searchQuery}
+                  current={searchIndex}
+                  count={searchCount}
+                  matchCase={matchCase}
+                  mode={searchMode}
+                  replacement={replacement}
+                  onReplacementChange={setReplacement}
+                  onReplace={replaceCurrent}
+                  onReplaceAll={replaceAll}
+                  onQueryChange={(value) => {
+                    setSearchQuery(value)
+                    setSearchIndex(0)
+                  }}
+                  onPrevious={() => nextMatch(-1)}
+                  onNext={() => nextMatch(1)}
+                  onMatchCaseChange={setMatchCase}
+                  onModeChange={setSearchMode}
+                  onClose={() => setFindOpen(false)}
+                />
+              ) : null}
+              {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
+            </DocumentTools>
             {viewMode === 'edit' ? (
               <Suspense fallback={<div className="editor-loading" />}>
                 <EditorPane
@@ -1236,6 +1288,9 @@ function DocumentApp() {
                   contentWidth={settings.contentWidth}
                   initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
                   initialLine={pendingEditorLine ?? undefined}
+                  // Keep the find field authoritative when it is open; the
+                  // editor's initial autofocus must not steal the query focus.
+                  initialFocus={!findOpen}
                   initialCursor={pendingEditorCursor}
                   initialSelection={pendingEditorSelection}
                   onInitialPositionApplied={clearPendingEditorPosition}
@@ -1423,10 +1478,7 @@ function DocumentApp() {
         onLineHeightChange={setLineHeight}
         onPagePaddingHorizontalChange={setPagePaddingHorizontal}
         onDocumentFontChange={setDocumentFont}
-        onThemePresetChange={(themePreset) => {
-          const flavor = THEME_PRESETS[themePreset].flavor
-          patch({ themePreset, theme: flavor === 'system' ? 'system' : flavor, themeColors: {} })
-        }}
+        onThemePresetChange={chooseThemePreset}
         onThemeColorChange={(scheme, slot, color) =>
           patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
         }

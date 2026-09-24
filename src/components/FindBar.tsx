@@ -40,6 +40,7 @@ export function FindBar(props: FindBarProps) {
           value={props.query}
           onChange={(event) => props.onQueryChange(event.target.value)}
           placeholder={t(props.locale, 'find')}
+          aria-label={t(props.locale, 'find')}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.shiftKey ? props.onPrevious() : props.onNext()
             if (event.key === 'Escape') props.onClose()

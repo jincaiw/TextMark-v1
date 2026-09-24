@@ -59,6 +59,10 @@ interface EditorPaneProps {
    * Only honoured together with `initialLine`, and only when the reader did not
    * move while they were in the preview (see `caretForReturnToEditor`). */
   initialCursor?: { line: number; column: number } | null
+  /** Focus the editor after its initial position has been applied. This is
+   * intentionally consumed by the editor instance, because the parent is
+   * mounted through Suspense and cannot focus it reliably on the next tick. */
+  initialFocus?: boolean
   /** Called once the initial scroll position has been consumed. The parent is
    * mounted through Suspense, so it cannot know when that happened and must not
    * clear the pending position on the next tick. */
@@ -105,6 +109,16 @@ function toggledInline(selected: string, wrapper: [string, string]) {
 const stripListMarker = (line: string) => line.replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
 const stripTaskMarker = (line: string) => line.replace(/^\s*(?:[-+*]\s+)?(?:\[[ xX]\]\s+)?/, '')
 
+function editorOverlayHeight(view: EditorView): number {
+  return parseFloat(getComputedStyle(view.dom).getPropertyValue('--document-tools-height')) || 0
+}
+
+function editorTopLine(view: EditorView): number {
+  const top = view.scrollDOM.getBoundingClientRect().top + editorOverlayHeight(view)
+  const block = view.lineBlockAtHeight(Math.max(0, top - view.documentTop))
+  return view.state.doc.lineAt(block.from).number
+}
+
 function getEditorState(view: EditorView): EditorSessionState {
   const position = (offset: number) => {
     const line = view.state.doc.lineAt(offset)
@@ -116,7 +130,7 @@ function getEditorState(view: EditorView): EditorSessionState {
       anchor: position(view.state.selection.main.anchor),
       head: position(view.state.selection.main.head),
     },
-    topLine: view.state.doc.lineAt(view.lineBlockAt(view.viewport.from).from).number,
+    topLine: editorTopLine(view),
     scrollFraction: dom.scrollHeight <= dom.clientHeight ? 0 : clampScrollFraction(dom.scrollTop / (dom.scrollHeight - dom.clientHeight)),
   }
 }
@@ -192,12 +206,19 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   // (and re-apply the position) whenever the parent happened to render.
   const onInitialPositionAppliedRef = useRef(props.onInitialPositionApplied)
   onInitialPositionAppliedRef.current = props.onInitialPositionApplied
+  const initialFocusRef = useRef(props.initialFocus)
+  initialFocusRef.current = props.initialFocus
   const initialCursorRef = useRef(props.initialCursor)
   initialCursorRef.current = props.initialCursor
   const initialSelectionRef = useRef(props.initialSelection)
   initialSelectionRef.current = props.initialSelection
   const onStateChangeRef = useRef(props.onStateChange)
   onStateChangeRef.current = props.onStateChange
+  // The parent callback is recreated on every render. Keeping it in the
+  // dependency list would re-apply a pending format command on unrelated
+  // renders before the parent has cleared it.
+  const onInitialFormatAppliedRef = useRef(props.onInitialFormatApplied)
+  onInitialFormatAppliedRef.current = props.onInitialFormatApplied
   const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
   const imagePasteExtension = useMemo(
     () =>
@@ -313,8 +334,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       getTopLine: () => {
         const view = viewRef.current
         if (!view) return null
-        const block = view.lineBlockAtHeight(Math.max(0, view.scrollDOM.scrollTop - view.documentTop))
-        return view.state.doc.lineAt(block.from).number
+        return editorTopLine(view)
       },
       revealLine: (line) => {
         const view = viewRef.current
@@ -340,42 +360,50 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   useEffect(() => {
     if (!ready || !viewRef.current) return
     const view = viewRef.current
-    if (props.initialLine == null && props.initialScrollFraction == null) return
-    let frame = 0
-    if (props.initialLine != null) {
-      // A source line survives the layout difference between the preview and the
-      // editor; a scroll fraction does not, so the line wins when both arrive.
-      const target = Math.min(Math.max(1, Math.round(props.initialLine)), view.state.doc.lines)
-      const lineStart = view.state.doc.line(target).from
-      // Move the caret with the viewport: the editor is remounted on every mode
-      // switch, and leaving the selection at the document start put the caret
-      // thousands of pixels above the line the reader had just come back to.
-      // When the round trip ended where it started, put it back exactly.
-      const initialSelection = initialSelectionRef.current
-      const restoredAnchor = caretToOffset(
-        initialSelection?.anchor ?? initialCursorRef.current ?? null,
-        (line) => view.state.doc.line(line).from,
-        (line) => view.state.doc.line(line).to,
-        view.state.doc.lines,
-      )
-      const restoredHead = caretToOffset(
-        initialSelection?.head ?? initialCursorRef.current ?? null,
-        (line) => view.state.doc.line(line).from,
-        (line) => view.state.doc.line(line).to,
-        view.state.doc.lines,
-      )
-      view.dispatch({
-        selection: { anchor: restoredAnchor ?? lineStart, head: restoredHead ?? restoredAnchor ?? lineStart },
-        effects: EditorView.scrollIntoView(lineStart, { y: 'start' }),
-      })
-    } else {
-      const fraction = clampScrollFraction(props.initialScrollFraction ?? 0)
-      const dom = view.scrollDOM
-      frame = requestAnimationFrame(() => {
-        dom.scrollTop = fraction * Math.max(0, dom.scrollHeight - dom.clientHeight)
-      })
+    if (props.initialLine == null && props.initialScrollFraction == null) {
+      if (initialFocusRef.current) view.focus()
+      return
     }
-    onInitialPositionAppliedRef.current?.()
+    let frame = 0
+    // Match the upstream contract: apply the source anchor first, then focus
+    // the editor only after CodeMirror has measured its scrollable viewport.
+    // Focusing in the parent on the next tick races Suspense and can select the
+    // toolbar/search field instead of the editor on first entry.
+    frame = requestAnimationFrame(() => {
+      if (props.initialLine != null) {
+        // A source line survives the layout difference between the preview and the
+        // editor; a scroll fraction does not, so the line wins when both arrive.
+        const target = Math.min(Math.max(1, Math.round(props.initialLine)), view.state.doc.lines)
+        const lineStart = view.state.doc.line(target).from
+        // Move the caret with the viewport: the editor is remounted on every mode
+        // switch, and leaving the selection at the document start put the caret
+        // thousands of pixels above the line the reader had just come back to.
+        // When the round trip ended where it started, put it back exactly.
+        const initialSelection = initialSelectionRef.current
+        const restoredAnchor = caretToOffset(
+          initialSelection?.anchor ?? initialCursorRef.current ?? null,
+          (line) => view.state.doc.line(line).from,
+          (line) => view.state.doc.line(line).to,
+          view.state.doc.lines,
+        )
+        const restoredHead = caretToOffset(
+          initialSelection?.head ?? initialCursorRef.current ?? null,
+          (line) => view.state.doc.line(line).from,
+          (line) => view.state.doc.line(line).to,
+          view.state.doc.lines,
+        )
+        view.dispatch({
+          selection: { anchor: restoredAnchor ?? lineStart, head: restoredHead ?? restoredAnchor ?? lineStart },
+          effects: EditorView.scrollIntoView(lineStart, { y: 'start' }),
+        })
+      } else {
+        const fraction = clampScrollFraction(props.initialScrollFraction ?? 0)
+        const dom = view.scrollDOM
+        dom.scrollTop = fraction * Math.max(0, dom.scrollHeight - dom.clientHeight)
+      }
+      if (initialFocusRef.current) view.focus()
+      onInitialPositionAppliedRef.current?.()
+    })
     return () => cancelAnimationFrame(frame)
   }, [ready, props.initialLine, props.initialScrollFraction])
 
@@ -402,9 +430,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   useEffect(() => {
     if (ready && props.initialFormat && viewRef.current) {
       applyFormat(viewRef.current, props.initialFormat)
-      props.onInitialFormatApplied?.()
+      onInitialFormatAppliedRef.current?.()
     }
-  }, [ready, props.initialFormat, props.onInitialFormatApplied])
+  }, [ready, props.initialFormat])
 
   return (
     <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
@@ -437,6 +465,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             imagePasteExtension,
             codeFenceInputExtension,
             EditorView.lineWrapping,
+            EditorView.scrollMargins.of((view) => ({ top: editorOverlayHeight(view) })),
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
               { key: 'Tab', run: (view) => indentFenceBody(view, 'more') },
@@ -445,6 +474,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           ]}
           onCreateEditor={(view) => {
             viewRef.current = view
+            if (import.meta.env.DEV) (window as Window & { __TEXTMARK_EDITOR_VIEW__?: EditorView }).__TEXTMARK_EDITOR_VIEW__ = view
             const head = view.state.selection.main.head
             const line = view.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))

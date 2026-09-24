@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Share,
+  Settings,
   Sparkles,
   X,
   ZoomIn,
@@ -29,6 +30,7 @@ const AVAILABLE: ToolbarItem[] = [
   'openWith',
   'openInLlm',
   'zoom',
+  'themesAndSettings',
   'documentActions',
   'inspector',
   'alwaysOnTop',
@@ -50,6 +52,7 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   openWith: 'openWith',
   openInLlm: 'openInLlm',
   zoom: 'zoom',
+  themesAndSettings: 'themesAndSettings',
   documentActions: 'documentActions',
   inspector: 'inspector',
   alwaysOnTop: 'alwaysOnTop',
@@ -77,6 +80,8 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
       return <Sparkles />
     case 'zoom':
       return <ZoomIn />
+    case 'themesAndSettings':
+      return <Settings />
     case 'documentActions':
       return <Info />
     case 'inspector':

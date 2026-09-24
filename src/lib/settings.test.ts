@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, normalizeLineHeight, normalizePagePadding, normalizeSettings, SETTINGS_KEYS } from './settings'
+import { DEFAULT_SETTINGS, DEFAULT_TOOLBAR, normalizeLineHeight, normalizePagePadding, normalizeSettings, SETTINGS_KEYS } from './settings'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 describe('reading typography settings', () => {
@@ -11,6 +11,36 @@ describe('reading typography settings', () => {
   it('keeps the new profile version ahead of the ones it reads from', () => {
     expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v7')
     expect(DEFAULT_SETTINGS.schemaVersion).toBe(7)
+  })
+
+  it('defaults document actions to independent, reorderable toolbar items', () => {
+    expect(DEFAULT_TOOLBAR).toEqual([
+      'sidebar',
+      'navigation',
+      'flexibleSpace',
+      'openActions',
+      'space',
+      'themesAndSettings',
+      'inspector',
+      'share',
+      'edit',
+      'search',
+    ])
+  })
+
+  it.each([
+    [
+      5,
+      ['flexibleSpace', 'sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'zoom', 'inspector', 'share', 'edit', 'search'],
+    ],
+    [7, ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'documentActions', 'search']],
+  ] as const)('migrates the prior default toolbar from schema v%s without changing custom layouts', (schemaVersion, toolbar) => {
+    expect(normalizeSettings({ schemaVersion, toolbar }).toolbar).toEqual(DEFAULT_TOOLBAR)
+    expect(normalizeSettings({ schemaVersion, toolbar: ['search', 'documentActions', 'space'] }).toolbar).toEqual([
+      'search',
+      'documentActions',
+      'space',
+    ])
   })
 
   it('fills the new fields in for a profile written by an older build', () => {

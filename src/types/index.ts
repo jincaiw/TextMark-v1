@@ -202,6 +202,7 @@ export type ToolbarItem =
   | 'openWith'
   | 'openInLlm'
   | 'zoom'
+  | 'themesAndSettings'
   | 'documentActions'
   | 'inspector'
   | 'alwaysOnTop'

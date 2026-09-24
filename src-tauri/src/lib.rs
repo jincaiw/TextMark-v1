@@ -577,31 +577,34 @@ fn watch_paths(
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn known_application_name(application_id: &str) -> Option<&'static str> {
+    match application_id {
+        "vscode" => Some("Visual Studio Code"),
+        "cursor" => Some("Cursor"),
+        "windsurf" => Some("Windsurf"),
+        "trae" => Some("Trae"),
+        "zed" => Some("Zed"),
+        "sublime" => Some("Sublime Text"),
+        "obsidian" => Some("Obsidian"),
+        "typora" => Some("Typora"),
+        "bbedit" => Some("BBEdit"),
+        "nova" => Some("Nova"),
+        "coteditor" => Some("CotEditor"),
+        "textmate" => Some("TextMate"),
+        "macvim" => Some("MacVim"),
+        "xcode" => Some("Xcode"),
+        "textedit" => Some("TextEdit"),
+        _ => None,
+    }
+}
+
 fn spawn_known_application(path: &str, application_id: &str) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     let mut command = {
-        let name = match application_id {
-            "vscode" => "Visual Studio Code",
-            "cursor" => "Cursor",
-            "windsurf" => "Windsurf",
-            "trae" => "Trae",
-            "zed" => "Zed",
-            "sublime" => "Sublime Text",
-            "obsidian" => "Obsidian",
-            "typora" => "Typora",
-            "bbedit" => "BBEdit",
-            "nova" => "Nova",
-            "coteditor" => "CotEditor",
-            "textmate" => "TextMate",
-            "macvim" => "MacVim",
-            "xcode" => "Xcode",
-            "textedit" => "TextEdit",
-            _ => {
-                return Err(AppError {
-                    code: "invalid_path",
-                });
-            }
-        };
+        let name = known_application_name(application_id).ok_or(AppError {
+            code: "invalid_path",
+        })?;
         let mut command = Command::new("open");
         command.args(["-a", name]).arg(path);
         command
@@ -2762,6 +2765,81 @@ mod tests {
         ] {
             assert!(ids.contains(id), "missing application catalog entry: {id}");
         }
+        let system_default = discover_applications()
+            .into_iter()
+            .find(|application| application.id == "system")
+            .unwrap();
+        assert_eq!(system_default.kind, "system");
+        assert!(system_default.available);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_application_ids_map_to_launch_services_names() {
+        for (id, expected) in [
+            ("vscode", "Visual Studio Code"),
+            ("cursor", "Cursor"),
+            ("windsurf", "Windsurf"),
+            ("trae", "Trae"),
+            ("zed", "Zed"),
+            ("sublime", "Sublime Text"),
+            ("obsidian", "Obsidian"),
+            ("typora", "Typora"),
+            ("bbedit", "BBEdit"),
+            ("nova", "Nova"),
+            ("coteditor", "CotEditor"),
+            ("textmate", "TextMate"),
+            ("macvim", "MacVim"),
+            ("xcode", "Xcode"),
+            ("textedit", "TextEdit"),
+        ] {
+            assert_eq!(known_application_name(id), Some(expected));
+        }
+        assert_eq!(known_application_name("system"), None);
+        assert_eq!(known_application_name("unknown-editor"), None);
+    }
+
+    #[test]
+    fn external_open_rejects_missing_non_markdown_and_unknown_targets() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-external-open-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let markdown = root.join("guide.md");
+        let non_markdown = root.join("page.html");
+        fs::write(&markdown, "# Guide").unwrap();
+        fs::write(&non_markdown, "<h1>Page</h1>").unwrap();
+
+        assert_eq!(
+            open_external_application(
+                root.join("missing.md").to_string_lossy().to_string(),
+                "vscode".into()
+            )
+            .unwrap_err()
+            .code,
+            "not_found"
+        );
+        assert_eq!(
+            open_external_application(non_markdown.to_string_lossy().to_string(), "vscode".into())
+                .unwrap_err()
+                .code,
+            "invalid_document"
+        );
+        assert_eq!(
+            open_external_application(
+                markdown.to_string_lossy().to_string(),
+                "unknown-editor".into()
+            )
+            .unwrap_err()
+            .code,
+            "invalid_path"
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

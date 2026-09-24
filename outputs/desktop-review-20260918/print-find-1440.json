@@ -1,0 +1,716 @@
+{
+  "output": "outputs/desktop-review-20260918/print-find-1440.png",
+  "scenario": "print-find",
+  "ready": true,
+  "scenarioReady": true,
+  "title": "README.md",
+  "language": "zh-CN",
+  "renderer": "worker",
+  "theme": "light",
+  "htmlBytes": 21296,
+  "geometry": {
+    "elements": {
+      ".native-toolbar": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 52,
+        "display": "grid",
+        "gap": "normal 8px",
+        "padding": "0px 10px",
+        "justifyContent": "normal"
+      },
+      ".window-leading": {
+        "x": 10,
+        "y": 18.5,
+        "width": 60,
+        "height": 14,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".toolbar-leading-actions": null,
+      ".toolbar-document-context": {
+        "x": 525.5,
+        "y": 18,
+        "width": 360,
+        "height": 15,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px 8px",
+        "justifyContent": "center"
+      },
+      ".native-actions": {
+        "x": 78,
+        "y": 12.5,
+        "width": 1352,
+        "height": 26,
+        "display": "flex",
+        "gap": "4px",
+        "padding": "0px",
+        "justifyContent": "flex-start"
+      },
+      ".more-menu": {
+        "x": 1398,
+        "y": 12.5,
+        "width": 32,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-tabs": null,
+      ".document-shell": {
+        "x": 0,
+        "y": 52,
+        "width": 1440,
+        "height": 848,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-workspace": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 848,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".formatting-toolbar": null,
+      ".editor-pane": null,
+      ".cm-content": null,
+      ".cm-editor": null,
+      ".sidebar-mode-picker": {
+        "x": 78,
+        "y": 10.5,
+        "width": 64,
+        "height": 30,
+        "display": "flex",
+        "gap": "2px",
+        "padding": "2px",
+        "justifyContent": "normal"
+      },
+      ".search-trigger": {
+        "x": 1374,
+        "y": 13.5,
+        "width": 16,
+        "height": 24,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".find-bar": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 39,
+        "display": "flex",
+        "gap": "5px",
+        "padding": "4px 10px",
+        "justifyContent": "space-between"
+      },
+      ".inspector-panel": null
+    },
+    "buttonCenters": [
+      {
+        "label": "关闭",
+        "x": 17,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "最小化",
+        "x": 40,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "缩放",
+        "x": 63,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "大纲",
+        "x": 94.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 125.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "显示或隐藏边栏",
+        "x": 219,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "打开",
+        "x": 1193.5,
+        "y": 25.5,
+        "width": 51
+      },
+      {
+        "label": "外观与设置",
+        "x": 1257.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "显示简介",
+        "x": 1291,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "共享 Markdown 源文件",
+        "x": 1321,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "编辑",
+        "x": 1351,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "在文稿中搜索",
+        "x": 1382,
+        "y": 25.5,
+        "width": 16
+      },
+      {
+        "label": "更多",
+        "x": 1414,
+        "y": 25.5,
+        "width": 32
+      }
+    ],
+    "visibleSlots": [
+      {
+        "index": 0,
+        "item": "sidebar",
+        "x": 78,
+        "y": 12.5,
+        "width": 165,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px 10px 0px 0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 1,
+        "item": "flexibleSpace",
+        "x": 247,
+        "y": 18,
+        "width": 917,
+        "height": 15,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 2,
+        "item": "openActions",
+        "x": 1168,
+        "y": 12.5,
+        "width": 51,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 3,
+        "item": "space",
+        "x": 1223,
+        "y": 25,
+        "width": 14,
+        "height": 1,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 4,
+        "item": "themesAndSettings",
+        "x": 1241,
+        "y": 12.5,
+        "width": 33,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 5,
+        "item": "inspector",
+        "x": 1278,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 6,
+        "item": "share",
+        "x": 1308,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 7,
+        "item": "edit",
+        "x": 1338,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 8,
+        "item": "search",
+        "x": 1368,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      }
+    ],
+    "visibleSlotOrder": [
+      "sidebar",
+      "flexibleSpace",
+      "openActions",
+      "space",
+      "themesAndSettings",
+      "inspector",
+      "share",
+      "edit",
+      "search"
+    ],
+    "searchVisible": true,
+    "sidebarModePicker": [
+      {
+        "label": "大纲",
+        "x": 94.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 125.5,
+        "y": 25.5,
+        "width": 29
+      }
+    ],
+    "documentTabCount": 0,
+    "visibleDocumentTabCount": 0,
+    "editorVisible": false,
+    "pageWidth": 1440,
+    "scrollWidth": 1440,
+    "overlaps": [],
+    "assertions": {
+      "searchVisibleAtDesktopWidth": true,
+      "sidebarModePickerAligned": true,
+      "noPageHorizontalOverflow": true,
+      "majorSlotsDoNotOverlap": true
+    }
+  },
+  "tools": {
+    "rects": {
+      "tabs": null,
+      "sidebar": {
+        "x": 0,
+        "y": 52,
+        "width": 240,
+        "height": 848,
+        "top": 52,
+        "right": 240,
+        "bottom": 900,
+        "left": 0
+      },
+      "workspace": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 848,
+        "top": 52,
+        "right": 1440,
+        "bottom": 900,
+        "left": 246
+      },
+      "editor": null,
+      "scroller": null,
+      "tools": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 39,
+        "top": 52,
+        "right": 1440,
+        "bottom": 91,
+        "left": 246
+      },
+      "find": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 39,
+        "top": 52,
+        "right": 1440,
+        "bottom": 91,
+        "left": 246
+      },
+      "formatting": null
+    },
+    "height": 39,
+    "cssHeight": "39px",
+    "cssHeightPx": 39,
+    "position": "absolute",
+    "padding": {
+      "tools": "0px",
+      "content": null,
+      "contentTop": null,
+      "scroller": null,
+      "preview": "0px",
+      "previewBeforeHeight": "39px"
+    },
+    "focus": {
+      "tag": "input",
+      "id": "",
+      "className": "",
+      "label": "查找",
+      "inFind": true,
+      "inEditor": false
+    },
+    "heightChain": [],
+    "scrollTop": null,
+    "scrollContainer": {
+      "tag": "section",
+      "id": "",
+      "className": "preview-pane",
+      "label": "Rendered Markdown preview",
+      "rect": {
+        "x": 246,
+        "y": 52,
+        "width": 1194,
+        "height": 848,
+        "top": 52,
+        "right": 1440,
+        "bottom": 900,
+        "left": 246
+      },
+      "scrollTop": 0,
+      "scrollLeft": 0,
+      "scrollHeight": 1400,
+      "clientHeight": 848,
+      "scrollWidth": 1194,
+      "clientWidth": 1194,
+      "overflowX": "auto",
+      "overflowY": "auto",
+      "padding": "0px",
+      "scrollPaddingTop": "39px"
+    },
+    "scrollContainers": [
+      {
+        "tag": "div",
+        "id": "",
+        "className": "document-workspace",
+        "label": "匹配：包含开头为替换全部替换完成Welcome to TextMark\nCross-platform Markdown, beautifully rendere",
+        "rect": {
+          "x": 246,
+          "y": 52,
+          "width": 1194,
+          "height": 848,
+          "top": 52,
+          "right": 1440,
+          "bottom": 900,
+          "left": 246
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 1401,
+        "clientHeight": 848,
+        "scrollWidth": 1194,
+        "clientWidth": 1194,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "padding": "0px",
+        "scrollPaddingTop": "auto"
+      },
+      {
+        "tag": "section",
+        "id": "",
+        "className": "preview-pane",
+        "label": "Rendered Markdown preview",
+        "rect": {
+          "x": 246,
+          "y": 52,
+          "width": 1194,
+          "height": 848,
+          "top": 52,
+          "right": 1440,
+          "bottom": 900,
+          "left": 246
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 1400,
+        "clientHeight": 848,
+        "scrollWidth": 1194,
+        "clientWidth": 1194,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px",
+        "scrollPaddingTop": "39px"
+      }
+    ],
+    "activeTab": null,
+    "visibleTabCount": 0,
+    "controls": [
+      {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "查找",
+        "rect": {
+          "x": 256,
+          "y": 56,
+          "width": 319.5,
+          "height": 30,
+          "top": 56,
+          "right": 575.5,
+          "bottom": 86,
+          "left": 256
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-mode selected",
+        "label": "包含",
+        "rect": {
+          "x": 629.5,
+          "y": 58,
+          "width": 52,
+          "height": 26,
+          "top": 58,
+          "right": 681.5,
+          "bottom": 84,
+          "left": 629.5
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-mode ",
+        "label": "开头为",
+        "rect": {
+          "x": 686.5,
+          "y": 58,
+          "width": 64,
+          "height": 26,
+          "top": 58,
+          "right": 750.5,
+          "bottom": 84,
+          "left": 686.5
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "替换为",
+        "rect": {
+          "x": 755.5,
+          "y": 56,
+          "width": 319.5,
+          "height": 30,
+          "top": 56,
+          "right": 1075,
+          "bottom": 86,
+          "left": 755.5
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-action",
+        "label": "替换",
+        "rect": {
+          "x": 1080,
+          "y": 58,
+          "width": 42,
+          "height": 26,
+          "top": 58,
+          "right": 1122,
+          "bottom": 84,
+          "left": 1080
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-action",
+        "label": "全部替换",
+        "rect": {
+          "x": 1127,
+          "y": 58,
+          "width": 66,
+          "height": 26,
+          "top": 58,
+          "right": 1193,
+          "bottom": 84,
+          "left": 1127
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon ",
+        "label": "区分大小写",
+        "rect": {
+          "x": 1273,
+          "y": 56,
+          "width": 30,
+          "height": 30,
+          "top": 56,
+          "right": 1303,
+          "bottom": 86,
+          "left": 1273
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon",
+        "label": "上一个匹配项",
+        "rect": {
+          "x": 1308,
+          "y": 56,
+          "width": 30,
+          "height": 30,
+          "top": 56,
+          "right": 1338,
+          "bottom": 86,
+          "left": 1308
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon",
+        "label": "下一个匹配项",
+        "rect": {
+          "x": 1343,
+          "y": 56,
+          "width": 30,
+          "height": 30,
+          "top": 56,
+          "right": 1373,
+          "bottom": 86,
+          "left": 1343
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-done",
+        "label": "完成",
+        "rect": {
+          "x": 1378,
+          "y": 58,
+          "width": 52,
+          "height": 26,
+          "top": 58,
+          "right": 1430,
+          "bottom": 84,
+          "left": 1378
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      }
+    ],
+    "overflowingControls": []
+  },
+  "printMedia": {
+    "mediaMatches": true,
+    "hiddenUi": {
+      ".native-toolbar": "none",
+      ".native-sidebar": "none",
+      ".document-tabs": null,
+      ".inspector-panel": null,
+      ".formatting-toolbar": null,
+      ".find-bar": "none",
+      ".document-tools": "none",
+      ".toast": null
+    },
+    "root": {
+      "display": "block",
+      "height": "1258.69px",
+      "overflow": "visible"
+    },
+    "preview": {
+      "textLength": 796,
+      "width": 1440,
+      "height": 1258.6875,
+      "scrollHeight": 1259,
+      "color": "rgb(29, 29, 31)",
+      "background": "rgba(0, 0, 0, 0)"
+    },
+    "title": "README.md",
+    "pdfOutput": "outputs/desktop-review-20260918/print-find-1440.pdf",
+    "pdfBytes": 193802,
+    "pdfPageCount": 2
+  },
+  "failures": []
+}

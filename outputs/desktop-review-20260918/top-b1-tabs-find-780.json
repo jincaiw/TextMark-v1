@@ -1,0 +1,4212 @@
+{
+  "output": "outputs/desktop-review-20260918/top-b1-tabs-find-780.png",
+  "scenario": "tabs-find",
+  "ready": true,
+  "scenarioReady": true,
+  "title": "README.md",
+  "language": "zh-CN",
+  "renderer": "worker",
+  "theme": "light",
+  "htmlBytes": 0,
+  "geometry": {
+    "elements": {
+      ".native-toolbar": {
+        "x": 0,
+        "y": 0,
+        "width": 780,
+        "height": 52,
+        "display": "grid",
+        "gap": "6px",
+        "padding": "0px 12px 0px 10px",
+        "justifyContent": "normal"
+      },
+      ".window-leading": {
+        "x": 10,
+        "y": 18.5,
+        "width": 60,
+        "height": 14,
+        "display": "flex",
+        "gap": "18px",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".toolbar-leading-actions": null,
+      ".toolbar-document-context": {
+        "x": 235.9,
+        "y": 19,
+        "width": 187.2,
+        "height": 13,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px 8px",
+        "justifyContent": "center"
+      },
+      ".native-actions": {
+        "x": 76,
+        "y": 12.5,
+        "width": 692,
+        "height": 26,
+        "display": "flex",
+        "gap": "4px",
+        "padding": "0px",
+        "justifyContent": "flex-end"
+      },
+      ".more-menu": {
+        "x": 736,
+        "y": 12.5,
+        "width": 32,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-tabs": {
+        "x": 0,
+        "y": 52,
+        "width": 780,
+        "height": 34,
+        "display": "flex",
+        "gap": "2px",
+        "padding": "3px 8px 0px",
+        "justifyContent": "normal"
+      },
+      ".document-shell": {
+        "x": 0,
+        "y": 86,
+        "width": 780,
+        "height": 554,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".document-workspace": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "display": "grid",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".formatting-toolbar": {
+        "x": 246,
+        "y": 160,
+        "width": 534,
+        "height": 40,
+        "display": "flex",
+        "gap": "2px",
+        "padding": "0px 40px",
+        "justifyContent": "normal"
+      },
+      ".editor-pane": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".cm-content": {
+        "x": 286,
+        "y": -114,
+        "width": 454,
+        "height": 1385.8,
+        "display": "block",
+        "gap": "normal",
+        "padding": "146px 0px 48px",
+        "justifyContent": "normal"
+      },
+      ".cm-editor": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "display": "flex",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".sidebar-mode-picker": {
+        "x": 76,
+        "y": 10.5,
+        "width": 64,
+        "height": 30,
+        "display": "flex",
+        "gap": "2px",
+        "padding": "2px",
+        "justifyContent": "normal"
+      },
+      ".search-trigger": {
+        "x": 709,
+        "y": 13.5,
+        "width": 16,
+        "height": 24,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      ".find-bar": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 74,
+        "display": "flex",
+        "gap": "5px",
+        "padding": "4px 10px",
+        "justifyContent": "space-between"
+      },
+      ".inspector-panel": null
+    },
+    "buttonCenters": [
+      {
+        "label": "关闭",
+        "x": 17,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "最小化",
+        "x": 40,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "缩放",
+        "x": 63,
+        "y": 25.5,
+        "width": 14
+      },
+      {
+        "label": "大纲",
+        "x": 92.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 123.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "显示或隐藏边栏",
+        "x": 161,
+        "y": 25.5,
+        "width": 26
+      },
+      {
+        "label": "打开",
+        "x": 512.5,
+        "y": 25.5,
+        "width": 55
+      },
+      {
+        "label": "外观与设置",
+        "x": 578.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "显示简介",
+        "x": 615.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "共享 Markdown 源文件",
+        "x": 650.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "停止编辑并返回预览",
+        "x": 685.5,
+        "y": 25.5,
+        "width": 33
+      },
+      {
+        "label": "在文稿中搜索",
+        "x": 717,
+        "y": 25.5,
+        "width": 16
+      },
+      {
+        "label": "更多",
+        "x": 752,
+        "y": 25.5,
+        "width": 32
+      }
+    ],
+    "visibleSlots": [
+      {
+        "index": 0,
+        "item": "sidebar",
+        "x": 76,
+        "y": 12.5,
+        "width": 98,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 1,
+        "item": "flexibleSpace",
+        "x": 178,
+        "y": 19,
+        "width": 303,
+        "height": 13,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 2,
+        "item": "openActions",
+        "x": 485,
+        "y": 12.5,
+        "width": 55,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 3,
+        "item": "space",
+        "x": 544,
+        "y": 25,
+        "width": 14,
+        "height": 1,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 4,
+        "item": "themesAndSettings",
+        "x": 562,
+        "y": 12.5,
+        "width": 33,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 5,
+        "item": "documentActions",
+        "x": 599,
+        "y": 12.5,
+        "width": 103,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      },
+      {
+        "index": 6,
+        "item": "search",
+        "x": 706,
+        "y": 12.5,
+        "width": 26,
+        "height": 26,
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "justifyContent": "normal"
+      }
+    ],
+    "visibleSlotOrder": [
+      "sidebar",
+      "flexibleSpace",
+      "openActions",
+      "space",
+      "themesAndSettings",
+      "documentActions",
+      "search"
+    ],
+    "searchVisible": true,
+    "sidebarModePicker": [
+      {
+        "label": "大纲",
+        "x": 92.5,
+        "y": 25.5,
+        "width": 29
+      },
+      {
+        "label": "文件夹",
+        "x": 123.5,
+        "y": 25.5,
+        "width": 29
+      }
+    ],
+    "documentTabCount": 2,
+    "visibleDocumentTabCount": 2,
+    "editorVisible": true,
+    "pageWidth": 780,
+    "scrollWidth": 780,
+    "overlaps": [],
+    "assertions": {
+      "searchVisibleAtDesktopWidth": true,
+      "sidebarModePickerAligned": true,
+      "noPageHorizontalOverflow": true,
+      "majorSlotsDoNotOverlap": true
+    }
+  },
+  "tools": {
+    "rects": {
+      "tabs": {
+        "x": 0,
+        "y": 52,
+        "width": 780,
+        "height": 34,
+        "top": 52,
+        "right": 780,
+        "bottom": 86,
+        "left": 0
+      },
+      "sidebar": {
+        "x": 0,
+        "y": 86,
+        "width": 240,
+        "height": 554,
+        "top": 86,
+        "right": 240,
+        "bottom": 640,
+        "left": 0
+      },
+      "workspace": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "top": 86,
+        "right": 780,
+        "bottom": 640,
+        "left": 246
+      },
+      "editor": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "top": 86,
+        "right": 780,
+        "bottom": 640,
+        "left": 246
+      },
+      "scroller": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "top": 86,
+        "right": 780,
+        "bottom": 640,
+        "left": 246
+      },
+      "tools": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 114,
+        "top": 86,
+        "right": 780,
+        "bottom": 200,
+        "left": 246
+      },
+      "find": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 74,
+        "top": 86,
+        "right": 780,
+        "bottom": 160,
+        "left": 246
+      },
+      "formatting": {
+        "x": 246,
+        "y": 160,
+        "width": 534,
+        "height": 40,
+        "top": 160,
+        "right": 780,
+        "bottom": 200,
+        "left": 246
+      }
+    },
+    "height": 114,
+    "cssHeight": "114px",
+    "cssHeightPx": 114,
+    "position": "absolute",
+    "padding": {
+      "tools": "0px",
+      "content": "146px 0px 48px",
+      "contentTop": 146,
+      "scroller": "0px 40px",
+      "preview": null,
+      "previewBeforeHeight": null
+    },
+    "focus": {
+      "tag": "input",
+      "id": "",
+      "className": "",
+      "label": "查找",
+      "inFind": true,
+      "inEditor": false
+    },
+    "heightChain": [
+      {
+        "className": "cm-scroller",
+        "height": "554px",
+        "minHeight": "auto",
+        "display": "flex",
+        "gridRow": "auto",
+        "rows": "none"
+      },
+      {
+        "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "flex",
+        "gridRow": "auto",
+        "rows": "none"
+      },
+      {
+        "className": "cm-theme-light",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "block",
+        "gridRow": "auto",
+        "rows": "none"
+      },
+      {
+        "className": "editor-page",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "block",
+        "gridRow": "auto",
+        "rows": "none"
+      },
+      {
+        "className": "editor-pane content-normal",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "block",
+        "gridRow": "1",
+        "rows": "none"
+      },
+      {
+        "className": "document-workspace",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "grid",
+        "gridRow": "auto",
+        "rows": "554px"
+      },
+      {
+        "className": "document-shell with-sidebar ",
+        "height": "554px",
+        "minHeight": "0px",
+        "display": "grid",
+        "gridRow": "auto",
+        "rows": "554px"
+      },
+      {
+        "className": "workspace-stack",
+        "height": "588px",
+        "minHeight": "0px",
+        "display": "grid",
+        "gridRow": "auto",
+        "rows": "34px 554px"
+      },
+      {
+        "className": "app-shell native-shell mode-edit ",
+        "height": "640px",
+        "minHeight": "0px",
+        "display": "grid",
+        "gridRow": "auto",
+        "rows": "52px 588px"
+      },
+      {
+        "className": "",
+        "height": "640px",
+        "minHeight": "0px",
+        "display": "block",
+        "gridRow": "auto",
+        "rows": "none"
+      }
+    ],
+    "scrollTop": 200,
+    "scrollContainer": {
+      "tag": "div",
+      "id": "",
+      "className": "cm-scroller",
+      "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+      "rect": {
+        "x": 246,
+        "y": 86,
+        "width": 534,
+        "height": 554,
+        "top": 86,
+        "right": 780,
+        "bottom": 640,
+        "left": 246
+      },
+      "scrollTop": 200,
+      "scrollLeft": 0,
+      "scrollHeight": 1386,
+      "clientHeight": 554,
+      "scrollWidth": 534,
+      "clientWidth": 534,
+      "overflowX": "auto",
+      "overflowY": "auto",
+      "padding": "0px 40px",
+      "scrollPaddingTop": "auto"
+    },
+    "scrollContainers": [
+      {
+        "tag": "div",
+        "id": "",
+        "className": "document-workspace",
+        "label": "匹配：包含开头为替换全部替换完成正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, be",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 554,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "padding": "0px",
+        "scrollPaddingTop": "auto"
+      },
+      {
+        "tag": "section",
+        "id": "",
+        "className": "editor-pane content-normal",
+        "label": "Markdown editor",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 554,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px",
+        "scrollPaddingTop": "auto"
+      },
+      {
+        "tag": "div",
+        "id": "",
+        "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 0,
+        "scrollLeft": 0,
+        "scrollHeight": 554,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "padding": "0px",
+        "scrollPaddingTop": "auto"
+      },
+      {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1386,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      }
+    ],
+    "activeTab": "README.md",
+    "visibleTabCount": 2,
+    "controls": [
+      {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "查找",
+        "rect": {
+          "x": 256,
+          "y": 90,
+          "width": 108,
+          "height": 30,
+          "top": 90,
+          "right": 364,
+          "bottom": 120,
+          "left": 256
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-mode selected",
+        "label": "包含",
+        "rect": {
+          "x": 418,
+          "y": 92,
+          "width": 52,
+          "height": 26,
+          "top": 92,
+          "right": 470,
+          "bottom": 118,
+          "left": 418
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-mode ",
+        "label": "开头为",
+        "rect": {
+          "x": 475,
+          "y": 92,
+          "width": 64,
+          "height": 26,
+          "top": 92,
+          "right": 539,
+          "bottom": 118,
+          "left": 475
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "替换为",
+        "rect": {
+          "x": 544,
+          "y": 90,
+          "width": 108,
+          "height": 30,
+          "top": 90,
+          "right": 652,
+          "bottom": 120,
+          "left": 544
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-action",
+        "label": "替换",
+        "rect": {
+          "x": 657,
+          "y": 92,
+          "width": 42,
+          "height": 26,
+          "top": 92,
+          "right": 699,
+          "bottom": 118,
+          "left": 657
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-action",
+        "label": "全部替换",
+        "rect": {
+          "x": 704,
+          "y": 92,
+          "width": 66,
+          "height": 26,
+          "top": 92,
+          "right": 770,
+          "bottom": 118,
+          "left": 704
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon ",
+        "label": "区分大小写",
+        "rect": {
+          "x": 613,
+          "y": 125,
+          "width": 30,
+          "height": 30,
+          "top": 125,
+          "right": 643,
+          "bottom": 155,
+          "left": 613
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon",
+        "label": "上一个匹配项",
+        "rect": {
+          "x": 648,
+          "y": 125,
+          "width": 30,
+          "height": 30,
+          "top": 125,
+          "right": 678,
+          "bottom": 155,
+          "left": 648
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-icon",
+        "label": "下一个匹配项",
+        "rect": {
+          "x": 683,
+          "y": 125,
+          "width": 30,
+          "height": 30,
+          "top": 125,
+          "right": 713,
+          "bottom": 155,
+          "left": 683
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "find-done",
+        "label": "完成",
+        "rect": {
+          "x": 718,
+          "y": 127,
+          "width": 52,
+          "height": 26,
+          "top": 127,
+          "right": 770,
+          "bottom": 153,
+          "left": 718
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "select",
+        "id": "",
+        "className": "formatting-heading",
+        "label": "Text style",
+        "rect": {
+          "x": 286,
+          "y": 166.5,
+          "width": 76,
+          "height": 26,
+          "top": 166.5,
+          "right": 362,
+          "bottom": 192.5,
+          "left": 286
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "粗体",
+        "rect": {
+          "x": 383,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 409,
+          "bottom": 193.5,
+          "left": 383
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "斜体",
+        "rect": {
+          "x": 411,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 437,
+          "bottom": 193.5,
+          "left": 411
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "删除线",
+        "rect": {
+          "x": 439,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 465,
+          "bottom": 193.5,
+          "left": 439
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "项目符号列表",
+        "rect": {
+          "x": 486,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 512,
+          "bottom": 193.5,
+          "left": 486
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "编号列表",
+        "rect": {
+          "x": 514,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 540,
+          "bottom": 193.5,
+          "left": 514
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "任务列表",
+        "rect": {
+          "x": 542,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 568,
+          "bottom": 193.5,
+          "left": 542
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "引用",
+        "rect": {
+          "x": 570,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 596,
+          "bottom": 193.5,
+          "left": 570
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "行内代码",
+        "rect": {
+          "x": 617,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 643,
+          "bottom": 193.5,
+          "left": 617
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      },
+      {
+        "tag": "button",
+        "id": "",
+        "className": "",
+        "label": "链接",
+        "rect": {
+          "x": 645,
+          "y": 165.5,
+          "width": 26,
+          "height": 28,
+          "top": 165.5,
+          "right": 671,
+          "bottom": 193.5,
+          "left": 645
+        },
+        "horizontalScrollException": false,
+        "withinWorkspace": true
+      }
+    ],
+    "overflowingControls": []
+  },
+  "tabsFind": {
+    "scrollSetup": {
+      "maxScroll": 758,
+      "target": 200
+    },
+    "before": {
+      "rects": {
+        "tabs": {
+          "x": 0,
+          "y": 52,
+          "width": 780,
+          "height": 34,
+          "top": 52,
+          "right": 780,
+          "bottom": 86,
+          "left": 0
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 86,
+          "width": 240,
+          "height": 554,
+          "top": 86,
+          "right": 240,
+          "bottom": 640,
+          "left": 0
+        },
+        "workspace": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "editor": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scroller": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "tools": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 40,
+          "top": 86,
+          "right": 780,
+          "bottom": 126,
+          "left": 246
+        },
+        "find": null,
+        "formatting": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 40,
+          "top": 86,
+          "right": 780,
+          "bottom": 126,
+          "left": 246
+        }
+      },
+      "height": 40,
+      "cssHeight": "40px",
+      "cssHeightPx": 40,
+      "position": "absolute",
+      "padding": {
+        "tools": "0px",
+        "content": "72px 0px 48px",
+        "contentTop": 72,
+        "scroller": "0px 40px",
+        "preview": null,
+        "previewBeforeHeight": null
+      },
+      "focus": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-content cm-lineWrapping",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "inFind": false,
+        "inEditor": true
+      },
+      "heightChain": [
+        {
+          "className": "cm-scroller",
+          "height": "554px",
+          "minHeight": "auto",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-editor cm-focused ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-theme-light",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-page",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-pane content-normal",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "1",
+          "rows": "none"
+        },
+        {
+          "className": "document-workspace",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "document-shell with-sidebar ",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "workspace-stack",
+          "height": "588px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "34px 554px"
+        },
+        {
+          "className": "app-shell native-shell mode-edit ",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "52px 588px"
+        },
+        {
+          "className": "",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        }
+      ],
+      "scrollTop": 200,
+      "scrollContainer": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1312,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      },
+      "scrollContainers": [
+        {
+          "tag": "div",
+          "id": "",
+          "className": "document-workspace",
+          "label": "正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, beautifully render",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "section",
+          "id": "",
+          "className": "editor-pane content-normal",
+          "label": "Markdown editor",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-editor cm-focused ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-scroller",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 200,
+          "scrollLeft": 0,
+          "scrollHeight": 1312,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px 40px",
+          "scrollPaddingTop": "auto"
+        }
+      ],
+      "activeTab": "README.md",
+      "visibleTabCount": 2,
+      "controls": [
+        {
+          "tag": "select",
+          "id": "",
+          "className": "formatting-heading",
+          "label": "Text style",
+          "rect": {
+            "x": 286,
+            "y": 92.5,
+            "width": 76,
+            "height": 26,
+            "top": 92.5,
+            "right": 362,
+            "bottom": 118.5,
+            "left": 286
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "粗体",
+          "rect": {
+            "x": 383,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 409,
+            "bottom": 119.5,
+            "left": 383
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "斜体",
+          "rect": {
+            "x": 411,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 437,
+            "bottom": 119.5,
+            "left": 411
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "删除线",
+          "rect": {
+            "x": 439,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 465,
+            "bottom": 119.5,
+            "left": 439
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "项目符号列表",
+          "rect": {
+            "x": 486,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 512,
+            "bottom": 119.5,
+            "left": 486
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "编号列表",
+          "rect": {
+            "x": 514,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 540,
+            "bottom": 119.5,
+            "left": 514
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "任务列表",
+          "rect": {
+            "x": 542,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 568,
+            "bottom": 119.5,
+            "left": 542
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "引用",
+          "rect": {
+            "x": 570,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 596,
+            "bottom": 119.5,
+            "left": 570
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "行内代码",
+          "rect": {
+            "x": 617,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 643,
+            "bottom": 119.5,
+            "left": 617
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "链接",
+          "rect": {
+            "x": 645,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 671,
+            "bottom": 119.5,
+            "left": 645
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        }
+      ],
+      "overflowingControls": []
+    },
+    "after": {
+      "rects": {
+        "tabs": {
+          "x": 0,
+          "y": 52,
+          "width": 780,
+          "height": 34,
+          "top": 52,
+          "right": 780,
+          "bottom": 86,
+          "left": 0
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 86,
+          "width": 240,
+          "height": 554,
+          "top": 86,
+          "right": 240,
+          "bottom": 640,
+          "left": 0
+        },
+        "workspace": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "editor": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scroller": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "tools": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 114,
+          "top": 86,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        },
+        "find": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 74,
+          "top": 86,
+          "right": 780,
+          "bottom": 160,
+          "left": 246
+        },
+        "formatting": {
+          "x": 246,
+          "y": 160,
+          "width": 534,
+          "height": 40,
+          "top": 160,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        }
+      },
+      "height": 114,
+      "cssHeight": "114px",
+      "cssHeightPx": 114,
+      "position": "absolute",
+      "padding": {
+        "tools": "0px",
+        "content": "146px 0px 48px",
+        "contentTop": 146,
+        "scroller": "0px 40px",
+        "preview": null,
+        "previewBeforeHeight": null
+      },
+      "focus": {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "查找",
+        "inFind": true,
+        "inEditor": false
+      },
+      "heightChain": [
+        {
+          "className": "cm-scroller",
+          "height": "554px",
+          "minHeight": "auto",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-theme-light",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-page",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-pane content-normal",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "1",
+          "rows": "none"
+        },
+        {
+          "className": "document-workspace",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "document-shell with-sidebar ",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "workspace-stack",
+          "height": "588px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "34px 554px"
+        },
+        {
+          "className": "app-shell native-shell mode-edit ",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "52px 588px"
+        },
+        {
+          "className": "",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        }
+      ],
+      "scrollTop": 200,
+      "scrollContainer": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1386,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      },
+      "scrollContainers": [
+        {
+          "tag": "div",
+          "id": "",
+          "className": "document-workspace",
+          "label": "匹配：包含开头为替换全部替换完成正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, be",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "section",
+          "id": "",
+          "className": "editor-pane content-normal",
+          "label": "Markdown editor",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-scroller",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 200,
+          "scrollLeft": 0,
+          "scrollHeight": 1386,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px 40px",
+          "scrollPaddingTop": "auto"
+        }
+      ],
+      "activeTab": "README.md",
+      "visibleTabCount": 2,
+      "controls": [
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "查找",
+          "rect": {
+            "x": 256,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 364,
+            "bottom": 120,
+            "left": 256
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode selected",
+          "label": "包含",
+          "rect": {
+            "x": 418,
+            "y": 92,
+            "width": 52,
+            "height": 26,
+            "top": 92,
+            "right": 470,
+            "bottom": 118,
+            "left": 418
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode ",
+          "label": "开头为",
+          "rect": {
+            "x": 475,
+            "y": 92,
+            "width": 64,
+            "height": 26,
+            "top": 92,
+            "right": 539,
+            "bottom": 118,
+            "left": 475
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "替换为",
+          "rect": {
+            "x": 544,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 652,
+            "bottom": 120,
+            "left": 544
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "替换",
+          "rect": {
+            "x": 657,
+            "y": 92,
+            "width": 42,
+            "height": 26,
+            "top": 92,
+            "right": 699,
+            "bottom": 118,
+            "left": 657
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "全部替换",
+          "rect": {
+            "x": 704,
+            "y": 92,
+            "width": 66,
+            "height": 26,
+            "top": 92,
+            "right": 770,
+            "bottom": 118,
+            "left": 704
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon ",
+          "label": "区分大小写",
+          "rect": {
+            "x": 613,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 643,
+            "bottom": 155,
+            "left": 613
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "上一个匹配项",
+          "rect": {
+            "x": 648,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 678,
+            "bottom": 155,
+            "left": 648
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "下一个匹配项",
+          "rect": {
+            "x": 683,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 713,
+            "bottom": 155,
+            "left": 683
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-done",
+          "label": "完成",
+          "rect": {
+            "x": 718,
+            "y": 127,
+            "width": 52,
+            "height": 26,
+            "top": 127,
+            "right": 770,
+            "bottom": 153,
+            "left": 718
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "select",
+          "id": "",
+          "className": "formatting-heading",
+          "label": "Text style",
+          "rect": {
+            "x": 286,
+            "y": 166.5,
+            "width": 76,
+            "height": 26,
+            "top": 166.5,
+            "right": 362,
+            "bottom": 192.5,
+            "left": 286
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "粗体",
+          "rect": {
+            "x": 383,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 409,
+            "bottom": 193.5,
+            "left": 383
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "斜体",
+          "rect": {
+            "x": 411,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 437,
+            "bottom": 193.5,
+            "left": 411
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "删除线",
+          "rect": {
+            "x": 439,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 465,
+            "bottom": 193.5,
+            "left": 439
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "项目符号列表",
+          "rect": {
+            "x": 486,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 512,
+            "bottom": 193.5,
+            "left": 486
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "编号列表",
+          "rect": {
+            "x": 514,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 540,
+            "bottom": 193.5,
+            "left": 514
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "任务列表",
+          "rect": {
+            "x": 542,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 568,
+            "bottom": 193.5,
+            "left": 542
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "引用",
+          "rect": {
+            "x": 570,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 596,
+            "bottom": 193.5,
+            "left": 570
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "行内代码",
+          "rect": {
+            "x": 617,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 643,
+            "bottom": 193.5,
+            "left": 617
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "链接",
+          "rect": {
+            "x": 645,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 671,
+            "bottom": 193.5,
+            "left": 645
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        }
+      ],
+      "overflowingControls": []
+    },
+    "closed": {
+      "rects": {
+        "tabs": {
+          "x": 0,
+          "y": 52,
+          "width": 780,
+          "height": 34,
+          "top": 52,
+          "right": 780,
+          "bottom": 86,
+          "left": 0
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 86,
+          "width": 240,
+          "height": 554,
+          "top": 86,
+          "right": 240,
+          "bottom": 640,
+          "left": 0
+        },
+        "workspace": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "editor": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scroller": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "tools": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 40,
+          "top": 86,
+          "right": 780,
+          "bottom": 126,
+          "left": 246
+        },
+        "find": null,
+        "formatting": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 40,
+          "top": 86,
+          "right": 780,
+          "bottom": 126,
+          "left": 246
+        }
+      },
+      "height": 40,
+      "cssHeight": "40px",
+      "cssHeightPx": 40,
+      "position": "absolute",
+      "padding": {
+        "tools": "0px",
+        "content": "72px 0px 48px",
+        "contentTop": 72,
+        "scroller": "0px 40px",
+        "preview": null,
+        "previewBeforeHeight": null
+      },
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "className": "",
+        "label": "README.md使用默认编辑器打开AI 应用CodexClaudeChatGPT编辑器S系统默认编辑器外观与设置A100%A偏好设置…打开文件…打开文件夹…存",
+        "inFind": false,
+        "inEditor": false
+      },
+      "heightChain": [
+        {
+          "className": "cm-scroller",
+          "height": "554px",
+          "minHeight": "auto",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-theme-light",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-page",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-pane content-normal",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "1",
+          "rows": "none"
+        },
+        {
+          "className": "document-workspace",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "document-shell with-sidebar ",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "workspace-stack",
+          "height": "588px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "34px 554px"
+        },
+        {
+          "className": "app-shell native-shell mode-edit ",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "52px 588px"
+        },
+        {
+          "className": "",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        }
+      ],
+      "scrollTop": 200,
+      "scrollContainer": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1312,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      },
+      "scrollContainers": [
+        {
+          "tag": "div",
+          "id": "",
+          "className": "document-workspace",
+          "label": "正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, beautifully render",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "section",
+          "id": "",
+          "className": "editor-pane content-normal",
+          "label": "Markdown editor",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-scroller",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 200,
+          "scrollLeft": 0,
+          "scrollHeight": 1312,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px 40px",
+          "scrollPaddingTop": "auto"
+        }
+      ],
+      "activeTab": "README.md",
+      "visibleTabCount": 2,
+      "controls": [
+        {
+          "tag": "select",
+          "id": "",
+          "className": "formatting-heading",
+          "label": "Text style",
+          "rect": {
+            "x": 286,
+            "y": 92.5,
+            "width": 76,
+            "height": 26,
+            "top": 92.5,
+            "right": 362,
+            "bottom": 118.5,
+            "left": 286
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "粗体",
+          "rect": {
+            "x": 383,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 409,
+            "bottom": 119.5,
+            "left": 383
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "斜体",
+          "rect": {
+            "x": 411,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 437,
+            "bottom": 119.5,
+            "left": 411
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "删除线",
+          "rect": {
+            "x": 439,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 465,
+            "bottom": 119.5,
+            "left": 439
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "项目符号列表",
+          "rect": {
+            "x": 486,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 512,
+            "bottom": 119.5,
+            "left": 486
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "编号列表",
+          "rect": {
+            "x": 514,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 540,
+            "bottom": 119.5,
+            "left": 514
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "任务列表",
+          "rect": {
+            "x": 542,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 568,
+            "bottom": 119.5,
+            "left": 542
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "引用",
+          "rect": {
+            "x": 570,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 596,
+            "bottom": 119.5,
+            "left": 570
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "行内代码",
+          "rect": {
+            "x": 617,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 643,
+            "bottom": 119.5,
+            "left": 617
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "链接",
+          "rect": {
+            "x": 645,
+            "y": 91.5,
+            "width": 26,
+            "height": 28,
+            "top": 91.5,
+            "right": 671,
+            "bottom": 119.5,
+            "left": 645
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        }
+      ],
+      "overflowingControls": []
+    },
+    "reopened": {
+      "rects": {
+        "tabs": {
+          "x": 0,
+          "y": 52,
+          "width": 780,
+          "height": 34,
+          "top": 52,
+          "right": 780,
+          "bottom": 86,
+          "left": 0
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 86,
+          "width": 240,
+          "height": 554,
+          "top": 86,
+          "right": 240,
+          "bottom": 640,
+          "left": 0
+        },
+        "workspace": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "editor": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scroller": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "tools": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 114,
+          "top": 86,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        },
+        "find": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 74,
+          "top": 86,
+          "right": 780,
+          "bottom": 160,
+          "left": 246
+        },
+        "formatting": {
+          "x": 246,
+          "y": 160,
+          "width": 534,
+          "height": 40,
+          "top": 160,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        }
+      },
+      "height": 114,
+      "cssHeight": "114px",
+      "cssHeightPx": 114,
+      "position": "absolute",
+      "padding": {
+        "tools": "0px",
+        "content": "146px 0px 48px",
+        "contentTop": 146,
+        "scroller": "0px 40px",
+        "preview": null,
+        "previewBeforeHeight": null
+      },
+      "focus": {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "查找",
+        "inFind": true,
+        "inEditor": false
+      },
+      "heightChain": [
+        {
+          "className": "cm-scroller",
+          "height": "554px",
+          "minHeight": "auto",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-theme-light",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-page",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-pane content-normal",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "1",
+          "rows": "none"
+        },
+        {
+          "className": "document-workspace",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "document-shell with-sidebar ",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "workspace-stack",
+          "height": "588px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "34px 554px"
+        },
+        {
+          "className": "app-shell native-shell mode-edit ",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "52px 588px"
+        },
+        {
+          "className": "",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        }
+      ],
+      "scrollTop": 200,
+      "scrollContainer": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1386,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      },
+      "scrollContainers": [
+        {
+          "tag": "div",
+          "id": "",
+          "className": "document-workspace",
+          "label": "匹配：包含开头为替换全部替换完成正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, be",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "section",
+          "id": "",
+          "className": "editor-pane content-normal",
+          "label": "Markdown editor",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-scroller",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 200,
+          "scrollLeft": 0,
+          "scrollHeight": 1386,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px 40px",
+          "scrollPaddingTop": "auto"
+        }
+      ],
+      "activeTab": "README.md",
+      "visibleTabCount": 2,
+      "controls": [
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "查找",
+          "rect": {
+            "x": 256,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 364,
+            "bottom": 120,
+            "left": 256
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode selected",
+          "label": "包含",
+          "rect": {
+            "x": 418,
+            "y": 92,
+            "width": 52,
+            "height": 26,
+            "top": 92,
+            "right": 470,
+            "bottom": 118,
+            "left": 418
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode ",
+          "label": "开头为",
+          "rect": {
+            "x": 475,
+            "y": 92,
+            "width": 64,
+            "height": 26,
+            "top": 92,
+            "right": 539,
+            "bottom": 118,
+            "left": 475
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "替换为",
+          "rect": {
+            "x": 544,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 652,
+            "bottom": 120,
+            "left": 544
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "替换",
+          "rect": {
+            "x": 657,
+            "y": 92,
+            "width": 42,
+            "height": 26,
+            "top": 92,
+            "right": 699,
+            "bottom": 118,
+            "left": 657
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "全部替换",
+          "rect": {
+            "x": 704,
+            "y": 92,
+            "width": 66,
+            "height": 26,
+            "top": 92,
+            "right": 770,
+            "bottom": 118,
+            "left": 704
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon ",
+          "label": "区分大小写",
+          "rect": {
+            "x": 613,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 643,
+            "bottom": 155,
+            "left": 613
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "上一个匹配项",
+          "rect": {
+            "x": 648,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 678,
+            "bottom": 155,
+            "left": 648
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "下一个匹配项",
+          "rect": {
+            "x": 683,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 713,
+            "bottom": 155,
+            "left": 683
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-done",
+          "label": "完成",
+          "rect": {
+            "x": 718,
+            "y": 127,
+            "width": 52,
+            "height": 26,
+            "top": 127,
+            "right": 770,
+            "bottom": 153,
+            "left": 718
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "select",
+          "id": "",
+          "className": "formatting-heading",
+          "label": "Text style",
+          "rect": {
+            "x": 286,
+            "y": 166.5,
+            "width": 76,
+            "height": 26,
+            "top": 166.5,
+            "right": 362,
+            "bottom": 192.5,
+            "left": 286
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "粗体",
+          "rect": {
+            "x": 383,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 409,
+            "bottom": 193.5,
+            "left": 383
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "斜体",
+          "rect": {
+            "x": 411,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 437,
+            "bottom": 193.5,
+            "left": 411
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "删除线",
+          "rect": {
+            "x": 439,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 465,
+            "bottom": 193.5,
+            "left": 439
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "项目符号列表",
+          "rect": {
+            "x": 486,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 512,
+            "bottom": 193.5,
+            "left": 486
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "编号列表",
+          "rect": {
+            "x": 514,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 540,
+            "bottom": 193.5,
+            "left": 514
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "任务列表",
+          "rect": {
+            "x": 542,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 568,
+            "bottom": 193.5,
+            "left": 542
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "引用",
+          "rect": {
+            "x": 570,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 596,
+            "bottom": 193.5,
+            "left": 570
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "行内代码",
+          "rect": {
+            "x": 617,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 643,
+            "bottom": 193.5,
+            "left": 617
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "链接",
+          "rect": {
+            "x": 645,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 671,
+            "bottom": 193.5,
+            "left": 645
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        }
+      ],
+      "overflowingControls": []
+    },
+    "final": {
+      "rects": {
+        "tabs": {
+          "x": 0,
+          "y": 52,
+          "width": 780,
+          "height": 34,
+          "top": 52,
+          "right": 780,
+          "bottom": 86,
+          "left": 0
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 86,
+          "width": 240,
+          "height": 554,
+          "top": 86,
+          "right": 240,
+          "bottom": 640,
+          "left": 0
+        },
+        "workspace": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "editor": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scroller": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "tools": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 114,
+          "top": 86,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        },
+        "find": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 74,
+          "top": 86,
+          "right": 780,
+          "bottom": 160,
+          "left": 246
+        },
+        "formatting": {
+          "x": 246,
+          "y": 160,
+          "width": 534,
+          "height": 40,
+          "top": 160,
+          "right": 780,
+          "bottom": 200,
+          "left": 246
+        }
+      },
+      "height": 114,
+      "cssHeight": "114px",
+      "cssHeightPx": 114,
+      "position": "absolute",
+      "padding": {
+        "tools": "0px",
+        "content": "146px 0px 48px",
+        "contentTop": 146,
+        "scroller": "0px 40px",
+        "preview": null,
+        "previewBeforeHeight": null
+      },
+      "focus": {
+        "tag": "input",
+        "id": "",
+        "className": "",
+        "label": "查找",
+        "inFind": true,
+        "inEditor": false
+      },
+      "heightChain": [
+        {
+          "className": "cm-scroller",
+          "height": "554px",
+          "minHeight": "auto",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "flex",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "cm-theme-light",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-page",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        },
+        {
+          "className": "editor-pane content-normal",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "1",
+          "rows": "none"
+        },
+        {
+          "className": "document-workspace",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "document-shell with-sidebar ",
+          "height": "554px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "554px"
+        },
+        {
+          "className": "workspace-stack",
+          "height": "588px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "34px 554px"
+        },
+        {
+          "className": "app-shell native-shell mode-edit ",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "grid",
+          "gridRow": "auto",
+          "rows": "52px 588px"
+        },
+        {
+          "className": "",
+          "height": "640px",
+          "minHeight": "0px",
+          "display": "block",
+          "gridRow": "auto",
+          "rows": "none"
+        }
+      ],
+      "scrollTop": 200,
+      "scrollContainer": {
+        "tag": "div",
+        "id": "",
+        "className": "cm-scroller",
+        "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+        "rect": {
+          "x": 246,
+          "y": 86,
+          "width": 534,
+          "height": 554,
+          "top": 86,
+          "right": 780,
+          "bottom": 640,
+          "left": 246
+        },
+        "scrollTop": 200,
+        "scrollLeft": 0,
+        "scrollHeight": 1386,
+        "clientHeight": 554,
+        "scrollWidth": 534,
+        "clientWidth": 534,
+        "overflowX": "auto",
+        "overflowY": "auto",
+        "padding": "0px 40px",
+        "scrollPaddingTop": "auto"
+      },
+      "scrollContainers": [
+        {
+          "tag": "div",
+          "id": "",
+          "className": "document-workspace",
+          "label": "匹配：包含开头为替换全部替换完成正文标题 1标题 2标题 3# Welcome to TextMark**Cross-platform Markdown, be",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "section",
+          "id": "",
+          "className": "editor-pane content-normal",
+          "label": "Markdown editor",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-editor ͼ1 ͼ2 ͼ4 ͼ17 ͼ16 ͼ15",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 0,
+          "scrollLeft": 0,
+          "scrollHeight": 554,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "padding": "0px",
+          "scrollPaddingTop": "auto"
+        },
+        {
+          "tag": "div",
+          "id": "",
+          "className": "cm-scroller",
+          "label": "# Welcome to TextMark**Cross-platform Markdown, beautifully rendered.**TextMark ",
+          "rect": {
+            "x": 246,
+            "y": 86,
+            "width": 534,
+            "height": 554,
+            "top": 86,
+            "right": 780,
+            "bottom": 640,
+            "left": 246
+          },
+          "scrollTop": 200,
+          "scrollLeft": 0,
+          "scrollHeight": 1386,
+          "clientHeight": 554,
+          "scrollWidth": 534,
+          "clientWidth": 534,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "padding": "0px 40px",
+          "scrollPaddingTop": "auto"
+        }
+      ],
+      "activeTab": "README.md",
+      "visibleTabCount": 2,
+      "controls": [
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "查找",
+          "rect": {
+            "x": 256,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 364,
+            "bottom": 120,
+            "left": 256
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode selected",
+          "label": "包含",
+          "rect": {
+            "x": 418,
+            "y": 92,
+            "width": 52,
+            "height": 26,
+            "top": 92,
+            "right": 470,
+            "bottom": 118,
+            "left": 418
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-mode ",
+          "label": "开头为",
+          "rect": {
+            "x": 475,
+            "y": 92,
+            "width": 64,
+            "height": 26,
+            "top": 92,
+            "right": 539,
+            "bottom": 118,
+            "left": 475
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "className": "",
+          "label": "替换为",
+          "rect": {
+            "x": 544,
+            "y": 90,
+            "width": 108,
+            "height": 30,
+            "top": 90,
+            "right": 652,
+            "bottom": 120,
+            "left": 544
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "替换",
+          "rect": {
+            "x": 657,
+            "y": 92,
+            "width": 42,
+            "height": 26,
+            "top": 92,
+            "right": 699,
+            "bottom": 118,
+            "left": 657
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-action",
+          "label": "全部替换",
+          "rect": {
+            "x": 704,
+            "y": 92,
+            "width": 66,
+            "height": 26,
+            "top": 92,
+            "right": 770,
+            "bottom": 118,
+            "left": 704
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon ",
+          "label": "区分大小写",
+          "rect": {
+            "x": 613,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 643,
+            "bottom": 155,
+            "left": 613
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "上一个匹配项",
+          "rect": {
+            "x": 648,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 678,
+            "bottom": 155,
+            "left": 648
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-icon",
+          "label": "下一个匹配项",
+          "rect": {
+            "x": 683,
+            "y": 125,
+            "width": 30,
+            "height": 30,
+            "top": 125,
+            "right": 713,
+            "bottom": 155,
+            "left": 683
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "find-done",
+          "label": "完成",
+          "rect": {
+            "x": 718,
+            "y": 127,
+            "width": 52,
+            "height": 26,
+            "top": 127,
+            "right": 770,
+            "bottom": 153,
+            "left": 718
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "select",
+          "id": "",
+          "className": "formatting-heading",
+          "label": "Text style",
+          "rect": {
+            "x": 286,
+            "y": 166.5,
+            "width": 76,
+            "height": 26,
+            "top": 166.5,
+            "right": 362,
+            "bottom": 192.5,
+            "left": 286
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "粗体",
+          "rect": {
+            "x": 383,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 409,
+            "bottom": 193.5,
+            "left": 383
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "斜体",
+          "rect": {
+            "x": 411,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 437,
+            "bottom": 193.5,
+            "left": 411
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "删除线",
+          "rect": {
+            "x": 439,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 465,
+            "bottom": 193.5,
+            "left": 439
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "项目符号列表",
+          "rect": {
+            "x": 486,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 512,
+            "bottom": 193.5,
+            "left": 486
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "编号列表",
+          "rect": {
+            "x": 514,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 540,
+            "bottom": 193.5,
+            "left": 514
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "任务列表",
+          "rect": {
+            "x": 542,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 568,
+            "bottom": 193.5,
+            "left": 542
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "引用",
+          "rect": {
+            "x": 570,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 596,
+            "bottom": 193.5,
+            "left": 570
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "行内代码",
+          "rect": {
+            "x": 617,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 643,
+            "bottom": 193.5,
+            "left": 617
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "className": "",
+          "label": "链接",
+          "rect": {
+            "x": 645,
+            "y": 165.5,
+            "width": 26,
+            "height": 28,
+            "top": 165.5,
+            "right": 671,
+            "bottom": 193.5,
+            "left": 645
+          },
+          "horizontalScrollException": false,
+          "withinWorkspace": true
+        }
+      ],
+      "overflowingControls": []
+    },
+    "assertions": {
+      "initialScrollApplied": true,
+      "open.tabsRectUnchanged": true,
+      "open.sidebarRectUnchanged": true,
+      "open.workspaceRectUnchanged": true,
+      "open.editorRectUnchanged": true,
+      "open.scrollerRectUnchanged": true,
+      "open.scrollTopUnchanged": true,
+      "close.tabsRectUnchanged": true,
+      "close.sidebarRectUnchanged": true,
+      "close.workspaceRectUnchanged": true,
+      "close.editorRectUnchanged": true,
+      "close.scrollerRectUnchanged": true,
+      "close.scrollTopUnchanged": true,
+      "roundTrip.tabsRectUnchanged": true,
+      "roundTrip.sidebarRectUnchanged": true,
+      "roundTrip.workspaceRectUnchanged": true,
+      "roundTrip.editorRectUnchanged": true,
+      "roundTrip.scrollerRectUnchanged": true,
+      "roundTrip.scrollTopUnchanged": true,
+      "roundTrip.toolsRectUnchanged": true,
+      "roundTrip.formattingRectUnchanged": true,
+      "roundTrip.heightUnchanged": true,
+      "roundTrip.paddingUnchanged": true,
+      "reopen.tabsRectUnchanged": true,
+      "reopen.sidebarRectUnchanged": true,
+      "reopen.workspaceRectUnchanged": true,
+      "reopen.editorRectUnchanged": true,
+      "reopen.scrollerRectUnchanged": true,
+      "reopen.scrollTopUnchanged": true,
+      "reopenedMatchesFirstOpen.tabsRectUnchanged": true,
+      "reopenedMatchesFirstOpen.sidebarRectUnchanged": true,
+      "reopenedMatchesFirstOpen.workspaceRectUnchanged": true,
+      "reopenedMatchesFirstOpen.editorRectUnchanged": true,
+      "reopenedMatchesFirstOpen.scrollerRectUnchanged": true,
+      "reopenedMatchesFirstOpen.scrollTopUnchanged": true,
+      "reopenedMatchesFirstOpen.toolsRectUnchanged": true,
+      "reopenedMatchesFirstOpen.formattingRectUnchanged": true,
+      "reopenedMatchesFirstOpen.findRectUnchanged": true,
+      "reopenedMatchesFirstOpen.heightUnchanged": true,
+      "reopenedMatchesFirstOpen.paddingUnchanged": true,
+      "finalStable.tabsRectUnchanged": true,
+      "finalStable.sidebarRectUnchanged": true,
+      "finalStable.workspaceRectUnchanged": true,
+      "finalStable.editorRectUnchanged": true,
+      "finalStable.scrollerRectUnchanged": true,
+      "finalStable.scrollTopUnchanged": true,
+      "finalStable.toolsRectUnchanged": true,
+      "finalStable.formattingRectUnchanged": true,
+      "finalStable.findRectUnchanged": true,
+      "finalStable.heightUnchanged": true,
+      "finalStable.paddingUnchanged": true,
+      "finalMatchesBaseline.tabsRectUnchanged": true,
+      "finalMatchesBaseline.sidebarRectUnchanged": true,
+      "finalMatchesBaseline.workspaceRectUnchanged": true,
+      "finalMatchesBaseline.editorRectUnchanged": true,
+      "finalMatchesBaseline.scrollerRectUnchanged": true,
+      "finalMatchesBaseline.scrollTopUnchanged": true,
+      "before.readmeActive": true,
+      "before.absoluteOverlay": true,
+      "before.heightMeasured": true,
+      "before.formattingInsideWorkspace": true,
+      "before.toolsInsideWorkspace": true,
+      "before.controlsInsideWorkspace": true,
+      "before.realScrollContainer": true,
+      "before.contentInsetTracksTools": true,
+      "before.findClosed": true,
+      "after.readmeActive": true,
+      "after.absoluteOverlay": true,
+      "after.heightMeasured": true,
+      "after.formattingInsideWorkspace": true,
+      "after.toolsInsideWorkspace": true,
+      "after.controlsInsideWorkspace": true,
+      "after.realScrollContainer": true,
+      "after.contentInsetTracksTools": true,
+      "after.findInsideWorkspace": true,
+      "after.formattingBelowFind": true,
+      "after.findFocused": true,
+      "closed.readmeActive": true,
+      "closed.absoluteOverlay": true,
+      "closed.heightMeasured": true,
+      "closed.formattingInsideWorkspace": true,
+      "closed.toolsInsideWorkspace": true,
+      "closed.controlsInsideWorkspace": true,
+      "closed.realScrollContainer": true,
+      "closed.contentInsetTracksTools": true,
+      "closed.findClosed": true,
+      "reopened.readmeActive": true,
+      "reopened.absoluteOverlay": true,
+      "reopened.heightMeasured": true,
+      "reopened.formattingInsideWorkspace": true,
+      "reopened.toolsInsideWorkspace": true,
+      "reopened.controlsInsideWorkspace": true,
+      "reopened.realScrollContainer": true,
+      "reopened.contentInsetTracksTools": true,
+      "reopened.findInsideWorkspace": true,
+      "reopened.formattingBelowFind": true,
+      "reopened.findFocused": true,
+      "final.readmeActive": true,
+      "final.absoluteOverlay": true,
+      "final.heightMeasured": true,
+      "final.formattingInsideWorkspace": true,
+      "final.toolsInsideWorkspace": true,
+      "final.controlsInsideWorkspace": true,
+      "final.realScrollContainer": true,
+      "final.contentInsetTracksTools": true,
+      "final.findInsideWorkspace": true,
+      "final.formattingBelowFind": true,
+      "final.findFocused": true
+    }
+  },
+  "failures": []
+}

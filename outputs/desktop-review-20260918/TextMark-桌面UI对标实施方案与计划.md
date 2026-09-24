@@ -2,11 +2,110 @@
 
 - **项目**：TextMark-v1
 - **参照应用**：本机 `/Applications/Markdown Preview.app`
-- **参照版本**：Markdown Preview `0.0.58`，Build `62`
-- **TextMark 基线**：当前已发布能力 `v0.10.2`；对标结论基于此前 `v0.9.7` 代码审查、`v0.9.8` 实施结果及本机 UI 调研
-- **文档版本**：实施方案 `v1.0`
-- **编制日期**：2026-09-18
-- **当前状态**：v0.10.2 已正式发布；P0–P5、B11–B14 代码与当前环境可验证项已完成，剩余为跨平台实机与像素级证据边界
+- **参照版本**：Markdown Preview `v0.0.60`，发布tag解引用提交 `0022426b59af68e0a9e45191be2de66c5fb102bd`；复核main `d4a033aaf0d31028175a4f6195602fe2a2ed5134`（相关五个顶部/分栏源码文件diff为空；不再混称tag/main）（本轮公开仓库 API 与固定提交源码复核）
+- **TextMark 基线**：本轮发布目标 `v0.10.7`（待提交与发布）；上游 Toolbar、Sidebar、Inspector 和编辑焦点行为按当前核验基线记录。
+- **v0.10.7 收口**：用户于 2026-09-24 确认 macOS 原生验收通过：系统默认与已安装第三方编辑器打开 Markdown、原生标题栏/Toolbar、系统打印面板及打印/取消恢复均通过。浏览器/CDP 证据仍仅代表 WebView DOM 行为，不替代上述原生验收。本次自动化门禁中前端 46 文件/420 项、TypeScript、ESLint、format:check、Rust fmt/test 23项/Clippy通过；生产 Vite 构建在 `/tmp` 隔离目录成功。v0.10.7 尚未提交/推送/发布；产品变更已测，但完整交付范围需在单独清单确认。
+- **文档版本**：实施方案 `v1.4`
+- **B2修订**：首位侧栏配置项随实际侧栏宽度跟随，空间不足/收起/自定义移位回退紧凑排列；标题约束在弹性区域内。浏览器验证通过；2026-09-24 用户确认 macOS 原生窗口/Toolbar 验收通过。
+- **C1修订**：顶部 aA 浮层复用已有设置状态；外观循环、7个预设、缩放档位与设置页入口完成浏览器验证。全量前端门禁通过；桌面debug构建曾被 `safe-delete` 对 `dist/assets` 的批量清理保护拦截，未删除产物或绕过保护；用户于 2026-09-24 确认原生外观及打印验收通过。
+- **B1修订**：Find/Formatting移入标签下内容覆盖层；修复实际cm-theme-light包装层高度链；完成三种宽度双标签编辑+查找显隐往返验证。
+- **C1修订（2026-09-23）**：新增 ToolbarAppearance 外观浮层，含缩放、系统/浅色/深色循环、7个主题预设及自定义设置入口；新增受控交互与键盘关闭测试，1440/780浅色及1440深色浏览器场景通过。Chromium媒体模拟不等于原生OS明暗验收。
+- **本轮修订**：以 v0.0.60 源码替代历史截图作为结构事实；撤回顶部已完全对齐、自定义语义未改变及双标签已验收的推断。优先布局/UI，尺寸距离次之。
+
+- **T06 收口（2026-09-23）**：默认 Toolbar 已将 Inspector/Share/Edit 拆为独立可排序项；旧 v5 默认与 v7 复合默认识别迁移到新默认，其他自定义配置保持原数组。全量 Vitest 单 worker 46文件/416项、TypeScript、ESLint、format:check 与 diff-check通过；原生 NSToolbar 定制行为尚未实机复验。
+- **T11 书签差异核验（2026-09-23）**：TextMark `src` 中没有 bookmark/Bookmarks/书签能力。固定上游提交 `d4a033a` 的 Sidebar 仅包含 TOC 与 Project Navigator，未发现书签面板或书签模型。故本轮不以该基线为由新增书签功能；已更正 U03/F03、P1 工作区草案、T11 与验收条目中的书签差异描述。
+- **T11 面板专项补验（2026-09-23）**：扩充 `scripts/capture-ui.mjs` 三个 workspace-panels 场景，覆盖真实 CDP 指针拖动、左右面板最大宽度 clamp、localStorage 写入、刷新后 310/360px 宽度恢复。键盘/开合/最小值场景 17 项、拖动与最大值场景 7 项、刷新恢复场景 6 项均全部通过（`failures=[]`）；证据为 `workspace-panels-extended-1440.png/.json`、`workspace-panels-drag-1440.png/.json`、`workspace-panels-persistence-1440.png/.json`。这些是 Chromium/WebView DOM 事件证据，不等于 AppKit 原生分隔器行为。
+
+## 本轮再评估：v0.0.60 顶部优先实施账本
+
+证据固定于 [d4a033a](https://github.com/pluk-inc/markdown-preview/tree/d4a033aaf0d31028175a4f6195602fe2a2ed5134)。`docs/screenshot-main.png` 图中徽标为 v0.0.14；编辑截图仍显示旧缩放按钮。两图只用于历史风格参考，不能据此证明最新版布局。远端发布时间与当前会话注入日期存在跨日差异，本轮以实际查询的版本/提交为准，不倒推发布日期。
+
+| ID | 上游事实与证据 | TextMark 改前问题 | 实施与验收 | 状态 |
+|---|---|---|---|---|
+| T01 | Toolbar.swift:44–75：macOS 26+ 模式选择→弹性空间→侧栏开关→跟随分隔线→导航→弹性空间→Open→外观→Inspector/Share/Edit→Search | 固定开关+文件下拉、无分栏跟随区域 | A批双模式按钮；B2首位侧栏跟随，开关靠分隔线；真实鼠标调宽与收起重开通过 | 浏览器与用户确认的 macOS 原生验收通过 |
+| T02 | Sidebar.swift:24–65：大纲/文件两按钮、单选、隐藏时均未选；选择模式会打开侧栏 | 图标与箭头竖排、模式状态不可见 | 替换下拉为直接按钮，aria-pressed 与真实状态一致；隐藏后选择自动展开 | 第一批 |
+| T03 | Toolbar.swift:181–186：无前后历史隐藏导航 | 固定显示且忽略自定义删除 | 依据历史和配置渲染；导航删除、排序、间隔不再被过滤 | 第一批 |
+| T04 | Toolbar.swift:397–418：textformat.size 外观按钮，弹出字号/外观/主题 | 齿轮下拉，只有缩放与设置 | aA 浮层提供字号、system/light/dark循环、7主题预设、自定义设置入口；受控组件、设置持久化与窄窗几何已验证 | C1浏览器验证与用户确认的 macOS 原生验收通过 |
+| T05 | Find.swift:11–26：NSSearchToolbarItem，preferredWidth=320 | gap 测量8与CSS4不符，宽屏也隐藏；窄屏 input 不可见 | 稳定宽度预算、读取计算样式、搜索可聚焦；980/1440 默认入口可见；窄窗溢出可返回 | 第一批 |
+| T06 | Toolbar.swift:77–103：侧栏/导航/空白可定制，Inspector/Share/Edit可独立移动 | 4类配置被丢弃、复合动作溢出无法访问；默认仍合并三动作 | 保留自定义数组顺序、空白及溢出入口；独立 Inspector/Share/Edit 默认项；旧复合默认迁移到新版，非默认自定义布局原样保留；现代 schema 不误迁移 openWith | 浏览器组件回归与设置迁移测试通过；用户确认 macOS 原生 Toolbar 验收通过 |
+| T07 | Find.swift:89–93：查找覆盖层不在 tabs 上方、不重排 tabs | FindBar 位于 Toolbar 与 tabs 之间 | B1移入文档工作区且不重排内容；本轮以真实 CodeMirror 文档验证非空查询计数、Begins With 模式、导航控件、单次替换及全部替换 | 浏览器交互已验证；用户确认原生窗口/打印通过，但未单独报告原生查找交互 |
+| T08 | 原生文档标签+格式覆盖层 | 没有双标签截图却曾标完成 | A批双标签；B1三种宽度双标签+查找+编辑实际组合回归通过 | 浏览器组合场景已验证；原生窗口/打印通过，未单独确认双标签行为 |
+| T09 | AppKit 原生窗口控制与侧栏 titlebar 区域 | 浏览器模拟红绿灯又加92px原生预留 | 按 runtime 分离预留；用户确认原生标题栏/Toolbar验收通过；像素级逐点校准未作为本轮验收项 | 原生交互验收通过；像素级对齐另列
+| T10 | #416 自动明暗外观同步；#415 编辑焦点 | 历史已有焦点修复，未重验系统外观切换 | C1已验证 Chromium `prefers-color-scheme` 模拟与 system/light/dark设置循环；用户确认 macOS 原生窗口/打印验收通过；单独的系统主题切换覆盖不在该确认中 | 浏览器验证通过；原生主题单项未确认 |
+| T11 | 三栏桌面工作区、导航/Inspector 各面板 | 已有能力不能继续按旧表认定缺失 | 浏览器专项覆盖三栏开合、Inspector tab 切换、分隔器键盘 1px/10px、鼠标拖动、最小/最大值 clamp、宽度持久化与刷新恢复；固定上游 Sidebar 只证实 TOC/Project Navigator，两端均未证实书签面板 | DOM/浏览器交互与宽度恢复已验；AppKit 原生焦点/分隔器仍待验，书签不纳入本轮差异 |
+
+### 导出回归验收（2026-09-23）
+
+- 使用固定 fixture `e2e/fixtures/export-regression.md` 运行 `scripts/verify-exports.mjs`，输出隔离在 `/tmp/textmark-export-qa-20260923`，未写入仓库。
+- HTML/PNG/PDF 均成功生成；PNG 签名正确、尺寸 1800×4116，PDF `%PDF-` 签名、353269 bytes。渲染包含 6 个标题、2 张表、2 个任务项、1 个 alert、2 个公式和 1 个 Mermaid 图；导出 HTML 有 CSP、无脚本/屏幕控件/缺失图片。主题状态恢复，网络请求失败和浏览器异常均为 0。
+- 源码复核 `src/App.css` 的 `@media print`：明确隐藏 `.native-toolbar`、`.native-sidebar`、`.document-tabs`、`.inspector-panel`、`.formatting-toolbar`、`.find-bar` 和 toast；解除根容器/预览滚动高度限制，设置 A4 与分页避免规则。此项是 print CSS 静态契约核对，不代表浏览器打印渲染或原生打印实测。
+- **打印媒体浏览器验收（2026-09-23）**：`scripts/capture-ui.mjs` 通过 CDP 切换 Chromium print media，核验界面隐藏、文档内容布局并以 `Page.printToPDF` 生成 PDF。默认预览、Inspector 打开、Find 打开、双标签+编辑器+Find 打开场景均报告 `failures=[]`。双标签场景中 tabs/格式栏/Find 隐藏、编辑正文可布局（954字符），PDF 2页。另在真实页面根节点挂载 Toast 后验证 `.toast` 的打印计算样式为 `display:none`，预览正文796字符/1440×1258.7 CSS px，PDF 193,802 bytes/2页，`failures=[]`。证据：`print-media-1440.*`、`print-inspector-1440.*`、`print-find-1440.*`、`print-tabs-find-1440.*`、`print-toast-1440.*`（PNG/JSON/PDF）。初次扩展验收发现编辑态无 `.markdown-body`，脚本已改为兼容检测 `.cm-content`；并将打印验收路由统一为 `print*` 场景，避免 fixture 错误断言。最终各场景通过，format、TypeScript 和 diff-check 通过。证据仅代表 Chromium print-media / PDF，不等同 macOS 原生打印面板或实体打印验收。
+- **原生打印验收边界（2026-09-23复核）**：Tauri 路径最终调用 Rust `window.print()`（`src-tauri/src/lib.rs::print_current_window`），会打开系统打印面板；CDP/浏览器脚本不能可靠自动化该系统面板，也不能代替实纸输出。本机当前无 TextMark GUI 进程；仅有 `/Applications/TextMark.app`（2026-09-22安装）与 `/tmp/TextMarkVerify.app`（2026-09-21验证包），都不能证明包含当前未提交源码，因此不拿旧二进制冒充本轮验收。待能安全构建当前工作树且启动本轮二进制后，需人工完成：在预览态与编辑态各打开一次打印面板；确认预览/编辑正文、表格/图示存在且工具栏、Tabs、Inspector、Find、Toast 不出现在预览纸张；检查 A4 分页、页边距、缩放和取消/关闭后应用仍可操作；至少另存一份 PDF 并核对页数/首末页。该手工项目未完成前保持“原生打印待验”，不阻断已通过的 Chromium print-media 结论。
+
+### 原生窗口及当前源码浏览器复核（2026-09-24）
+
+- 前一轮 `tauri dev` 已完成 Rust 编译，屏幕截图曾确认 TextMark 原生窗口显示 README 预览和侧栏；但该 `target/debug/textmark` 进程现已退出。本机仍有当前源码 Vite 开发服务器 `http://127.0.0.1:1420/`，首页返回 HTTP 200。
+- 用 `scripts/capture-ui.mjs` 对当前源码默认预览场景运行 Chromium CDP 验收，报告 `ready=true`、`scenarioReady=true`、标题 `README.md`、语言 `zh-CN`、主题 `light`、`failures=[]`；1440×900 几何断言通过：搜索入口可见、侧栏模式控件并排、无横向溢出、主要 Toolbar 槽无重叠。报告输出 `/tmp/textmark-current-preview.png`，仅用于本轮浏览器验证，不等价原生 AppKit 实拍。
+- 首次脚本启动没有匹配到 Chrome page target；显式指定 Chrome 可执行路径后复跑通过。系统打印面板、原生 NSToolbar/titlebar、macOS 系统外观切换仍未实机验收。
+- **打印调用链源码核验**：Tauri 2.11.5 `WebviewWindow::print()` 委托 `Webview::print()`；该 API 注释说明系统对话框在 macOS Wry 支持。tauri-runtime-wry 2.11.4 的 dispatcher 把 `WebviewMessage::Print` 送入事件循环，处理分支对目标 WebView 调用 `webview.print()`；`send_user_message` 在主线程直接派发、非主线程经 event-loop proxy 投递。Wry 0.55.1 macOS 实现调用 `WKWebView.printOperationWithPrintInfo:`，创建 `NSPrintOperation`，设置 `canSpawnSeparateThread` 并用 `runOperationModalForWindow` 显示系统打印面板。这个源码链确认线程/平台调用路径，不代表本机实际打印结果。
+- 前端门禁 TypeScript、Vitest 46文件/416项、ESLint、format:check 与 `git diff --check` 通过。工作树仍含混合改动，未逐项核定发布范围，故不提交、推送或发布；桌面构建仍受 dist/assets 批量删除安全保护约束，不绕过。
+- **当前工作树原生启动复验（2026-09-24）**：通过 Tauri CLI 临时配置把前端 `outDir` 与 `frontendDist` 指向 `/tmp/textmark-native-verify-dist`，`tsc + vite build` 和 macOS debug `--no-bundle` 构建均成功，仓库 `dist/assets` 未清理/覆盖。将新构建的 `src-tauri/target/debug/textmark` 复制到 `/tmp/TextMarkCurrent.app` 后分别比对 SHA-256 一致（`4d9b10d79de7fb5228d08c9ccf344cc996712dfedd86b93d02eaee996f9561cd`），ad-hoc 签名有效。LaunchServices 记录该 bundle 为前台应用（PID 68160，check-in `2026-09-24 08:22:43`），同 PID 的 WebKit GPU、WebContent、Networking 子进程存在；用户提供截图确认当前窗口展示 README 预览/编辑分栏及应用菜单，启动和主界面显示通过。该截图未显示打印面板，且受 TCC `-10004` 阻止的 System Events 快捷键尝试没有触发 ⌘P。因此系统打印面板、预览/编辑态打印、取消恢复、NSToolbar/titlebar 与原生系统外观仍待人工交互验收；WebKit/LaunchServices 存活不证明这些交互正确。仓库原 `target/debug/bundle/macos/TextMark.app` 二进制哈希与本轮不同，未复用作新代码证据。其后并行运行 Rust clippy/test 时，Cargo 重新编译并覆盖了 `target/debug/textmark`；当前磁盘上该路径与仍在运行进程已加载的 bundle 副本哈希不同，因此启动时 hash 比对仍可证明启动副本来源，但不可再拿被覆盖后的 target 路径 hash 代称运行进程的映像。Rust `cargo fmt --check`、clippy `-D warnings`、Rust 21 项测试均通过；仓库 `dist/assets` 仍完整（9.1 MB）。
+
+- **当前源码组合回归（2026-09-24）**：复用现存 Vite `http://127.0.0.1:1420/` 并显式指定 Chrome，对 `tabs-find` 与 `workspace-panels` 场景复验，均 `ready=true`、`scenarioReady=true`、`failures=[]`。前者确认双标签编辑、查找和格式栏处于文档工作区，开/关/重开 Find 后 tabs、侧栏、工作区、编辑器、真实 `.cm-scroller` 与 `scrollTop=200` 几何/滚动不变，Find 焦点正确；后者确认三栏开合、Inspector tab 切换、键盘步进和最小宽度 clamp、关闭重开。截图 `/tmp/textmark-current-tabs-find.png`、`/tmp/textmark-current-panels.png`，仅当前源码 Chromium 回归证据，不替代原生 AppKit。
+
+- **追加当前源码组合验收（2026-09-24）**：同一 Vite 源码对 `appearance`、`sidebar-tracking`（980×900）、`print-tabs-find` 场景复跑。三份报告均 `failures=[]`：外观浮层确认缩放/自动外观/7个预设/自定义入口均在视口内，system/light/dark 状态切换与颜色变量一致；窄窗测试确认侧栏跟随分隔线、展开/收起/恢复和无横向溢出；双标签编辑+查找打印媒体下 Tabs/Find/格式工具隐藏、正文 954 字符存在，PDF 2 页（73,723 bytes）。截图和PDF位于 `/tmp/textmark-current-appearance.png`、`/tmp/textmark-current-sidebar.png`、`/tmp/textmark-current-tabs-print.png/.pdf`。打印仍是 Chromium PDF，非系统原生打印。
+
+### T11 面板键盘交互浏览器验收（2026-09-23）
+
+- 新增 `scripts/capture-ui.mjs workspace-panels` 场景，以真实页面状态打开/关闭 Inspector、切换其 tab，并分别聚焦左右 `role=separator` 分隔器验证方向、1px/Shift+10px 增减、最小宽度 clamp 及 localStorage 更新。
+- 1440×900 三栏最终状态：侧栏 230px、中央工作区 928px、Inspector 270px；所有断言通过（`failures=[]`）。浏览器合成键盘事件证明 WebView DOM 路径，不等于原生窗口/menu 键盘行为验收。
+- 证据：`workspace-panels-1440.png/.json`，追加 `workspace-panels-extended-1440.png/.json`、`workspace-panels-drag-1440.png/.json`、`workspace-panels-persistence-1440.png/.json`。扩展断言覆盖键盘 1px/10px、最小宽度、真实指针拖动 +50/+60px、最大宽度 clamp（侧栏400px/Inspector500px）、localStorage 写入及刷新后310/360px恢复；17+7+6项断言全部通过，`failures=[]`。本次无须改产品逻辑；仅补强验收脚本。DOM/CDP 事件不等同 AppKit 原生交互；面板滚动位置保持与原生标题栏/菜单焦点仍待单独实测。
+
+**分批顺序**：A 顶部可证实结构/交互缺陷 → B 侧栏跟随、标题区域、Tabs/Find/Formatting 层级 → C 主题浮层、工作区各面板与键盘操作 → D 原生多状态视觉验收与尺寸微调。
+
+### C1 批执行结果（顶部外观浮层）
+
+- 新增 `ToolbarAppearance.tsx`，顶部 aA 菜单提供缩放档位、系统/浅色/深色循环、7个主题预设和自定义外观入口；状态沿用现有 `theme`、`themePreset`、`zoom` 与设置页，不另建持久化模型。
+- 主题与缩放操作受控：回调由现有设置写入路径处理，浮层保持打开；自定义入口先关闭浮层再打开外观设置页。Escape 关闭并恢复 summary 焦点、外部点击关闭、监听器卸载、缩放反馈两秒回收均有组件测试。
+- 浏览器真实鼠标/CDP验收：1440×900浅色、780×640窄窗浅色、1440×900深色三场景均 `failures=[]`。7个主题卡片呈三列（3/3/1），浮层、控件在视口内；缩放100→110持久化；主题选取、system/light/dark循环、reload持久化、设置页入口、Escape/外部点击均通过。
+- Chromium `prefers-color-scheme` 模拟验证 system 模式 light→dark→light 的 Web CSS 响应；该证据不是 macOS 原生外观切换证据。窄窗浏览器可见布局通过，不代表最窄原生窗口或原生 toolbar 锚点已验。
+- 新增 `ToolbarAppearance.test.tsx` 21项；与 Toolbar 定向测试合计39项通过。TypeScript、相关 ESLint、`format:check`、`git diff --check`通过；本批尚未重跑全量 Vitest、桌面 debug 构建、WDIO或原生OS主题切换。
+- 新增截图及同名 JSON：`top-c1-appearance-1440`、`top-c1-appearance-780`、`top-c1-appearance-dark-1440`。**当批历史状态**：当时尚未提交、未推送、未发布。
+
+### B2 批执行结果（侧栏跟随与标题边界）
+
+- 复核固定上游 Toolbar.swift:44–75：macOS 26+ 侧栏模式位于 titlebar 区域左侧，toggle 在右侧 tracking separator 前；旧系统无跟随区。本轮实现 WebView 中的结构对应，不宣称复刻 AppKit。
+- Toolbar 新增受控 sidebarWidth；只增强配置数组首位 sidebar，不排序、不补回已删除项。跟随区域右边界对准正文 6px divider 中心，模式按钮居左、toggle 居右；sidebar 收起、移位、视口≤700、图标文字占宽不足时，先释放跟随留白再执行原有 overflow。
+- 标题 max-width 受所在 flexibleSpace 约束，修复窄窗 vw 宽度可能越出宿主；仍是第一个弹性项内居中，不将“绝对窗口居中”或“原生标题锚点一致”当结论。没有弹性项时沿用不渲染标题的定制语义。
+- 真实 CDP 鼠标拖动240→320→400px、关闭→模式重开、1440→780→1440，90项专项断言通过：跟随右边界分别243/323/403px，分隔中心误差均0px，toggle右缘距中心11px，重开保持400px。780下标题宿主宽74px且文字仍在其内。
+- 980px三组持久化自定义配置：侧栏移位、删除、图标+文字；顺序/重复间隔保留，删除后不补回。图标+文字宽度不足时回退紧凑布局。另验980双标签编辑+Find（108项专项断言）、Inspector、深色。共7组top-b2-*.png/json，全部failures=[]；人工检查跟随、图标文字与编辑组合截图。
+- Toolbar新增4项回归，合计18项；全量45文件/391项、TypeScript、ESLint、format:check、git diff --check通过；普通debug no-bundle构建成功。README未被改写。
+- 边界（当批记录）：未安装重启原生验证包、未新跑WDIO；该阶段的原生标题锚点、系统主题切换、原生查找/替换、实际导出打印当时仍待验。后续验收结论见本文档开头更新；**当批历史状态**为未提交、未推送、未发布。
+
+### B1 批执行结果（顶部内容层级）
+
+- App.tsx 将 FindBar 从根布局移入 DocumentTools，与 FormattingToolbar 顺排覆盖在正文上方；去掉根36px行与工作区40px行，标签/侧栏/编辑器外框不再因查找显隐移动。
+- 新增 DocumentTools.tsx，用 ResizeObserver 测量真实高度并写入局部CSS变量。窄列允许查找按钮换行，不裁掉完成/替换入口；格式条横向可滚动。预览留白放在文章外伪元素，编辑正文增加padding并向CodeMirror注册scrollMargins；打印隐藏工具和伪元素，未新增导出正文空白。
+- 实测暴露旧`.cm-theme`规则不命中`.cm-theme-light`，修复为editor-page直属cm-theme前缀包装层。改前980宽编辑器高1243、内部maxScroll=0；改后视口554、maxScroll=689，真实滚动恢复。
+- 1440/980/780三个宽度真实双标签+README编辑+查找打开→关闭→再打开：标签/侧栏/workspace/编辑器/scroller rect不变，scrollTop均维持200，查找输入保持焦点。工具高度在980为40→79→40→79，在780换行为114px。断言要求非零可滚动位置，避免0→0假通过。
+- 另测980预览查找、1440编辑、显式深色，共6组截图与JSON均failures=[]。查找/格式条全部交互控件在正文列可达；截图发现半透明格式条透出正文，已改不透明底色并重拍三组组合状态。
+- 新增DocumentTools组件7项测试，全量45文件/387项通过；TypeScript、ESLint、format:check、git diff --check、最终debug no-bundle构建通过。
+- 尚未覆盖：查找非空命中的模式往返/替换后回归、系统明暗切换、真实导出/打印、新原生窗口验收。B1仅闭合覆盖层布局与空查询显隐稳定性，不宣称编辑状态交接全量闭合。B2侧栏跟随/标题、C主题浮层、D原生同状态实拍仍待做。
+
+### A 批执行结果
+
+- 已替换 Sidebar 下拉为大纲/文件双按钮；导航仅在有历史且配置包含该项时出现；aA 替代外观齿轮。
+- 已撤销四列固定分区：采用窗口控件 + 独立剩余宽度轨道，轨道内部按配置有序渲染，弹性空间承载标题。恢复 sidebar/navigation 删除排序、重复 space/flexibleSpace；不宣称标题相对整个窗口居中。
+- Overflow 按计算 gap/padding 测量，固定间隔14px生效，弹性间隔先缩；复合动作保留More访问入口。新增可键盘访问的搜索按钮；窄屏不再强行display:none输入框。
+- v4及以后schema保留独立openWith，不再被误迁移成openActions。浏览器红绿灯与原生92px预留不再重复。
+- 新增 Toolbar.test.tsx 14 项；设置迁移新增1项；全量44文件/380项通过，TypeScript、ESLint、format:check、git diff --check通过；普通debug no-bundle桌面构建通过。
+- 8组实际浏览器截图：1440预览/编辑/深色/Inspector/定制器、980预览/Find/真实双标签编辑。全部场景就绪、worker渲染、搜索可见、控件同行、无主要slot重叠与页面横溢出；双标签数量=2、编辑器可见。对应top-v0060-*.png/.json。
+- 验收边界：定制器截图仅证明打开，删除/排序/宽度恢复与溢出回调由14项组件测试覆盖（模拟布局）；未做真实窗口拖放定制与缩放往返。普通构建未安装/重启验证包，未新跑WDIO，未取得v0.0.60原生同状态实拍。系统自动明暗切换未测；截图仅显式深色。
+- B/C/D仍未完成：侧栏跟随分区、标题锚点、Find移至标签下内容覆盖层、完整主题浮层、原生视觉对照。侧栏内部仍有模式切换入口，与新顶部入口重复，下一批统一评估后收口。历史9.28的固定导航/过滤结构项方案由本节取代。
+
+**第一批验收**：默认1440/980搜索可见；侧栏双按钮同排且点击生效；无历史不显示导航；自定义删除/顺序/固定和弹性间隔生效；小窗隐藏项在More可达且放大恢复；双标签编辑状态真实出现；深色、Inspector、Find场景无遮挡。测试不能替代最新版原生实拍，未覆盖项必须保持待验。所有批次均不提交、推送、发布。
+- **编制日期**：2026-09-22
+- **历史状态（2026-09-24前）**：v0.10.6 已正式发布；随后继续收口编辑/阅读位置交接、标签切换恢复和 Find Bar 焦点竞争。v0.10.7 候选的验收与发布状态见本文档开头的更新记录。
 
 ---
 
@@ -68,7 +167,7 @@ P0 桌面 UI 骨架
   - 左侧栏：`240px`；
   - 中央内容区：`960px`；
   - 右侧栏：`270px`；
-- 左侧默认工作区：Files、Search、Bookmarks；
+- 左侧默认工作区：固定上游证据为 Outline、Files 两种 Sidebar 模式；Search 为独立 Find 工具，不将其误写成左侧面板。
 - 右侧默认工作区：Backlinks、Outgoing links、Tags、All properties、Outline；
 - 右侧栏默认折叠；
 - Toolbar 使用原生分组和弹性空间；
@@ -101,7 +200,7 @@ TextMark 已经具备并应保留的能力：
 |---|---|---|---|---|---|
 | U01 | 桌面外壳 | 原生 macOS 工作区 | Tauri 系统窗口 + React 工作区 | 保留 Tauri，调整 React 工作区表达 | P0 |
 | U02 | Toolbar | 原生分组、留白克制 | 控件较多，分组边界不够明显 | 重排区域、压缩低频入口、补窄窗溢出 | P0 |
-| U03 | 左侧栏 | 文件/搜索/书签工作区 | 文件导航与大纲关系较紧 | 引入统一工作区切换 | P0/P1 |
+| U03 | 左侧栏 | 固定上游 v0.0.60 为大纲/文件两种模式 | TextMark 提供文件导航与大纲；左侧查找入口属于另一交互 | 对齐大纲/文件切换，不把未见于该上游基线的书签面板作为对标缺口 | P0/P1 |
 | U04 | 右侧栏 | 反向链接/出链/标签/属性/大纲 | Inspector 偏属性和辅助信息 | 改为面板型 Inspector | P1 |
 | U05 | 默认尺寸 | 左约240、右约270 | 左260、右292 | 采用对标默认值，同时保留用户持久化宽度 | P0 |
 | U06 | 文档版心 | 稳定阅读列，留白明确 | 已有版心，但页面感偏强 | 调整最大宽度、内边距和空白比例 | P3 |
@@ -112,7 +211,7 @@ TextMark 已经具备并应保留的能力：
 | U11 | 主题 | 主题覆盖窗口和阅读布局 | 已有主题、字体、边距和行高 | 补齐 chrome 一致性，不追求主题数量 | P3 |
 | F01 | 文件操作 | 新建、打开、最近、保存、导出、打印 | 基本覆盖 | 保留，补菜单一致性 | P2/P4 |
 | F02 | 文档关系 | Backlinks、Outgoing links、Tags | 尚未形成完整工作区 | 分阶段补齐 | P1 |
-| F03 | 书签 | 左侧独立工作区 | 不突出或未形成独立面板 | 先实现文档/位置级书签模型 | P1 |
+| F03 | 书签 | 固定上游 v0.0.60 Sidebar/ProjectNavigator 中未发现书签面板或模型 | TextMark `src` 中也未发现书签功能 | 非本轮上游对标范围；若产品未来需要，另立需求评估 | 不纳入本轮 |
 | F04 | Markdown 渲染 | 阅读排版克制 | 功能覆盖较完整 | UI 骨架稳定后逐项调整 | P3 |
 | F05 | 外部入口 | 检查更新、帮助体系 | 已有检查更新 | 增加项目主页、Releases、Issues | P4 |
 | F06 | ARM64 DMG | 不属于 UI 对标 | 尚未提供独立 ARM64 DMG | 独立修改发布流水线 | P5 |
@@ -200,10 +299,8 @@ src/components/PanelResizer.tsx
 建议顺序：
 
 ```text
-文件
-搜索
-书签
-大纲
+文件 / 大纲（对应固定上游 Sidebar 的两种模式）
+搜索（TextMark 当前独立查找入口，不声称与上游侧栏面板一致）
 ```
 
 ### 右侧工作区
@@ -228,7 +325,7 @@ src/components/PanelResizer.tsx
 6. 保留左右栏调宽和键盘调宽；
 7. 切换面板不得重置文档滚动位置、编辑器光标和 dirty 状态；
 8. 文件树、大纲、搜索均补齐键盘焦点和可访问性反馈；
-9. 书签先采用本地文档/位置级模型，不引入云同步。
+9. 书签不是固定上游 v0.0.60 已证实的面板，本轮不作为对标实施项；如列入产品规划，需另行确认需求与数据模型。
 
 ### 主要代码落点
 
@@ -238,7 +335,7 @@ src/components/Inspector.tsx
 src/components/Outline.tsx
 src/components/FindBar.tsx
 src/components/Search*
-src/components/Bookmarks*
+src/components/ProjectNavigator*
 src/App.tsx
 src/App.css
 src/lib/settings.ts
@@ -532,7 +629,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
 ### 6.2 工作区与交互
 
-- 文件、搜索、书签、大纲面板职责清晰；
+- 文件/大纲模式职责清晰，搜索保持独立入口；
 - Inspector 面板切换不影响文档滚动和光标；
 - 标签页键盘导航有效；
 - dirty 文档离开时保存、放弃、取消语义一致；
@@ -605,11 +702,11 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 1. 是否批准先实施 **P0 桌面 UI 骨架对齐**；
 2. 是否批准 P0 通过后继续实施 **P1 工作区和 Inspector 对齐**；
 3. 是否采用左侧默认约 `240px`、右侧默认约 `270px`，同时保留用户已保存宽度；
-4. 是否采用“左侧文件/搜索/书签/大纲，右侧大纲/属性/标签/出链/反向链接”的工作区结构；
+4. 左侧按已核实上游采用文件/大纲模式；搜索和右侧 Inspector 面板作为 TextMark 自身工作区结构分别评估；
 5. 是否将 `rch64.dmg` 统一解释为 `arm64.dmg`，构建 target 使用 `aarch64-apple-darwin`；
 6. 是否在 P4 增加项目主页、GitHub Releases 和 Issues 三个菜单入口。
 
-**当前文档状态：v0.10.2 已正式发布。P0–P5 桌面 UI、菜单入口、ARM64 DMG 基础能力及顶部区域第一批对齐已落地；B11–B14 代码与当前环境可验证项已完成。剩余为跨平台实机与像素级证据边界，不阻塞本版本发布。**
+**历史状态（2026-09-19）：v0.10.2 已正式发布。** 本文后续章节继续记录各批次的历史实施证据；当前 v0.10.7 发布状态以文首收口记录和 GitHub Release 状态为准。
 
 ### 9.1 当前实施账本（2026-09-19）
 
@@ -1021,6 +1118,222 @@ git diff --check：通过
 ```
 
 当前状态：顶部区域第一批代码和浏览器截图验证已完成，并已随 `v0.10.2` 提交、推送和正式发布；macOS 原生窗口实拍、原生 NSToolbar 行为、Finder 拖放和原生 titlebar 像素级对齐仍属于独立证据边界，不宣称已完全闭合。
+
+### 9.22 v0.10.6 Toolbar 与 Sidebar 第二批对齐（2026-09-22）
+
+本轮继续对照最新版 Markdown Preview `v0.0.59 / main@719f2dd`，将上游默认 Toolbar 中的统一外观/设置入口落到 TextMark，同时保持 TextMark 原有跨平台设置能力和旧 Toolbar 配置迁移兼容。
+
+实施内容：
+
+- 新增 `themesAndSettings` Toolbar item，并加入 `ToolbarItem` 类型、默认配置、Toolbar 定制器和中英文文案；
+- 弹出入口提供当前缩放比例、缩小、放大和偏好设置，避免把缩放和外观设置分散到多个低可发现入口；
+- 保留 `zoom` 作为用户自定义 Toolbar item，旧用户配置不会被强制重写；
+- 文件树行高从 `30px` 收紧为 `24px`，图标调整为 `14px`，大纲行仍保持约 `30px`，对齐上游文件导航与大纲的不同密度；
+- 新增 Toolbar 弹出区域样式和恢复默认测试断言。
+
+本轮验证：
+
+```text
+TypeScript：通过
+aVitest：43 个文件 / 364 项通过
+ESLint：通过
+format:check：通过
+生产构建：通过
+bundle budget：通过，main+worker 305 KiB，native preview 71 KiB gzip
+Rust fmt：通过
+Rust clippy -D warnings：通过
+Rust test：21 项通过
+浏览器截图：预览、深色、编辑三组均 ready=true、renderer=worker、failures=[]
+```
+
+截图观察：
+
+- 预览态 Toolbar 保持左侧 Sidebar、导航、中央标题和右侧操作的稳定布局；
+- 编辑态 Formatting Toolbar 正常显示，文本编辑区和预览内容未出现空白帧；
+- 深色场景脚本现在会写入真实 v7 设置并重新加载页面，验证实际主题派生链；截图确认背景、文字、Toolbar、Sidebar 和表格均切换为深色；
+- 已通过真实浏览器交互打开 `themesAndSettings`，确认弹出菜单包含缩小、100%、放大和偏好设置按钮；菜单截图已保存；
+- 弹出菜单在当前 WebView 中靠近右上 Toolbar，未宣称与原生 NSToolbar 的 WindowServer 级位置完全一致；
+- 浏览器截图不用于宣称原生 NSToolbar、titlebar、红绿灯或 WindowServer 像素级一致。
+
+补充交互证据：
+
+- 窄窗口 `980×640` 截图满足 `ready=true`、`renderer=worker`、`failures=[]`；Toolbar 右侧项目能够收缩到 More 菜单，中央标题和 Sidebar 不发生重叠；
+- Toolbar 定制器截图满足同样的渲染条件，弹窗显示“可用项目”“当前工具栏”“恢复默认”“显示”和“完成”，确认 `themesAndSettings` 已进入可用项目列表；
+- 真实浏览器交互切换 Sidebar“大纲/文件夹”成功，两个 tab 的 `aria-selected` 状态正确；无工作区时文件夹模式显示“打开文件夹…”空状态；
+- 复核上游实现后确认当前 TextMark 已有 Markdown 扩展名筛选、workspace watcher 和导航失败不提前改变选中状态；上游级懒加载树、系统文件图标和每个已加载目录独立 watcher 暂列后续增强，不为追求表面一致性贸然扩大本轮改动；
+- 进一步收紧右键菜单语义：目录节点现在只显示位置、复制路径和复制内容，文件专属的打开文件、新标签、新窗口和外部编辑器操作不再出现在目录菜单中；目录行也可直接唤起上下文菜单；新增回归测试覆盖该契约。
+
+本批完整门禁已补齐：
+
+```text
+Vitest：43 个文件 / 365 项通过
+TypeScript：通过
+ESLint：通过
+format:check：通过
+生产构建：通过
+bundle budget：通过，main+worker 305 KiB，native preview 71 KiB gzip
+Rust fmt：通过
+Rust clippy -D warnings：通过
+Rust test：21 项通过
+npm audit --omit=dev --audit-level=high：0 vulnerabilities
+```
+
+当前状态：Toolbar/Sidebar 第二批已完成代码、门禁和交互证据验证，尚未提交、推送或发布；原生 NSToolbar/titlebar 像素级证据仍独立保留。
+
+### 9.25 顶部 Toolbar 第二批几何收口（2026-09-22）
+
+用户复核指出顶部区域仍存在明显视觉差距。本轮先扩展 `scripts/capture-ui.mjs`，输出 Toolbar 分区、标题区域、右侧动作组、More 入口、标签栏/Formatting Bar 和关键按钮中心点的运行时几何及计算样式，避免继续凭缩略图目测调整。
+
+实施：
+
+- 将 `.native-toolbar` 从弹性行改为四列网格：窗口保留区、固定左侧控件、中央标题区、右侧动作组；
+- 中央标题由绝对定位改为第三列 `justify-self: center`，右侧动作组改为第四列 `justify-content: flex-end`，使按钮密集区稳定靠右并避免挤压中央标题；
+- 保留 macOS 浏览器模拟红绿灯的 `92px` 左侧预留；该预留属于浏览器/Tauri titlebar 差异处理，不作为原生 NSToolbar 像素证据；
+- 保留窄窗口的 Toolbar 溢出逻辑和 More 菜单，未修改 Toolbar 默认顺序、交互回调或会话逻辑。
+
+量化证据：
+
+| 场景 | Toolbar | 中央标题区 | 右侧动作组 | More |
+|---|---:|---:|---:|---:|
+| 1440×900 | 1440×52 | x=470.5, w=360 | x=1091, w=339 | x=1398, w=32 |
+| 980×640 | 980×52 | x=269.5, w=294 | x=625, w=343 | x=936, w=32 |
+
+两组截图均 `ready=true`、`renderer=worker`、`failures=[]`。Toolbar 高度继续保持 `52px`；宽屏右侧操作组从标题区右侧稳定收口到窗口右缘，窄屏 More 入口固定在 `x=936`，未出现标题与右侧动作重叠。
+
+本轮验证：TypeScript、ESLint、format:check、Vitest 43 个文件/365 项、生产构建、bundle budget、Rust fmt、Rust clippy `-D warnings`、Rust test、npm audit（0 vulnerabilities）和 git diff --check 均通过。原生窗口实拍尚未完成，也未提交、推送或发布。
+
+结论边界：该批次只闭合浏览器/WebView 可控的 Toolbar 分区几何；macOS 原生 NSToolbar、titlebar、红绿灯真实位置和 WindowServer 像素级一致性仍需同尺寸原生实拍证据，不能由本轮浏览器截图替代。
+
+### 9.26 编辑态 Formatting Bar 与源码列对齐（2026-09-22）
+
+继续复核编辑态截图后确认，Formatting Bar 的主要缺口不是高度，而是工具组相对源码列的水平锚点：宽窗口下工具组应与编辑内容列对齐，窄窗口下应回退到固定 `40px` 内边距，避免工具按钮贴近 Sidebar 分隔线或在窄窗口发生截断。
+
+本轮调整：
+
+- Formatting Bar 保持 `40px` 高度、`15px` 图标和现有分组分隔线，不修改格式命令与焦点语义；
+- 宽窗口下将左右内边距从 `max(12px, calc((100% - 820px) / 2))` 收敛为 `max(40px, calc((100% - 820px) / 2 + 40px))`，使工具组与编辑器源码列的 `40px` 内容内边距保持同一水平节奏；
+- 窄窗口下实际回退为 `40px`，与 `.cm-scroller` 的 `padding-inline` 一致；
+- 扩展 `capture-ui.mjs` 几何输出，加入 `.document-shell`、`.document-workspace`、`.editor-pane` 和 `.cm-content`，用于验证 Toolbar、Formatting Bar、编辑区和源码列的边界关系。
+
+验证结果：
+
+| 场景 | Formatting Bar | 编辑区 | 源码列 |
+|---|---:|---:|---:|
+| 1440×900 | x=246, w=1194, h=40，padding=227px | x=246, w=1194 | x=473, w=740 |
+| 980×640 | x=246, w=734, h=40，padding=40px | x=246, w=734 | x=286, w=654 |
+
+编辑态宽屏、窄屏均 `ready=true`、`renderer=worker`、`failures=[]`；TypeScript、ESLint、format:check 和顶部组件定向测试 27 项通过。随后重新构建 E2E 验证包并运行 `TEXTMARK_LAYOUT_GEOMETRY=1 npm run test:e2e`，布局几何 E2E 1 项通过。首次直接运行因旧验证包提前退出失败，重建 E2E 包后复跑通过；原生窗口像素级证据仍未宣称闭合。
+
+### 9.27 顶部批次最终回归（2026-09-22）
+
+在 Formatting Bar 对齐改动后完成最终回归：
+
+```text
+TypeScript：通过
+ESLint：通过
+format:check：通过
+Vitest：43 个文件 / 365 项通过
+生产构建：通过
+bundle budget：通过
+Rust fmt：通过
+Rust clippy -D warnings：通过
+Rust test：通过
+npm audit --omit=dev --audit-level=high：0 vulnerabilities
+git diff --check：通过
+```
+
+原生 debug 无 bundle 构建通过。布局几何 E2E 首次直接运行因旧 E2E 验证包提前退出，随后执行 `npm run build:e2e` 重建并复跑 `TEXTMARK_LAYOUT_GEOMETRY=1 npm run test:e2e`，最终 1 个 spec 通过。当前累计改动仍未提交、推送或发布。
+
+### 9.28 顶部区域信息架构优先收口（2026-09-22）
+
+根据复核意见，本轮将“布局和 UI 结构”置于尺寸/距离微调之前，重点修正顶部区域的控件归属和视觉分组：
+
+- Sidebar 模式入口与 Back/Forward 导航统一放入左侧 leading cluster，形成“窗口控制 → Sidebar → 导航”的连续结构；
+- 从可配置 Toolbar 的测量/渲染流中排除 `sidebar`、`navigation`、`flexibleSpace`、`space` 等结构性 item，避免它们继续被当作右侧普通动作或产生隐形弹性空白；
+- 中央文档标题继续保持独立、稳定的居中区域；
+- 右侧动作统一归入 trailing cluster，增加与中央标题之间的分隔边界，保留外观/设置、文档动作和 More 的功能层级；
+- 文档动作组取消厚重的分段外框，改为独立图标动作加轻量间距，更接近上游 Toolbar 的视觉层级；
+- 保持 `52px` Toolbar 高度、窄窗口溢出和所有回调语义不变，尺寸细节暂不作为本轮主目标。
+
+本轮浏览器验证：宽屏 `1440×900`、窄屏 `980×640` 均 `ready=true`、`renderer=worker`、`failures=[]`；顶部结构定向测试 27 项、完整前端门禁、生产构建、bundle、Rust fmt/clippy/test、npm audit 0 vulnerabilities 和布局几何 E2E 通过。原生 NSToolbar/titlebar 仍需独立实拍证据。
+
+### 9.22 编辑初始焦点与 readiness 专项复核（2026-09-22）
+
+对照上游最新提交 `719f2ddc1db679bfc9feb7df2abbc2032c446481` 的 `MainSplitViewController`、`EditorViewController` 和 `EditorHTML`，确认上游的关键语义是：编辑器 DOM ready 与源码滚动锚点分别就绪后，先应用滚动位置，待一帧显示周期完成后再揭示编辑器，最后才执行 autofocus；不能由父层在 Suspense/lazy 挂载后的固定 timeout 中抢焦点。
+
+本轮实施：
+
+- `EditorPane` 新增 `initialFocus`，由编辑器实例在 CodeMirror 已创建且初始位置已安排到下一帧后调用 `view.focus()`；
+- 移除 `App.tsx` 中 `setTimeout(() => editorRef.current?.focus(), 0)`，避免首次编辑时与 Suspense 挂载、Toolbar/Find Bar 焦点竞争；
+- 初始行锚点仍优先于滚动比例，选区/光标仍按既定“未移动则精确恢复、移动后锚点胜出”规则处理；
+- `onInitialPositionApplied` 改为在同一帧位置消费和 focus 之后回报，父层再清除 pending 状态；
+- 上游图像 readiness 语义与 TextMark 的 preview hydration gate 对照复核：TextMark 已等待字体、图片 decode、Mermaid 完成后再报告 hydration，且在编辑/阅读两端切换时使旧报告失效。
+
+专项验证：
+
+```text
+上游基线：v0.0.59 tag / main@719f2ddc1db679bfc9feb7df2abbc2032c446481
+编辑截图：1440×900，ready=true，renderer=worker，failures=[]
+编辑截图 htmlBytes=0：符合编辑态卸载预览 DOM 的现有实现，不代表渲染失败
+TypeScript：通过
+Vitest：43 个文件 / 365 项通过
+ESLint：通过
+format:check：通过
+生产构建：通过
+bundle budget：通过
+Rust fmt：通过
+Rust clippy -D warnings：通过
+Rust test：21 项通过
+npm audit --omit=dev --audit-level=high：0 vulnerabilities
+```
+
+证据边界：浏览器截图确认编辑器可见、初始编辑流程无运行时异常，但无法替代原生 WebKit/AppKit 的 first responder、overlay alpha 交叉淡入和 WindowServer 级焦点证据；当前仍不宣称原生焦点行为与上游完全像素/事件级一致。
+
+### 9.23 编辑标签切换与焦点竞争专项修复（2026-09-21/22）
+
+继续审查编辑/阅读状态交接后，确认有三处可验证的剩余风险：
+
+- 从预览进入编辑时，原有 `documents.document.editorState` effect 同时监听 `viewMode`，可能在模式切换后的下一次提交中覆盖刚由预览锚点计算出的 `pendingEditorLine`、选区和光标；
+- 编辑态切换文档标签时，若只调用 `documents.activate`，新标签的 `editorState` 不会作为待恢复输入明确交给 lazy `EditorPane`，上一文档的 `editorExitRef` 也可能影响下一文档；
+- `initialFormat` 的完成回调是父组件每次 render 都会重建的函数，若进入 effect 依赖会使格式化 effect 在无关重渲染时重新执行。
+
+本轮最小修复：
+
+- `App.tsx` 新增 `activateDocumentTab`：按目标 session 的 `editorState` 显式设置行号、滚动比例、选区和光标，切换文档时清除上一文档的 `editorExit` 快照；
+- 恢复 session editor state 的 effect 改为仅响应 `documents.activeId`，不再响应 `viewMode`，并为没有保存状态的文档清理旧 pending 值；
+- `EditorPane` 以 ref 保存 `onInitialFormatApplied`，将其移出格式化 effect 依赖，避免父层重渲染重复消费同一个格式命令；
+- 编辑器 `initialFocus` 在 Find Bar 打开时关闭，保证搜索输入框保持权威焦点，避免 Formatting Bar/Find Bar 与 lazy 编辑器初始 autofocus 竞争。
+
+验证结果：
+
+```text
+TypeScript：通过
+ESLint：通过
+定向 Vitest：2 个文件 / 22 项通过
+全量 Vitest：43 个文件 / 365 项通过
+format:check：通过
+前端门禁：未引入新增失败
+```
+
+当前仍未宣称原生 first responder、WebKit overlay 淡入和 WindowServer 级焦点证据闭合；本轮修复仅收口了浏览器/WebView 可验证的状态交接和焦点竞争语义。
+
+### 9.24 编辑器滚动容器与预览往返收敛验证（2026-09-22）
+
+继续按“先确认谁在滚”原则复核编辑器高度链：`.editor-pane`、`.editor-page`、`.cm-theme`、`.cm-editor` 均有明确的 `height: 100%` / `min-height: 0` 约束，CodeMirror 的 `.cm-scroller` 继续作为编辑器内部滚动容器；此前补入的 `.editor-pane .cm-theme { height: 100% }` 未被后续样式覆盖。
+
+浏览器验证结果：
+
+```text
+编辑模式截图：1440×900，ready=true，renderer=worker，failures=[]，htmlBytes=0（符合编辑态预览卸载语义）
+预览模式截图：1440×900，ready=true，renderer=worker，failures=[]，htmlBytes=21296
+```
+
+本轮新增证据文件：
+
+- `outputs/desktop-review-20260918/editor-scroll-verify-1440x900.png`
+- `outputs/desktop-review-20260918/preview-scroll-verify-1440x900.png`
+
+结论：当前代码层已确认滚动所有权和异步预览位置恢复路径没有新增缺口；预览返回位置会在 hydration 完成后再按当前 heading anchor 计算，避免 Mermaid/图片/字体布局变化覆盖恢复结果。原生窗口和 AppKit first responder 仍不在本轮浏览器证据范围内。
 
 ### 9.21 v0.10.5 跨平台 PDF 导出能力收口（2026-09-21）
 

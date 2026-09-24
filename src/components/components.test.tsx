@@ -289,7 +289,9 @@ describe('localized desktop components', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.tc-remove')!.click())
     expect(onChange).toHaveBeenLastCalledWith(['search'])
     await act(async () => host.querySelector<HTMLButtonElement>('.tc-reset')!.click())
-    expect(onChange).toHaveBeenLastCalledWith(expect.arrayContaining(['navigation', 'documentActions', 'search']))
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.arrayContaining(['navigation', 'themesAndSettings', 'inspector', 'share', 'edit', 'search']),
+    )
     const display = host.querySelector<HTMLSelectElement>('.tc-display select')!
     display.value = 'iconAndLabel'
     await act(async () => display.dispatchEvent(new Event('change', { bubbles: true })))
@@ -314,6 +316,36 @@ describe('localized desktop components', () => {
     expect(html).toContain('value="56"')
     expect(html).toContain('max="96"')
   })
+  it('keeps the sidebar header as a section title without duplicate mode controls', () => {
+    const html = renderToStaticMarkup(
+      <Sidebar
+        mode="outline"
+        fileName="README.md"
+        documentKey="README.md"
+        files={[]}
+        workspacePath={null}
+        activePath={null}
+        locale="en"
+        outline={[]}
+        applications={[]}
+        defaultOpenTarget="system"
+        activeHeading={null}
+        onOutlineSelect={vi.fn()}
+        onOpenFile={vi.fn()}
+        onOpenFileInTab={vi.fn()}
+        onOpenFileInWindow={vi.fn()}
+        onOpenFileWith={vi.fn()}
+        onRevealFile={vi.fn()}
+        onCopyFilePath={vi.fn()}
+        onCopyFileContents={vi.fn()}
+        onOpenFolder={vi.fn()}
+      />,
+    )
+    expect(html).toContain('<strong>README.md</strong>')
+    expect(html).not.toContain('sidebar-mode-switch')
+    expect(html).not.toContain('role="tablist"')
+  })
+
   it('keeps heading collapse state per document', async () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -335,7 +367,6 @@ describe('localized desktop components', () => {
       activeHeading: null,
       applications: [],
       defaultOpenTarget: 'system',
-      onModeChange: vi.fn(),
       onOpenFolder: vi.fn(),
       onOpenFile: vi.fn(),
       onOpenFileInTab: vi.fn(),
@@ -367,6 +398,54 @@ describe('localized desktop components', () => {
     await act(async () => root.render(<Sidebar {...props} />))
     expect(rows()).toHaveLength(2)
 
+    await act(async () => root.unmount())
+    host.remove()
+  })
+  it('keeps directory context actions scoped to files', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onOpenFile = vi.fn()
+    const onRevealFile = vi.fn()
+    const files = [
+      {
+        name: 'docs',
+        path: '/tmp/docs',
+        isDirectory: true,
+        children: [{ name: 'guide.md', path: '/tmp/docs/guide.md', isDirectory: false, children: [] }],
+      },
+    ]
+    await act(async () =>
+      root.render(
+        <Sidebar
+          mode="files"
+          fileName="README.md"
+          documentKey="doc"
+          files={files}
+          workspacePath="/tmp"
+          activePath={null}
+          outline={[]}
+          activeHeading={null}
+          applications={[]}
+          defaultOpenTarget="system"
+          onOpenFolder={vi.fn()}
+          onOpenFile={onOpenFile}
+          onOpenFileInTab={vi.fn()}
+          onOpenFileInWindow={vi.fn()}
+          onOpenFileWith={vi.fn()}
+          onRevealFile={onRevealFile}
+          onCopyFilePath={vi.fn()}
+          onCopyFileContents={vi.fn()}
+          onOutlineSelect={vi.fn()}
+          locale="zh-CN"
+        />,
+      ),
+    )
+    const directory = host.querySelector<HTMLButtonElement>('.tree-row')!
+    await act(async () => directory.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 20, clientY: 20 })))
+    expect(host.querySelector('.project-context-menu')).not.toBeNull()
+    expect(host.textContent).not.toContain('打开文件…')
+    expect(host.textContent).toContain('在“访达”中显示')
     await act(async () => root.unmount())
     host.remove()
   })

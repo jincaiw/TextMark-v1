@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, ListTree } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
 import type { ExternalApplication, FileNode, OutlineItem, SidebarMode } from '../types'
 import { t } from '../lib/i18n'
 import type { Locale } from '../types'
@@ -26,6 +26,7 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
           aria-expanded={expanded}
           aria-level={depth + 1}
           onClick={() => setExpanded((value) => !value)}
+          onContextMenu={(event) => onContextMenu(event, node)}
         >
           {expanded ? <ChevronDown /> : <ChevronRight />}
           {expanded ? <FolderOpen /> : <Folder />}
@@ -76,7 +77,6 @@ interface SidebarProps {
   activeHeading: string | null
   applications: ExternalApplication[]
   defaultOpenTarget: string
-  onModeChange: (mode: SidebarMode) => void
   onOpenFolder: () => void
   onOpenFile: (path: string) => void
   onOpenFileInTab: (path: string) => void
@@ -124,26 +124,6 @@ export function Sidebar(props: SidebarProps) {
     <aside className="native-sidebar">
       <div className="sidebar-section-title">
         <strong>{props.mode === 'outline' ? props.fileName : (workspaceName ?? t(props.locale, 'project'))}</strong>
-        <div className="sidebar-mode-switch" role="tablist" aria-label={t(props.locale, 'sidebar')}>
-          <button
-            role="tab"
-            aria-selected={props.mode === 'outline'}
-            className={props.mode === 'outline' ? 'active' : ''}
-            title={t(props.locale, 'tableOfContents')}
-            onClick={() => props.onModeChange('outline')}
-          >
-            <ListTree />
-          </button>
-          <button
-            role="tab"
-            aria-selected={props.mode === 'files'}
-            className={props.mode === 'files' ? 'active' : ''}
-            title={t(props.locale, 'projectNavigator')}
-            onClick={() => props.onModeChange('files')}
-          >
-            <Folder />
-          </button>
-        </div>
       </div>
       {props.mode === 'outline' ? (
         <nav className="native-outline" aria-label={t(props.locale, 'tableOfContents')}>
@@ -203,58 +183,62 @@ export function Sidebar(props: SidebarProps) {
       )}
       {context ? (
         <div className="project-context-menu" role="menu" style={{ left: context.x, top: context.y }} onMouseLeave={closeContext}>
-          <button role="menuitem" onClick={() => run(() => props.onOpenFile(context.node.path))}>
-            {t(props.locale, 'openFile')}
-          </button>
-          <button role="menuitem" onClick={() => run(() => props.onOpenFileInTab(context.node.path))}>
-            {t(props.locale, 'openInNewTab')}
-          </button>
-          <button role="menuitem" onClick={() => run(() => props.onOpenFileInWindow(context.node.path))}>
-            {t(props.locale, 'openInNewWindow')}
-          </button>
-          <hr />
-          <button
-            role="menuitem"
-            disabled={!editors.length}
-            onClick={() =>
-              run(() =>
-                props.onOpenFileWith(
-                  context.node.path,
-                  props.defaultOpenTarget === 'system'
-                    ? 'system'
-                    : editors.some((e) => e.id === props.defaultOpenTarget)
-                      ? props.defaultOpenTarget
-                      : 'system',
-                ),
-              )
-            }
-          >
-            {t(props.locale, 'openWithExternalEditor')}
-          </button>
-          <div className="context-submenu">
-            <button role="menuitem">
-              {t(props.locale, 'openAs')}
-              <ChevronRight />
-            </button>
-            <div className="context-submenu-panel">
-              {editors.length ? (
-                editors.map((application) => (
-                  <button
-                    key={application.id}
-                    role="menuitem"
-                    onClick={() => run(() => props.onOpenFileWith(context.node.path, application.id))}
-                  >
-                    {application.kind === 'system' ? t(props.locale, 'systemDefault') : application.name}
-                  </button>
-                ))
-              ) : (
-                <button role="menuitem" disabled>
-                  {t(props.locale, 'noEditorsAvailable')}
+          {!context.node.isDirectory ? (
+            <>
+              <button role="menuitem" onClick={() => run(() => props.onOpenFile(context.node.path))}>
+                {t(props.locale, 'openFile')}
+              </button>
+              <button role="menuitem" onClick={() => run(() => props.onOpenFileInTab(context.node.path))}>
+                {t(props.locale, 'openInNewTab')}
+              </button>
+              <button role="menuitem" onClick={() => run(() => props.onOpenFileInWindow(context.node.path))}>
+                {t(props.locale, 'openInNewWindow')}
+              </button>
+              <hr />
+              <button
+                role="menuitem"
+                disabled={!editors.length}
+                onClick={() =>
+                  run(() =>
+                    props.onOpenFileWith(
+                      context.node.path,
+                      props.defaultOpenTarget === 'system'
+                        ? 'system'
+                        : editors.some((e) => e.id === props.defaultOpenTarget)
+                          ? props.defaultOpenTarget
+                          : 'system',
+                    ),
+                  )
+                }
+              >
+                {t(props.locale, 'openWithExternalEditor')}
+              </button>
+              <div className="context-submenu">
+                <button role="menuitem">
+                  {t(props.locale, 'openAs')}
+                  <ChevronRight />
                 </button>
-              )}
-            </div>
-          </div>
-          <hr />
+                <div className="context-submenu-panel">
+                  {editors.length ? (
+                    editors.map((application) => (
+                      <button
+                        key={application.id}
+                        role="menuitem"
+                        onClick={() => run(() => props.onOpenFileWith(context.node.path, application.id))}
+                      >
+                        {application.kind === 'system' ? t(props.locale, 'systemDefault') : application.name}
+                      </button>
+                    ))
+                  ) : (
+                    <button role="menuitem" disabled>
+                      {t(props.locale, 'noEditorsAvailable')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <hr />
+            </>
+          ) : null}
           <button role="menuitem" onClick={() => run(() => props.onRevealFile(context.node.path))}>
             {t(props.locale, 'showInFileManager')}
           </button>
