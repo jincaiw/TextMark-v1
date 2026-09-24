@@ -34,7 +34,6 @@ import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, Tool
 import { ToolbarAppearance } from './ToolbarAppearance'
 
 interface ToolbarProps {
-  fileName: string
   busy: boolean
   viewMode: ViewMode
   sidebarVisible: boolean
@@ -133,7 +132,6 @@ export function Toolbar(props: ToolbarProps) {
     () => props.items.filter((item) => item !== 'navigation' || props.canGoBack || props.canGoForward),
     [props.items, props.canGoBack, props.canGoForward],
   )
-  const titleSlot = toolbarItems.indexOf('flexibleSpace')
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -250,15 +248,7 @@ export function Toolbar(props: ToolbarProps) {
       </span>
     )
     if (item === 'flexibleSpace')
-      return (
-        <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle}>
-          {index === titleSlot ? (
-            <span className="toolbar-document-context" title={props.fileName}>
-              <span className="toolbar-document-name">{props.fileName}</span>
-            </span>
-          ) : null}
-        </span>
-      )
+      return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
     if (item === 'space')
       return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
     if (item === 'navigation')

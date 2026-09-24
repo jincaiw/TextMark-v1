@@ -8,7 +8,6 @@ import { Toolbar } from './Toolbar'
 type ToolbarProps = ComponentProps<typeof Toolbar>
 
 const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
-  fileName: 'guide.md',
   busy: false,
   viewMode: 'preview',
   sidebarVisible: false,
@@ -164,8 +163,9 @@ describe('Toolbar', () => {
     render(props)
     expect(slots().map((slot) => slot.dataset.toolbarItem)).toEqual(props.items)
     expect(visibleItems()).toEqual(props.items)
-    expect(host.querySelectorAll('.toolbar-document-name')).toHaveLength(1)
-    expect(element('.toolbar-document-name').textContent).toBe(props.fileName)
+    // 文件名由原生窗口标题与侧栏标题承载，工具栏不再重复渲染同一名称。
+    expect(host.querySelector('.toolbar-document-name')).toBeNull()
+    expect(host.querySelector('.toolbar-document-context')).toBeNull()
 
     const items = props.items.filter((item) => item !== 'sidebar' && item !== 'navigation')
     render({ ...props, items })

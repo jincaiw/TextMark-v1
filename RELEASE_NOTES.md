@@ -1,3 +1,17 @@
+# TextMark v0.10.8
+
+TextMark 0.10.8 keeps the document name in one place per window and repairs the browser acceptance scenario that had been timing out since the alignment capture script was rewritten.
+
+TextMark 0.10.8 让窗口内文件名只保留一处，并修复自对标截图脚本重写后一直超时的浏览器验收场景。
+
+## Highlights / 主要更新
+
+- 顶部区域：移除工具栏里重复的文档名。文件名改由原生窗口标题与侧栏标题承载，与参照应用的分层一致，顶部不再出现两段同样的文件名。
+- 验收脚本：`scripts/capture-ui.mjs` 的 customizer 场景改用 `.toolbar-customizer` 作为就绪条件；此前 `[role="dialog"]` 会先命中外观浮层，导致场景必然超时。preview / edit / customizer / dark / 窄窗五个场景现均为 `failures=[]`。
+- 门禁：前端 46 个测试文件、420 项测试，TypeScript、ESLint、格式检查、Rust 格式/测试/Clippy，以及导出回归校验均通过。
+
+---
+
 # TextMark v0.10.7
 
 TextMark 0.10.7 refines the desktop toolbar and document workspace against the latest Markdown Preview reference, improves editor and preview position handoff, and makes the default external-editor action safely fall back to the system handler.

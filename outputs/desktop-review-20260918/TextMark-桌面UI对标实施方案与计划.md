@@ -3,7 +3,9 @@
 - **项目**：TextMark-v1
 - **参照应用**：本机 `/Applications/Markdown Preview.app`
 - **参照版本**：Markdown Preview `v0.0.60`，发布tag解引用提交 `0022426b59af68e0a9e45191be2de66c5fb102bd`；复核main `d4a033aaf0d31028175a4f6195602fe2a2ed5134`（相关五个顶部/分栏源码文件diff为空；不再混称tag/main）（本轮公开仓库 API 与固定提交源码复核）
-- **TextMark 基线**：本轮交付目标 `v0.10.7`；上游 Toolbar、Sidebar、Inspector 和编辑焦点行为按当前核验基线记录。
+- **TextMark 基线**：本轮交付目标 `v0.10.8`（`v0.10.7` 已提交并建标签发布）；上游 Toolbar、Sidebar、Inspector 和编辑焦点行为按当前核验基线记录。
+- **v0.10.8 收口（2026-09-25）**：按用户顶部反馈第 4 条消除文件名重复渲染。核验固定基线源码 `DocumentWindowController+Sidebar.swift:13` 与 `SidebarViewController.swift:137–144`：上游工具栏不含文档名，文件名由原生窗口标题与侧栏 `TitleItem`（`secondaryLabelColor`）承载。据此删除 `Toolbar.tsx` 的 `.toolbar-document-context` / `.toolbar-document-name` 及 `fileName` prop，并清理 `App.css` 三处相关规则；侧栏标题样式（`--muted`、12px、600）已与上游次级标签色意义一致，未再改动。同时修复 `scripts/capture-ui.mjs` customizer 场景就绪条件：`[role="dialog"]` 会先命中始终存在于 DOM 的外观浮层（`.appearance-popover`，关闭时不可见），改用 `.toolbar-customizer` 后本地 preview/edit/customizer/dark/窄窗五场景均为 `failures=[]`，与 CI 日志中的超时一致可复现、可归因。门禁：前端 46 文件/420 项、TypeScript、ESLint、format:check、diff-check 通过。
+
 - **v0.10.7 收口**：用户于 2026-09-24 确认 macOS 原生验收通过：系统默认与已安装第三方编辑器打开 Markdown、原生标题栏/Toolbar、系统打印面板及打印/取消恢复均通过。浏览器/CDP 证据仍仅代表 WebView DOM 行为，不替代上述原生验收。自动化门禁：前端 46 文件/420 项、TypeScript、ESLint、format:check、Rust fmt/test 23项/Clippy 通过；生产 Vite 构建在 `/tmp` 隔离目录成功。产品变更、测试、本账本与随附验收证据已提交至 `main` 并创建 `v0.10.7` 标签触发跨平台发布；AppKit 像素级对齐仍为独立证据边界。
 - **文档版本**：实施方案 `v1.4`
 - **B2修订**：首位侧栏配置项随实际侧栏宽度跟随，空间不足/收起/自定义移位回退紧凑排列；标题约束在弹性区域内。浏览器验证通过；2026-09-24 用户确认 macOS 原生窗口/Toolbar 验收通过。
@@ -15,6 +17,8 @@
 - **T06 收口（2026-09-23）**：默认 Toolbar 已将 Inspector/Share/Edit 拆为独立可排序项；旧 v5 默认与 v7 复合默认识别迁移到新默认，其他自定义配置保持原数组。全量 Vitest 单 worker 46文件/416项、TypeScript、ESLint、format:check 与 diff-check通过；原生 NSToolbar 定制行为尚未实机复验。
 - **T11 书签差异核验（2026-09-23）**：TextMark `src` 中没有 bookmark/Bookmarks/书签能力。固定上游提交 `d4a033a` 的 Sidebar 仅包含 TOC 与 Project Navigator，未发现书签面板或书签模型。故本轮不以该基线为由新增书签功能；已更正 U03/F03、P1 工作区草案、T11 与验收条目中的书签差异描述。
 - **T11 面板专项补验（2026-09-23）**：扩充 `scripts/capture-ui.mjs` 三个 workspace-panels 场景，覆盖真实 CDP 指针拖动、左右面板最大宽度 clamp、localStorage 写入、刷新后 310/360px 宽度恢复。键盘/开合/最小值场景 17 项、拖动与最大值场景 7 项、刷新恢复场景 6 项均全部通过（`failures=[]`）；证据为 `workspace-panels-extended-1440.png/.json`、`workspace-panels-drag-1440.png/.json`、`workspace-panels-persistence-1440.png/.json`。这些是 Chromium/WebView DOM 事件证据，不等于 AppKit 原生分隔器行为。
+
+- **上游基线更新（2026-09-25）**：上游已发布 `v0.0.61`（tag `377c394`，2026-09-24T10:12Z），本账本下方 v0.0.60 表仍按固定提交 `d4a033a` 作为已验证事实基线记录历史实施。v0.0.61 相对 v0.0.60 变更 44 个文件，其中与顶部/工作区直接相关的是 `DocumentWindowController+Toolbar.swift`（+21/−8）、`FormattingBar.swift`（+772/−20）、`Find.swift`（−62）、`MainSplitViewController.swift`（+102/−60）、`EditorHTML.swift`、主题与设置文件。已完成的 v0.10.7 与本版新增的 #438「侧栏控件保持位于侧栏之上」方向一致（sidebarTrackingSeparator 在全部受支持系统统一使用，不再按 macOS 26 分支）；v0.0.61 的其余新增项（macOS 26 浮动格式控件、代码块复制/换行控件、主题记忆自身外观与阅读设置、模式切换文本重叠与 ⌘S 读模式保存等）尚未在 TextMark 逐项对标，列为下一批次输入，不在 v0.10.7 中宣称已对齐。
 
 ## 本轮再评估：v0.0.60 顶部优先实施账本
 

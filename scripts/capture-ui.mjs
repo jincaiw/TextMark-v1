@@ -1232,7 +1232,7 @@ if (scenario === 'edit') {
 const expectedSelector =
   {
     edit: '.editor-pane .cm-editor',
-    customizer: '[role="dialog"]',
+    customizer: '.toolbar-customizer',
     tabs: '.cm-editor',
     'tabs-find': '.document-tools .find-bar',
     'print-tabs-find': '.document-tools .find-bar',

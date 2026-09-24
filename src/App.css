@@ -323,27 +323,6 @@ select:focus-visible {
 .sidebar-control summary svg {
   width: 12px;
 }
-.toolbar-document-context {
-  min-width: 0;
-  width: 100%;
-  max-width: min(100%, 360px);
-  margin: auto;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-  color: var(--muted);
-  pointer-events: none;
-}
-.toolbar-document-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
 .native-actions {
   grid-column: 2;
   min-width: 0;
@@ -3368,9 +3347,6 @@ mark.search-match.active {
   :root {
     --sidebar-width: 250px;
   }
-  .toolbar-document-context {
-    width: min(30vw, 300px);
-  }
   .native-toolbar {
     gap: 6px;
     padding-right: 12px;
@@ -3394,12 +3370,6 @@ mark.search-match.active {
   }
 }
 @media (max-width: 920px) {
-  .toolbar-document-context {
-    width: 24vw;
-  }
-  .toolbar-document-name {
-    font-size: var(--text-xs);
-  }
   .document-shell.with-sidebar.with-inspector {
     grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
   }
