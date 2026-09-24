@@ -258,7 +258,7 @@ describe('TextMark toolbar click matrix', () => {
     })
   })
 
-  it('sidebar toggle and mode dropdown (hide / outline / folders)', async () => {
+  it('sidebar toggle and mode picker (hide / outline / folders)', async () => {
     const toggle = await $('.sidebar-control button[aria-label="显示或隐藏边栏"]')
     if ((await $('.document-shell').getAttribute('class')).includes('with-sidebar')) await toggle.click()
     await expect(await $('.document-shell')).not.toHaveClassContaining('with-sidebar')
@@ -266,17 +266,20 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.document-shell')).toHaveClassContaining('with-sidebar')
     await expect(await $('.native-sidebar')).toBeDisplayed()
 
-    const summary = await $('.sidebar-control summary[aria-label="选择边栏模式"]')
-    await summary.click()
-    await expect(await $('.sidebar-control details').getAttribute('open')).not.toBeNull()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='文件夹']").click()
+    // The pane picker is a segmented control on the toolbar (upstream
+    // AppKit parity): it is always present, toggles aria-pressed, and picking a
+    // pane reveals the sidebar the same way the native pane picker does.
+    const outline = await $('.sidebar-mode-picker button[aria-label="大纲"]')
+    await $('.sidebar-mode-picker button[aria-label="文件夹"]').click()
     await expect(await $('.native-file-tree')).toBeDisplayed()
-    await summary.click()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='大纲']").click()
+    await outline.click()
     await expect(await $('.native-outline')).toBeDisplayed()
-    await summary.click()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='隐藏边栏']").click()
+    expect(await outline.getAttribute('aria-pressed')).toBe('true')
+
+    await toggle.click()
     await expect(await $('.document-shell')).not.toHaveClassContaining('with-sidebar')
+    await outline.click()
+    await expect(await $('.document-shell')).toHaveClassContaining('with-sidebar')
   })
 
   it('open-actions dropdown lists editors and stays interactive', async () => {
@@ -294,14 +297,22 @@ describe('TextMark toolbar click matrix', () => {
   })
 
   it('zoom in/out updates the zoom percentage', async () => {
-    const zoom = await $('.zoom-buttons')
-    const before = await zoom.getAttribute('aria-label')
-    await $('.zoom-buttons button[title="放大"]').click()
-    const afterIn = await zoom.getAttribute('aria-label')
-    expect(afterIn).not.toBe(before)
-    await $('.zoom-buttons button[title="缩小"]').click()
-    const afterOut = await zoom.getAttribute('aria-label')
-    expect(afterOut).not.toBe(afterIn)
+    // Zoom moved into the toolbar appearance popover (aA) when the toolbar was
+    // rebuilt against the upstream item set: there is no standalone zoom group
+    // in the default layout.
+    await $('details.themes-and-settings > summary').click()
+    const popover = await $('.appearance-popover')
+    await popover.waitForDisplayed()
+    const readZoom = () =>
+      browser.execute(() => Number.parseInt(document.querySelector('.appearance-popover output')?.textContent ?? '', 10))
+    const before = await readZoom()
+    await $('.appearance-popover .appearance-text-size button[aria-label="放大"]').click()
+    const afterIn = await readZoom()
+    expect(afterIn).toBeGreaterThan(before)
+    await $('.appearance-popover .appearance-text-size button[aria-label="缩小"]').click()
+    expect(await readZoom()).toBe(before)
+    await browser.keys('Escape')
+    await expect(await $('.appearance-popover')).not.toBeDisplayed()
   })
 
   it('search opens the find bar and its controls respond', async () => {
@@ -421,9 +432,12 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.settings-dialog')).not.toBeDisplayed()
   })
 
-  it('navigation buttons exist and reflect history state', async () => {
-    await expect(await $('.history-buttons button[aria-label="Back"]')).toExist()
-    await expect(await $('.history-buttons button[aria-label="Forward"]')).toExist()
+  it('navigation stays hidden until the document has history', async () => {
+    // AppKit parity: Back/Forward only exist while a destination is available,
+    // so a freshly opened document renders no navigation group at all. The
+    // disabled/enabled transitions with history are covered by the Toolbar
+    // component tests in the shared quality gates.
+    expect(await browser.execute(() => Boolean(document.querySelector('.history-buttons')))).toBe(false)
   })
 
   it('window control buttons exist in the top area', async () => {
