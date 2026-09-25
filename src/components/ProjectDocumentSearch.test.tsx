@@ -40,11 +40,11 @@ describe('ProjectDocumentSearch', () => {
     host.remove()
   })
 
-  const render = async () => {
+  const render = async (fileTree: FileNode[] = files) => {
     await act(async () =>
       root.render(
         <ProjectDocumentSearch
-          files={files}
+          files={fileTree}
           activePath="/project/notes/Design.md"
           locale="en"
           onOpenCurrent={onOpenCurrent}
@@ -87,7 +87,31 @@ describe('ProjectDocumentSearch', () => {
     await render()
     const input = await setQuery('d')
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true })))
-    expect(onOpenInWindow).toHaveBeenCalledWith('/project/notes/Design.md')
+    expect(onOpenInWindow).toHaveBeenCalledWith('/project/notes/Draft.md')
+  })
+
+  it('supports Home and End to select the first and last search results', async () => {
+    await render()
+    const input = await setQuery('d')
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })))
+    expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain('Design.md')
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })))
+    expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain('Draft.md')
+  })
+
+  it('moves selection by a visible page with PageUp and PageDown', async () => {
+    const documents: FileNode[] = Array.from({ length: 12 }, (_, index) => ({
+      name: `Page ${index + 1}.md`,
+      path: `/project/Page ${index + 1}.md`,
+      isDirectory: false,
+      children: [],
+    }))
+    await render(documents)
+    const input = await setQuery('page')
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true })))
+    expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain('Page 6.md')
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true })))
+    expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain('Page 1.md')
   })
 
   it('opens as a compact search field without showing results before typing', async () => {

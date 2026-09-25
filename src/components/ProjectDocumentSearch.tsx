@@ -1,14 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Search, X } from 'lucide-react'
 import { isMacos } from '../lib/platform'
-import { fuzzySubsequenceMatch } from '../lib/fuzzySubsequence'
+import { rankProjectDocuments, type SearchEntry, type SearchResult } from '../lib/projectDocumentRank'
 import type { FileNode, Locale } from '../types'
-
-interface SearchEntry {
-  name: string
-  path: string
-  relativePath: string
-}
 
 function flatten(nodes: FileNode[], prefix = ''): SearchEntry[] {
   return nodes.flatMap((node) => {
@@ -16,27 +10,9 @@ function flatten(nodes: FileNode[], prefix = ''): SearchEntry[] {
     return node.isDirectory
       ? flatten(node.children, relativePath)
       : /\.(?:md|markdown|mdown|mdx|mkd|mkdn|mdwn|mdtxt|mdtext|rmd|txt)$/i.test(node.name)
-        ? [{ name: node.name, path: node.path, relativePath }]
+        ? [{ name: node.name, path: node.path, relativePath, relativePathLength: Array.from(relativePath).length }]
         : []
   })
-}
-
-interface SearchResult {
-  entry: SearchEntry
-  score: number
-  positions: number[]
-}
-
-function score(entry: SearchEntry, query: string): SearchResult | null {
-  const searchPath = query.includes('/')
-  const field = searchPath ? entry.relativePath : entry.name
-  const match = fuzzySubsequenceMatch(query, field)
-  if (!match) return null
-
-  const name = entry.name.toLocaleLowerCase()
-  const needle = query.toLocaleLowerCase()
-  const tierBonus = searchPath ? 0 : name === needle ? 1_000_000 : name.startsWith(needle) ? 100_000 : 0
-  return { entry, score: match.score + tierBonus, positions: match.positions }
 }
 
 interface ProjectDocumentSearchProps {
@@ -55,26 +31,92 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
   const resultRefs = useRef(new Map<number, HTMLButtonElement>())
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [resultsQuery, setResultsQuery] = useState('')
+  const workerRef = useRef<Worker | null>(null)
+  const requestIdRef = useRef(0)
+  const pendingOpenRef = useRef<'current' | 'tab' | 'window' | null>(null)
   const entries = useMemo(() => flatten(props.files), [props.files])
-  const results = useMemo(() => {
+  const entriesRef = useRef(entries)
+  const queryRef = useRef(query)
+  entriesRef.current = entries
+  queryRef.current = query
+  const open = useCallback(
+    (entry: SearchEntry, mode: 'current' | 'tab' | 'window') => {
+      if (mode === 'tab') props.onOpenInTab(entry.path)
+      else if (mode === 'window') props.onOpenInWindow(entry.path)
+      else props.onOpenCurrent(entry.path)
+      props.onClose()
+    },
+    [props.onClose, props.onOpenCurrent, props.onOpenInTab, props.onOpenInWindow],
+  )
+  useEffect(() => {
+    if (typeof Worker === 'undefined') return
+    try {
+      const worker = new Worker(new URL('../workers/projectDocumentSearch.worker.ts', import.meta.url), { type: 'module' })
+      workerRef.current = worker
+      worker.onmessage = (event: MessageEvent<{ requestId: number; query: string; results: SearchResult[] }>) => {
+        if (event.data.requestId !== requestIdRef.current) return
+        setResults(event.data.results)
+        setResultsQuery(event.data.query)
+        setSelected(0)
+      }
+      worker.onerror = () => {
+        worker.terminate()
+        if (workerRef.current !== worker) return
+        workerRef.current = null
+        const normalizedQuery = queryRef.current.trim()
+        if (normalizedQuery) {
+          setResults(rankProjectDocuments(entriesRef.current, normalizedQuery))
+          setResultsQuery(normalizedQuery)
+          setSelected(0)
+        }
+      }
+      return () => {
+        worker.terminate()
+        if (workerRef.current === worker) workerRef.current = null
+      }
+    } catch {
+      workerRef.current = null
+    }
+  }, [])
+  useEffect(() => {
+    workerRef.current?.postMessage({ type: 'index', entries })
+  }, [entries])
+  useEffect(() => {
     const normalizedQuery = query.trim()
-    if (!normalizedQuery) return []
-    return entries
-      .map((entry) => score(entry, normalizedQuery))
-      .filter((item): item is SearchResult => item !== null)
-      .sort((a, b) => b.score - a.score || a.entry.relativePath.localeCompare(b.entry.relativePath))
-      .slice(0, 30)
+    const requestId = ++requestIdRef.current
+    pendingOpenRef.current = null
+    if (!normalizedQuery) {
+      setResults([])
+      setResultsQuery('')
+      return
+    }
+    const worker = workerRef.current
+    if (!worker) {
+      setResults(rankProjectDocuments(entries, normalizedQuery))
+      setResultsQuery(normalizedQuery)
+      return
+    }
+    const timer = window.setTimeout(() => worker.postMessage({ type: 'search', requestId, query: normalizedQuery }), 60)
+    return () => window.clearTimeout(timer)
   }, [entries, query])
-  useEffect(() => inputRef.current?.focus(), [])
-  useEffect(() => setSelected(0), [query])
-  useEffect(() => resultRefs.current.get(selected)?.scrollIntoView?.({ block: 'nearest' }), [selected, results.length])
+  useEffect(() => {
+    const pendingTarget = pendingOpenRef.current
+    if (!pendingTarget || resultsQuery !== query.trim() || !results.length) return
+    pendingOpenRef.current = null
+    open(results[0].entry, pendingTarget)
+  }, [open, query, results, resultsQuery])
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+  useEffect(() => {
+    setSelected(0)
+  }, [query])
+  useEffect(() => {
+    resultRefs.current.get(selected)?.scrollIntoView?.({ block: 'nearest' })
+  }, [selected, results.length])
 
-  const open = (entry: SearchEntry, mode: 'current' | 'tab' | 'window') => {
-    if (mode === 'tab') props.onOpenInTab(entry.path)
-    else if (mode === 'window') props.onOpenInWindow(entry.path)
-    else props.onOpenCurrent(entry.path)
-    props.onClose()
-  }
   const highlightedText = (text: string, positions: number[]) => {
     const characters = Array.from(text)
     const matching = new Set(positions)
@@ -132,9 +174,26 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
               } else if (event.key === 'ArrowUp' && results.length) {
                 event.preventDefault()
                 setSelected((value) => Math.max(value - 1, 0))
+              } else if (event.key === 'Home' && results.length) {
+                event.preventDefault()
+                setSelected(0)
+              } else if (event.key === 'End' && results.length) {
+                event.preventDefault()
+                setSelected(results.length - 1)
+              } else if (event.key === 'PageUp' && results.length) {
+                event.preventDefault()
+                setSelected((value) => Math.max(value - 5, 0))
+              } else if (event.key === 'PageDown' && results.length) {
+                event.preventDefault()
+                setSelected((value) => Math.min(value + 5, results.length - 1))
               } else if (event.key === 'Enter' && results[selected]) {
                 event.preventDefault()
-                open(results[selected].entry, event.altKey ? 'window' : event.metaKey || event.ctrlKey ? 'tab' : 'current')
+                const target = event.altKey ? 'window' : event.metaKey || event.ctrlKey ? 'tab' : 'current'
+                if (resultsQuery === query.trim()) open(results[selected].entry, target)
+                else pendingOpenRef.current = target
+              } else if (event.key === 'Enter' && query.trim()) {
+                event.preventDefault()
+                pendingOpenRef.current = event.altKey ? 'window' : event.metaKey || event.ctrlKey ? 'tab' : 'current'
               }
             }}
           />

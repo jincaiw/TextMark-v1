@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fuzzySubsequenceMatch } from './fuzzySubsequence'
+import { fuzzySubsequenceMatch, fuzzySubsequenceScore } from './fuzzySubsequence'
 
 describe('fuzzySubsequenceMatch', () => {
   it('chooses a stronger word-boundary alignment over the earliest greedy hit', () => {
@@ -12,5 +12,10 @@ describe('fuzzySubsequenceMatch', () => {
 
   it('trims the query and matches without case sensitivity', () => {
     expect(fuzzySubsequenceMatch('  fb ', 'FooBar')?.positions).toEqual([0, 3])
+  })
+
+  it('scores without computing visible highlight positions', () => {
+    expect(fuzzySubsequenceScore('ab', 'a---ab')).toBe(fuzzySubsequenceMatch('ab', 'a---ab')?.score)
+    expect(fuzzySubsequenceScore('xyz', 'xylophone')).toBeNull()
   })
 })

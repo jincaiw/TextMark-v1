@@ -1,3 +1,18 @@
+# TextMark v0.10.12
+
+TextMark 0.10.12 brings project document search closer to Markdown Preview's floating desktop palette, improves large-project responsiveness, and completes keyboard result navigation.
+
+TextMark 0.10.12 进一步对齐 Markdown Preview 的桌面浮动搜索面板，提升大型项目搜索响应，并补齐结果键盘导航。
+
+## Highlights / 主要更新
+
+- 搜索面板：宽度收敛至 480px、输入字号调整至 20px、圆角与浮动层级贴近上游；移除全屏暗色遮罩，空查询保持紧凑搜索条。
+- 大型项目：通过 Web Worker 在后台完成项目文稿排序，仅为前 30 条结果生成高亮位置；快速键入时旧结果不会抢先响应 Enter。
+- 键盘操作：支持方向键、Home、End、PageUp、PageDown，以及当前标签、新标签和独立窗口打开。
+- 验证：前端 48 个测试文件、432 项通过；lint、格式检查、生产构建通过；Playwright 桌面/窄窗组件预览和搜索键盘操作通过。
+
+---
+
 # TextMark v0.10.11
 
 TextMark 0.10.11 refines project document search to match Markdown Preview's fuzzy ranking and compact initial search panel. Results now use the best subsequence alignment for ranking and highlights, and the result list stays collapsed until a query is entered.

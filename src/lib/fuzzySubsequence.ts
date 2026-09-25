@@ -3,6 +3,10 @@ export interface FuzzySubsequenceMatch {
   positions: number[]
 }
 
+interface FuzzySubsequenceScore {
+  score: number
+}
+
 const UNREACHABLE = Number.MIN_SAFE_INTEGER
 const DELIMITERS = new Set(['-', '_', '.', ' ', '/'])
 
@@ -18,8 +22,9 @@ function boundaryBonus(characters: string[], index: number) {
   return 0
 }
 
-/** Find the strongest fuzzy alignment, favoring contiguous runs and name boundaries. */
-export function fuzzySubsequenceMatch(query: string, text: string): FuzzySubsequenceMatch | null {
+function alignSubsequence(query: string, text: string, includePositions: true): FuzzySubsequenceMatch | null
+function alignSubsequence(query: string, text: string, includePositions: false): FuzzySubsequenceScore | null
+function alignSubsequence(query: string, text: string, includePositions: boolean): FuzzySubsequenceMatch | FuzzySubsequenceScore | null {
   const queryCharacters = Array.from(query.trim()).map(fold)
   const characters = Array.from(text)
   if (!queryCharacters.length || queryCharacters.length > characters.length) return null
@@ -36,7 +41,7 @@ export function fuzzySubsequenceMatch(query: string, text: string): FuzzySubsequ
   const columns = characters.length
   let previous = Array<number>(columns).fill(UNREACHABLE)
   let current = Array<number>(columns).fill(UNREACHABLE)
-  const parents = Array<number>(rows * columns).fill(-1)
+  const parents = includePositions ? Array<number>(rows * columns).fill(-1) : null
 
   for (let row = 0; row < rows; row += 1) {
     let gapBest = UNREACHABLE
@@ -68,7 +73,7 @@ export function fuzzySubsequenceMatch(query: string, text: string): FuzzySubsequ
       }
       if (parent >= 0) {
         current[column] = best + bonus
-        parents[row * columns + column] = parent
+        if (parents) parents[row * columns + column] = parent
       }
     }
     ;[previous, current] = [current, previous]
@@ -84,11 +89,23 @@ export function fuzzySubsequenceMatch(query: string, text: string): FuzzySubsequ
   }
   if (bestColumn < 0) return null
 
+  if (!includePositions) return { score: bestScore }
+
   const positions = Array<number>(rows)
   let column = bestColumn
   for (let row = rows - 1; row >= 0; row -= 1) {
     positions[row] = column
-    column = parents[row * columns + column]
+    column = parents![row * columns + column]
   }
   return { score: bestScore, positions }
+}
+
+/** Score the strongest fuzzy alignment without allocating highlight backtracking data. */
+export function fuzzySubsequenceScore(query: string, text: string): number | null {
+  return alignSubsequence(query, text, false)?.score ?? null
+}
+
+/** Find the strongest fuzzy alignment, favoring contiguous runs and name boundaries. */
+export function fuzzySubsequenceMatch(query: string, text: string): FuzzySubsequenceMatch | null {
+  return alignSubsequence(query, text, true)
 }
