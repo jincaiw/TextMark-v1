@@ -1,3 +1,19 @@
+# TextMark v0.10.14
+
+TextMark 0.10.14 refines the macOS desktop chrome to match Markdown Preview's toolbar and tab layout more closely, and updates the toolbar customization palette to use a compact native-style sheet.
+
+TextMark 0.10.14 进一步对齐 Markdown Preview 的 macOS 桌面顶部区域与标签布局，并将工具栏自定义面板调整为紧凑的原生风格浮层。
+
+## Highlights / 主要更新
+
+- 顶部区域：隐藏叠加式标题栏中的系统标题，避免文件名与交通灯控件重叠；在工具栏中居中显示当前文稿名。
+- 标签栏：macOS 始终显示文稿标签行，提供当前标签关闭和新建标签入口；非 macOS 平台保持原有显示规则。
+- 工具栏定制：收敛为上游风格的图标网格与图标托盘，已添加项目禁用重复添加，保留拖拽排序及移出删除。
+- 自动更新：沿用已验证的稳定版 GitHub 更新端点与 Minisign 公钥；本版本附带签名更新包及最新清单。
+- 验证：生产构建、48 个前端测试文件/434 项测试、ESLint、Prettier、Rust 格式检查与单元测试、bundle 预算检查通过。
+
+---
+
 # TextMark v0.10.13
 
 TextMark 0.10.13 aligns the default desktop toolbar spacing with Markdown Preview 0.0.62 and migrates the previous default layout automatically.

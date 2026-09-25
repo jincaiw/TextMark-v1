@@ -163,6 +163,9 @@ select:focus-visible {
   backdrop-filter: blur(28px) saturate(150%);
   user-select: none;
 }
+.toolbar-document-title {
+  display: none;
+}
 .window-leading,
 .toolbar-leading-actions,
 .native-actions,
@@ -951,6 +954,28 @@ select:focus-visible {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--chrome) 92%, transparent);
   overflow-x: auto;
+}
+.new-tab-button {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  margin: 1px 0 2px 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.new-tab-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.new-tab-button svg {
+  width: 15px;
+  height: 15px;
 }
 .document-tab {
   min-width: 116px;
@@ -3525,11 +3550,147 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .native-toolbar {
   padding-left: 92px;
 }
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-document-title {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: min(360px, 30vw);
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs {
+  min-height: 36px;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--chrome) 96%, transparent);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .document-tab {
+  min-width: 130px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .document-tab.active {
+  background: color-mix(in srgb, var(--surface) 84%, var(--hover));
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .new-tab-button {
+  margin-left: 4px;
+}
 :root[data-runtime='tauri'] .traffic-lights {
   display: none;
 }
 :root[data-runtime='tauri'] .window-leading {
   min-width: 0;
+}
+
+/* Match the compact macOS toolbar palette while retaining TextMark's
+   additional actions and drag-to-reorder behavior. */
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer-backdrop {
+  background: color-mix(in srgb, #000 9%, transparent);
+  backdrop-filter: blur(8px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer {
+  width: min(760px, calc(100vw - 64px));
+  max-height: min(560px, calc(100vh - 80px));
+  padding: 0 22px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--window) 94%, transparent);
+  box-shadow: 0 16px 48px #0003, 0 0 0 1px color-mix(in srgb, var(--border) 74%, transparent);
+  -webkit-backdrop-filter: blur(32px) saturate(150%);
+  backdrop-filter: blur(32px) saturate(150%);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header {
+  align-items: center;
+  justify-content: center;
+  padding: 17px 0 12px;
+  border-bottom: 0;
+  text-align: center;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header p {
+  margin-top: 4px;
+  font-size: 12px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header > button {
+  display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-section {
+  margin: 10px 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-palette {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 2px;
+  padding: 5px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sidebar) 72%, transparent);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-card {
+  height: 60px;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-card.is-added {
+  opacity: 0.4;
+  cursor: default;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-card-label {
+  font-size: 10px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-current {
+  min-height: 58px;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sidebar) 65%, transparent);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-current-item {
+  width: 44px;
+  justify-content: center;
+  height: 40px;
+  gap: 0;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-current-item .tc-grip,
+:root[data-runtime='tauri'][data-platform='macos'] .tc-current-item .tc-card-label,
+:root[data-runtime='tauri'][data-platform='macos'] .tc-current-item .tc-remove {
+  display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer footer {
+  margin-top: 9px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer footer button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

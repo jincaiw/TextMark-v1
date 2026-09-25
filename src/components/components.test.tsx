@@ -219,6 +219,32 @@ describe('localized desktop components', () => {
     expect(html).toContain('A.md •')
     expect(html).toContain('关闭标签页 A.md')
   })
+  it('keeps a single macOS tab visible and exposes a localized new-tab action', async () => {
+    const onNew = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <DocumentTabs
+          sessions={[session('a', 'A.md')]}
+          activeId="a"
+          locale="zh-CN"
+          alwaysVisible
+          onNew={onNew}
+          onActivate={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      ),
+    )
+    expect(host.querySelector('.document-tab')).not.toBeNull()
+    const newTab = host.querySelector<HTMLButtonElement>('.new-tab-button')!
+    expect(newTab.getAttribute('aria-label')).toBe('新建标签页')
+    await act(async () => newTab.click())
+    expect(onNew).toHaveBeenCalledOnce()
+    await act(async () => root.unmount())
+    host.remove()
+  })
   it('renders the three explicit conflict choices', () => {
     const html = renderToStaticMarkup(
       <ConflictDialog

@@ -128,6 +128,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
   if (!open) return null
 
   const insert = (item: ToolbarItem, index = items.length) => {
+    if (items.includes(item)) return
     const next = [...items]
     next.splice(index, 0, item)
     onChange(next)
@@ -148,7 +149,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose} ref={backdropRef}>
+    <div className="dialog-backdrop toolbar-customizer-backdrop" role="presentation" onMouseDown={onClose} ref={backdropRef}>
       <section
         className="toolbar-customizer"
         role="dialog"
@@ -172,8 +173,9 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
               <button
                 key={item}
                 type="button"
-                className="tc-card"
-                draggable
+                className={`tc-card ${items.includes(item) ? 'is-added' : ''}`}
+                draggable={!items.includes(item)}
+                disabled={items.includes(item)}
                 onDragStart={(event) => event.dataTransfer.setData('text/plain', `add:${item}`)}
                 onClick={() => insert(item)}
               >

@@ -1159,6 +1159,7 @@ function DocumentApp() {
   return (
     <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? '' : 'toolbar-hidden'}`}>
       <Toolbar
+        documentName={documents.document.name}
         busy={documents.busy}
         viewMode={viewMode}
         locale={settings.locale}
@@ -1239,6 +1240,8 @@ function DocumentApp() {
           locale={settings.locale}
           onActivate={activateDocumentTab}
           onClose={requestTabClose}
+          alwaysVisible={isTauri() && isMacos()}
+          onNew={createNewDocument}
         />
         <div
           className={`document-shell ${sidebarVisible ? 'with-sidebar' : ''} ${inspectorVisible ? 'with-inspector' : ''}`}

@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { t } from '../lib/i18n'
 import type { DocumentSession, Locale } from '../types'
 
@@ -8,20 +8,29 @@ export function DocumentTabs({
   locale,
   onActivate,
   onClose,
+  alwaysVisible = false,
+  onNew,
 }: {
   sessions: DocumentSession[]
   activeId: string
   locale: Locale
   onActivate: (id: string) => void
   onClose: (id: string) => void
+  alwaysVisible?: boolean
+  onNew?: () => void
 }) {
-  if (sessions.length < 2) return null
+  if (sessions.length < 2 && !alwaysVisible) return null
   const moveTo = (index: number) => {
     const target = (index + sessions.length) % sessions.length
     onActivate(sessions[target].id)
   }
   return (
-    <div className="document-tabs" role="tablist" aria-label="Documents" data-tauri-drag-region>
+    <div
+      className={`document-tabs ${alwaysVisible ? 'native-document-tabs' : ''}`}
+      role="tablist"
+      aria-label="Documents"
+      data-tauri-drag-region
+    >
       {sessions.map((session, index) => (
         <div
           key={session.id}
@@ -49,6 +58,11 @@ export function DocumentTabs({
           </button>
         </div>
       ))}
+      {alwaysVisible && onNew ? (
+        <button className="new-tab-button" type="button" aria-label={t(locale, 'newTab')} title={t(locale, 'newTab')} onClick={onNew}>
+          <Plus />
+        </button>
+      ) : null}
     </div>
   )
 }

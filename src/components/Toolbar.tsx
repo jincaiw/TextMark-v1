@@ -34,6 +34,7 @@ import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, Tool
 import { ToolbarAppearance } from './ToolbarAppearance'
 
 interface ToolbarProps {
+  documentName?: string
   busy: boolean
   viewMode: ViewMode
   sidebarVisible: boolean
@@ -452,6 +453,9 @@ export function Toolbar(props: ToolbarProps) {
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}
     >
+      <div className="toolbar-document-title" data-tauri-drag-region title={props.documentName ?? ''}>
+        {props.documentName ?? ''}
+      </div>
       <div className="window-leading" data-tauri-drag-region>
         <div className="traffic-lights">
           <button aria-label={tx('close')} onClick={() => windowAction('close')} />
