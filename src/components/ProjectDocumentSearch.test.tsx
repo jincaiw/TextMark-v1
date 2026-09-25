@@ -57,6 +57,16 @@ describe('ProjectDocumentSearch', () => {
     )
   }
 
+  const setQuery = async (query: string) => {
+    const input = host.querySelector('input')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, query)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    return input
+  }
+
   it('filters nested Markdown files by fuzzy filename and opens the selected result in a new tab', async () => {
     await render()
     const input = host.querySelector('input')!
@@ -78,5 +88,20 @@ describe('ProjectDocumentSearch', () => {
     const input = host.querySelector('input')!
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true })))
     expect(onOpenInWindow).toHaveBeenCalledWith('/project/notes/Design.md')
+  })
+
+  it('does not match a file only because its parent folder contains the query', async () => {
+    await render()
+    await setQuery('notes')
+    expect(host.textContent).toContain('No matching Markdown documents')
+    expect(host.querySelector('.project-search-file-name')).toBeNull()
+  })
+
+  it('matches and highlights a fuzzy relative path when the query contains a slash', async () => {
+    await render()
+    await setQuery('notes/dsgn')
+    expect(host.textContent).toContain('Design.md')
+    expect(host.querySelectorAll('.project-search-file-name strong')).toHaveLength(0)
+    expect(host.querySelectorAll('.project-search-file-path strong')).toHaveLength(10)
   })
 })

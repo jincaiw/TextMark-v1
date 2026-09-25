@@ -1,3 +1,16 @@
+# TextMark v0.10.10
+
+TextMark 0.10.10 aligns project document search with Markdown Preview: filename queries only match filenames, and queries containing `/` search relative project paths with matching characters highlighted in the path.
+
+TextMark 0.10.10 对齐 Markdown Preview 的项目文稿搜索行为：不含 `/` 的查询只匹配文件名，包含 `/` 时按项目相对路径搜索，并在路径中标出匹配字符。
+
+## Highlights / 主要更新
+
+- 搜索文稿：修复目录名造成的错误命中；路径查询会在相对路径中匹配和高亮。
+- 验证：新增回归覆盖目录误匹配和路径模糊匹配；前端 47 个测试文件、425 项测试通过。
+
+---
+
 # TextMark v0.10.9
 
 TextMark 0.10.9 aligns more closely with Markdown Preview 0.0.62. Search Markdown and text documents in the open project by filename, open results in the current tab, a new tab, or a separate window, and work with code blocks through persistent language, copy, and wrapping controls in both reading and editing views.

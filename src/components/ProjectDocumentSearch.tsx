@@ -24,16 +24,22 @@ function score(entry: SearchEntry, query: string) {
   const name = entry.name.toLocaleLowerCase()
   const path = entry.relativePath.toLocaleLowerCase()
   const needle = query.toLocaleLowerCase()
-  const exact = name === needle
-  const starts = name.startsWith(needle)
-  const word = name.split(/[\\s._/-]+/).some((part) => part.startsWith(needle))
+  const field = query.includes('/') ? path : name
+  const starts = field.startsWith(needle)
+  const word = field.split(/[\\s._/-]+/).some((part) => part.startsWith(needle))
   let cursor = 0
   for (const character of needle) {
-    cursor = path.indexOf(character, cursor)
+    cursor = field.indexOf(character, cursor)
     if (cursor < 0) return null
     cursor += 1
   }
-  return (exact ? 1000 : 0) + (starts ? 500 : 0) + (word ? 250 : 0) + (name.includes(needle) ? 100 : 0) - entry.relativePath.length / 100
+  return (
+    (field === needle ? 1000 : 0) +
+    (starts ? 500 : 0) +
+    (word ? 250 : 0) +
+    (field.includes(needle) ? 100 : 0) -
+    entry.relativePath.length / 100
+  )
 }
 
 interface ProjectDocumentSearchProps {
@@ -72,8 +78,8 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
     else props.onOpenCurrent(entry.path)
     props.onClose()
   }
-  const highlightedName = (name: string) => {
-    const characters = Array.from(name)
+  const highlightedText = (text: string) => {
+    const characters = Array.from(text)
     const needle = Array.from(query.trim().toLocaleLowerCase())
     const matching = new Set<number>()
     let cursor = 0
@@ -162,8 +168,10 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
                 onClick={() => open(entry, 'current')}
               >
                 <FileText aria-hidden="true" />
-                <span className="project-search-file-name">{highlightedName(entry.name)}</span>
-                <span className="project-search-file-path">{entry.relativePath}</span>
+                <span className="project-search-file-name">{query.includes('/') ? entry.name : highlightedText(entry.name)}</span>
+                <span className="project-search-file-path">
+                  {query.includes('/') ? highlightedText(entry.relativePath) : entry.relativePath}
+                </span>
                 {entry.path === props.activePath ? (
                   <span className="project-search-current">{props.locale === 'zh-CN' ? '当前' : 'Current'}</span>
                 ) : null}
