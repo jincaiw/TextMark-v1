@@ -39,6 +39,7 @@ const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
   onZoomChange: vi.fn(),
   onSearchQueryChange: vi.fn(),
   onSearchOpen: vi.fn(),
+  onSearchDocumentsOpen: vi.fn(),
   onOpenWith: vi.fn(),
   onOpenInLlm: vi.fn(),
   onOpen: vi.fn(),

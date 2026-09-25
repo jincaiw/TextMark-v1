@@ -495,4 +495,53 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  it('wraps preview code in a language card with a working wrap toggle', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const rendered: RenderedMarkdown = {
+      html: '<pre class="hljs"><code class="language-typescript">const message = "hello"</code></pre>',
+      outline: [],
+      hasMermaid: false,
+      hasMath: false,
+      frontmatter: [],
+      sourceMap: [],
+      tables: [],
+      tasks: [],
+      optionalRenderers: [],
+      direction: 'auto',
+    }
+    const props = {
+      rendered,
+      documentKey: 'code-card',
+      initialScrollTop: 0,
+      baseDirectory: null,
+      workspacePath: null,
+      zoom: 100,
+      contentWidth: 'normal' as const,
+      searchQuery: '',
+      searchIndex: 0,
+      matchCase: false,
+      searchMode: 'contains' as const,
+      locale: 'en' as const,
+      onSearchCount: vi.fn(),
+      onActiveHeading: vi.fn(),
+      onZoomChange: vi.fn(),
+      onOpenRelative: vi.fn(),
+      onRenameImage: vi.fn(),
+      onToggleTask: vi.fn(),
+      onEditTable: vi.fn(),
+    }
+    await act(async () => root.render(<PreviewPane {...props} />))
+    expect(host.querySelector('.md-code-language')?.textContent).toBe('typescript')
+    const card = host.querySelector<HTMLElement>('.md-code-card')!
+    const wrap = host.querySelector<HTMLButtonElement>('.md-code-toggle-wrap')!
+    expect(card.classList.contains('is-wrapped')).toBe(false)
+    await act(async () => wrap.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(card.classList.contains('is-wrapped')).toBe(true)
+    expect(wrap.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => root.unmount())
+    host.remove()
+  })
 })

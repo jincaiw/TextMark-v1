@@ -4,6 +4,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
+import { Copy, WrapText } from 'lucide-react'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
@@ -220,6 +221,20 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   const onInitialFormatAppliedRef = useRef(props.onInitialFormatApplied)
   onInitialFormatAppliedRef.current = props.onInitialFormatApplied
   const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
+  const [unwrappedFences, setUnwrappedFences] = useState<Set<number>>(() => new Set())
+  const [copiedCode, setCopiedCode] = useState(false)
+  const syncCodeWrap = (view: EditorView, unwrapped: Set<number>) => {
+    view.dom.querySelectorAll<HTMLElement>('.cm-md-code-line').forEach((line) => {
+      const fenceFrom = Number(line.dataset.codeFenceFrom)
+      line.classList.toggle('cm-md-code-nowrap', unwrapped.has(fenceFrom))
+    })
+    view.dom.querySelectorAll<HTMLElement>('.cm-md-code-card').forEach((card) => {
+      const codeLine = card.querySelector<HTMLElement>('.cm-md-code-line')
+      const fenceFrom = Number(codeLine?.dataset.codeFenceFrom)
+      card.classList.toggle('cm-md-code-card-wrapped', !unwrapped.has(fenceFrom))
+    })
+  }
+  const activeFenceUnwrapped = Boolean(activeFence && unwrappedFences.has(activeFence.from))
   const imagePasteExtension = useMemo(
     () =>
       EditorView.domEventHandlers({
@@ -412,6 +427,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     props.onSearchCount?.(searchMatchOffsets(props.value, props.searchQuery ?? '', props.matchCase ?? false, props.searchMode).length)
   }, [ready, props.value, props.searchQuery, props.matchCase, props.searchMode, props.onSearchCount])
 
+  useEffect(() => {
+    if (ready && viewRef.current) syncCodeWrap(viewRef.current, unwrappedFences)
+  }, [ready, unwrappedFences])
+
   const searchIndex = props.searchIndex ?? 0
   useEffect(() => {
     if (!ready || !props.searchQuery || !viewRef.current) return
@@ -438,21 +457,66 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
       <div className="editor-page">
         {activeFence ? (
-          <label className="code-fence-language-control">
-            <span>Code language</span>
-            <input
-              aria-label="Code fence language"
-              value={activeFence.language}
-              placeholder="auto"
-              onChange={(event) => {
+          <div className="code-fence-toolbar" role="toolbar" aria-label="Code block controls">
+            <label className="code-fence-language-control">
+              <span>Code language</span>
+              <input
+                aria-label="Code fence language"
+                value={activeFence.language}
+                placeholder="auto"
+                onChange={(event) => {
+                  const view = viewRef.current
+                  if (!view) return
+                  const fence = editableCodeFenceAtLine(view.state.doc, activeFence.lineNumber)
+                  if (!fence) return
+                  view.dispatch({ changes: rewriteCodeFenceLanguage(fence, event.target.value) })
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="md-code-action"
+              aria-label={copiedCode ? 'Code copied' : 'Copy code'}
+              title={copiedCode ? 'Code copied' : 'Copy code'}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
                 const view = viewRef.current
-                if (!view) return
-                const fence = editableCodeFenceAtLine(view.state.doc, activeFence.lineNumber)
-                if (!fence) return
-                view.dispatch({ changes: rewriteCodeFenceLanguage(fence, event.target.value) })
+                const fence = view && editableCodeFenceAtLine(view.state.doc, activeFence.lineNumber)
+                if (!view || !fence) return
+                const lastBodyLine = (fence.closingLineNumber ?? view.state.doc.lines + 1) - 1
+                const source = Array.from(
+                  { length: Math.max(0, lastBodyLine - fence.lineNumber) },
+                  (_, index) => view.state.doc.line(fence.lineNumber + index + 1).text,
+                ).join('\n')
+                void navigator.clipboard.writeText(source).then(() => {
+                  setCopiedCode(true)
+                  window.setTimeout(() => setCopiedCode(false), 1400)
+                })
               }}
-            />
-          </label>
+            >
+              <Copy aria-hidden="true" />
+              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+            </button>
+            <button
+              type="button"
+              className="md-code-action"
+              aria-label={activeFenceUnwrapped ? 'Wrap code' : 'Unwrap code'}
+              title={activeFenceUnwrapped ? 'Wrap code' : 'Unwrap code'}
+              aria-pressed={!activeFenceUnwrapped}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setUnwrappedFences((current) => {
+                  const next = new Set(current)
+                  if (next.has(activeFence.from)) next.delete(activeFence.from)
+                  else next.add(activeFence.from)
+                  return next
+                })
+              }}
+            >
+              <WrapText aria-hidden="true" />
+              <span>{activeFenceUnwrapped ? 'Unwrap' : 'Wrap'}</span>
+            </button>
+          </div>
         ) : null}
         <CodeMirror
           value={props.value}
@@ -484,6 +548,13 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           }}
           onChange={props.onChange}
           onUpdate={(update) => {
+            if (update.docChanged || update.viewportChanged) syncCodeWrap(update.view, unwrappedFences)
+            if (update.docChanged) {
+              setUnwrappedFences((current) => {
+                const next = new Set([...current].map((from) => update.changes.mapPos(from, 1)))
+                return next.size === current.size && [...next].every((from) => current.has(from)) ? current : next
+              })
+            }
             if (!update.selectionSet && !update.docChanged) return
             const head = update.state.selection.main.head
             const line = update.state.doc.lineAt(head)

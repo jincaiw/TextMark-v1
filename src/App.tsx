@@ -9,6 +9,7 @@ import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
 import { ExportDialog } from './components/ExportDialog'
 import { FindBar } from './components/FindBar'
+import { ProjectDocumentSearch } from './components/ProjectDocumentSearch'
 import { DocumentTools } from './components/DocumentTools'
 import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
@@ -115,6 +116,7 @@ function DocumentApp() {
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const [projectSearchOpen, setProjectSearchOpen] = useState(false)
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
   const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
@@ -689,6 +691,7 @@ function DocumentApp() {
     else if (command === 'undo') documents.undo()
     else if (command === 'redo') documents.redo()
     else if (command === 'find') setFindOpen(true)
+    else if (command === 'search-documents') setProjectSearchOpen(true)
     else if (command === 'find-next') nextMatch(1)
     else if (command === 'find-prev') nextMatch(-1)
     else if (command === 'edit-mode') switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
@@ -906,6 +909,9 @@ function DocumentApp() {
         event.preventDefault()
         void documents.saveFile()
       } else if (key === 'o' && event.shiftKey) {
+        event.preventDefault()
+        setProjectSearchOpen(true)
+      } else if (key === 'o' && event.altKey) {
         event.preventDefault()
         void documents.openFolder()
         setSidebarMode('files')
@@ -1183,6 +1189,7 @@ function DocumentApp() {
           setFindOpen(true)
         }}
         onSearchOpen={() => setFindOpen(true)}
+        onSearchDocumentsOpen={() => setProjectSearchOpen(true)}
         onOpenWith={(application) => void openWith(application)}
         onOpenInLlm={(application) => void openInLlm(application)}
         onOpen={() => void documents.openFile()}
@@ -1209,6 +1216,22 @@ function DocumentApp() {
         onCustomizeToolbar={() => setToolbarOpen(true)}
         onClose={requestClose}
       />
+      {projectSearchOpen ? (
+        <ProjectDocumentSearch
+          files={documents.files}
+          activePath={documents.document.path}
+          locale={settings.locale}
+          onOpenCurrent={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
+          onOpenInTab={(path) => void documents.openPath(path, true)}
+          onOpenInWindow={(path) => void openDocumentWindow(path)}
+          onOpenFolder={() => {
+            void documents.openFolder()
+            setSidebarMode('files')
+            setSidebarVisible(true)
+          }}
+          onClose={() => setProjectSearchOpen(false)}
+        />
+      ) : null}
       <div className="workspace-stack">
         <DocumentTabs
           sessions={documents.sessions}

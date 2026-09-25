@@ -209,6 +209,7 @@ export type ToolbarItem =
   | 'share'
   | 'edit'
   | 'search'
+  | 'documentSearch'
   | 'print'
   | 'copy'
   | 'export'

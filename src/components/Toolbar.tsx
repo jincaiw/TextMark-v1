@@ -65,6 +65,7 @@ interface ToolbarProps {
   onZoomChange: (zoom: number) => void
   onSearchQueryChange: (value: string) => void
   onSearchOpen: () => void
+  onSearchDocumentsOpen: () => void
   onOpenWith: (application?: string) => void
   onOpenInLlm: (application: 'codex' | 'claude' | 'chatgpt') => void
   onOpen: () => void
@@ -95,6 +96,7 @@ const SIMPLE_ACTIONS: Partial<
   export: { title: 'exportItem', icon: <FileDown />, action: (p) => p.onExport() },
   exportPdf: { title: 'exportPdf', icon: <FileDown />, action: (p) => p.onExportPdf() },
   search: { title: 'searchItem', icon: <Search />, action: (p) => p.onSearchOpen() },
+  documentSearch: { title: 'searchDocuments', icon: <Search />, action: (p) => p.onSearchDocumentsOpen() },
 }
 
 const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>

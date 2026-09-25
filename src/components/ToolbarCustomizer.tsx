@@ -37,6 +37,7 @@ const AVAILABLE: ToolbarItem[] = [
   'share',
   'edit',
   'search',
+  'documentSearch',
   'print',
   'copy',
   'export',
@@ -59,6 +60,7 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   share: 'share',
   edit: 'edit',
   search: 'searchItem',
+  documentSearch: 'searchDocuments',
   print: 'printItem',
   copy: 'copyItem',
   export: 'exportItem',
@@ -93,6 +95,7 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
     case 'edit':
       return <FilePenLine />
     case 'search':
+    case 'documentSearch':
       return <Search />
     case 'print':
       return <Printer />

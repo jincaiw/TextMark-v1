@@ -284,12 +284,35 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
 
     root.querySelectorAll('pre').forEach((pre) => {
-      const button = document.createElement('button')
-      button.className = 'copy-code-button'
-      button.type = 'button'
-      button.textContent = t(props.locale, 'copy')
-      button.setAttribute('aria-label', t(props.locale, 'copyCode'))
-      pre.append(button)
+      const code = pre.querySelector('code')
+      const languageClass = Array.from(code?.classList ?? []).find((name) => name.startsWith('language-'))
+      const language = languageClass?.slice('language-'.length) || ''
+      const card = document.createElement('div')
+      card.className = 'md-code-card'
+      const header = document.createElement('div')
+      header.className = 'md-code-card-header'
+      const label = document.createElement('span')
+      label.className = 'md-code-language'
+      label.textContent = language || t(props.locale, 'code')
+      const actions = document.createElement('div')
+      actions.className = 'md-code-actions'
+      const wrap = document.createElement('button')
+      wrap.className = 'md-code-action md-code-toggle-wrap'
+      wrap.type = 'button'
+      wrap.title = t(props.locale, 'wrapCode')
+      wrap.setAttribute('aria-label', t(props.locale, 'wrapCode'))
+      wrap.setAttribute('aria-pressed', 'false')
+      wrap.textContent = '↩'
+      const copy = document.createElement('button')
+      copy.className = 'md-code-action md-code-copy'
+      copy.type = 'button'
+      copy.title = t(props.locale, 'copyCode')
+      copy.setAttribute('aria-label', t(props.locale, 'copyCode'))
+      copy.textContent = t(props.locale, 'copy')
+      actions.append(wrap, copy)
+      header.append(label, actions)
+      pre.replaceWith(card)
+      card.append(header, pre)
     })
 
     if (props.searchQuery) {
@@ -544,10 +567,20 @@ export function PreviewPane(props: PreviewPaneProps) {
         onClick={(event) => {
           setTableMenu(null)
           const target = event.target as HTMLElement
-          const copy = target.closest<HTMLButtonElement>('.copy-code-button')
+          const wrap = target.closest<HTMLButtonElement>('.md-code-toggle-wrap')
+          if (wrap) {
+            const card = wrap.closest<HTMLElement>('.md-code-card')
+            const wrapped = card?.classList.toggle('is-wrapped') ?? false
+            wrap.setAttribute('aria-pressed', String(wrapped))
+            wrap.title = t(props.locale, wrapped ? 'unwrapCode' : 'wrapCode')
+            wrap.setAttribute('aria-label', wrap.title)
+            return
+          }
+          const copy = target.closest<HTMLButtonElement>('.md-code-copy')
           if (copy) {
-            void navigator.clipboard.writeText(copy.parentElement?.querySelector('code')?.textContent ?? '')
+            void navigator.clipboard.writeText(copy.closest('.md-code-card')?.querySelector('code')?.textContent ?? '')
             copy.textContent = t(props.locale, 'copied')
+            copy.setAttribute('aria-label', t(props.locale, 'copied'))
             return
           }
           const diagramAction = target.closest<HTMLButtonElement>('[data-diagram-action]')

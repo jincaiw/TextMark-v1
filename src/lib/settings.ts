@@ -29,6 +29,7 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'share',
   'edit',
   'search',
+  'documentSearch',
   'print',
   'copy',
   'export',

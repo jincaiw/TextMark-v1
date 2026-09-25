@@ -1,6 +1,7 @@
 import { RangeSetBuilder } from '@codemirror/state'
+import { Range } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
-import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView, type ViewUpdate } from '@codemirror/view'
+import { BlockWrapper, Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { markdownImageReferences } from './pastedImages'
 
 const lineClass = (line: string) => {
@@ -120,8 +121,22 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
     const last = view.state.doc.lineAt(to)
     for (let number = first.number; number <= last.number; number += 1) {
       const line = view.state.doc.line(number)
-      const className = lineClass(line.text)
-      if (className) builder.add(line.from, line.from, Decoration.line({ class: className }))
+      let codeNode = tree.resolveInner(line.from, 1)
+      while (codeNode && codeNode.name !== 'FencedCode') codeNode = codeNode.parent!
+      if (codeNode) {
+        const isFence = /^\s*(?:`{3,}|~{3,})/.test(line.text)
+        builder.add(
+          line.from,
+          line.from,
+          Decoration.line({
+            class: isFence ? 'cm-md-code-fence' : 'cm-md-code-line',
+            attributes: { 'data-code-fence-from': String(codeNode.from) },
+          }),
+        )
+      } else {
+        const className = lineClass(line.text)
+        if (className) builder.add(line.from, line.from, Decoration.line({ class: className }))
+      }
       const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
       if (!activeLine)
         for (const marker of markdownSyntaxMarkers(line.text))
@@ -149,17 +164,44 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
   return builder.finish()
 }
 
+function buildCodeBlockWrappers(view: EditorView) {
+  const wrappers: Range<BlockWrapper>[] = []
+  const document = view.state.doc
+  syntaxTree(view.state).iterate({
+    enter(node) {
+      if (node.name !== 'FencedCode') return
+      const first = document.lineAt(node.from)
+      const last = document.lineAt(Math.max(node.from, node.to - 1))
+      wrappers.push(
+        BlockWrapper.create({
+          tagName: 'div',
+          attributes: { class: 'cm-md-code-card' },
+        }).range(first.from, Math.max(last.to, last.from + 1)),
+      )
+    },
+  })
+  return BlockWrapper.set(wrappers, true)
+}
+
 export function createEditorMarkdownDecorations(options: EditorMarkdownDecorationOptions = {}) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
+      blockWrappers: ReturnType<typeof buildCodeBlockWrappers>
       constructor(view: EditorView) {
         this.decorations = buildDecorations(view, options)
+        this.blockWrappers = buildCodeBlockWrappers(view)
       }
       update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) this.decorations = buildDecorations(update.view, options)
+        if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
+          this.decorations = buildDecorations(update.view, options)
+          this.blockWrappers = buildCodeBlockWrappers(update.view)
+        }
       }
     },
-    { decorations: (plugin) => plugin.decorations },
+    {
+      decorations: (plugin) => plugin.decorations,
+      provide: (plugin) => EditorView.blockWrappers.of((view) => view.plugin(plugin)?.blockWrappers ?? BlockWrapper.set([])),
+    },
   )
 }

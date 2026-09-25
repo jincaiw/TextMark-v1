@@ -805,11 +805,17 @@ fn build_menu(
     )?;
     let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
+    let search_documents = item(
+        "search-documents",
+        "搜索文稿…",
+        "Search Documents…",
+        Some("CmdOrCtrl+Shift+O"),
+    )?;
     let open_folder = item(
         "open-folder",
         "打开文件夹…",
         "Open Folder…",
-        Some("CmdOrCtrl+Shift+O"),
+        Some("CmdOrCtrl+Alt+O"),
     )?;
     let save = item("save", "存储", "Save", Some("CmdOrCtrl+S"))?;
     let save_as = item("save-as", "存储为…", "Save As…", Some("CmdOrCtrl+Shift+S"))?;
@@ -843,7 +849,7 @@ fn build_menu(
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
         .items(&[&new_tab, &new_document, &close_tab])
         .separator()
-        .items(&[&open, &open_folder])
+        .items(&[&open, &search_documents, &open_folder])
         .item(&open_recent)
         .separator()
         .items(&[&save, &save_as, &revert])

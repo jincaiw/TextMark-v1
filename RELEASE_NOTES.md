@@ -1,3 +1,18 @@
+# TextMark v0.10.9
+
+TextMark 0.10.9 aligns more closely with Markdown Preview 0.0.62. Search Markdown and text documents in the open project by filename, open results in the current tab, a new tab, or a separate window, and work with code blocks through persistent language, copy, and wrapping controls in both reading and editing views.
+
+TextMark 0.10.9 进一步对齐 Markdown Preview 0.0.62。现在可按文件名搜索当前项目中的 Markdown 文稿，并在当前标签、新标签或独立窗口打开结果；阅读与编辑模式的代码块卡片均提供语言、复制和换行操作。
+
+## Highlights / 主要更新
+
+- 项目文稿搜索：使用 ⇧⌘O 打开模糊文件名搜索；回车在当前标签打开，⌘回车新建标签，⌥回车新建窗口；文件菜单和可定制工具栏也提供入口。
+- 代码块卡片：阅读态展示语言名称及复制、换行控件；编辑态围栏卡片支持独立滚动/换行、语言编辑和复制代码正文。
+- 桌面工具栏：进一步收紧前进/后退控件的尺寸，保留系统标题栏及跨平台工具栏结构。
+- 兼容性：保留 v0.10.8 的编辑搜索、文档位置恢复、工具栏自定义和多文档工作流；Mermaid 使用 11.16.1。
+
+---
+
 # TextMark v0.10.8
 
 TextMark 0.10.8 keeps the document name in one place per window and repairs the browser acceptance scenario that had been timing out since the alignment capture script was rewritten.
