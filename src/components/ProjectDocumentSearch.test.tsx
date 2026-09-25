@@ -85,9 +85,15 @@ describe('ProjectDocumentSearch', () => {
 
   it('uses Alt+Return for opening a result in a separate window', async () => {
     await render()
-    const input = host.querySelector('input')!
+    const input = await setQuery('d')
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true })))
     expect(onOpenInWindow).toHaveBeenCalledWith('/project/notes/Design.md')
+  })
+
+  it('opens as a compact search field without showing results before typing', async () => {
+    await render()
+    expect(host.querySelector('.project-search-file-name')).toBeNull()
+    expect(host.querySelector('.project-search-footer')).toBeNull()
   })
 
   it('does not match a file only because its parent folder contains the query', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Search, X } from 'lucide-react'
 import { isMacos } from '../lib/platform'
+import { fuzzySubsequenceMatch } from '../lib/fuzzySubsequence'
 import type { FileNode, Locale } from '../types'
 
 interface SearchEntry {
@@ -20,26 +21,22 @@ function flatten(nodes: FileNode[], prefix = ''): SearchEntry[] {
   })
 }
 
-function score(entry: SearchEntry, query: string) {
+interface SearchResult {
+  entry: SearchEntry
+  score: number
+  positions: number[]
+}
+
+function score(entry: SearchEntry, query: string): SearchResult | null {
+  const searchPath = query.includes('/')
+  const field = searchPath ? entry.relativePath : entry.name
+  const match = fuzzySubsequenceMatch(query, field)
+  if (!match) return null
+
   const name = entry.name.toLocaleLowerCase()
-  const path = entry.relativePath.toLocaleLowerCase()
   const needle = query.toLocaleLowerCase()
-  const field = query.includes('/') ? path : name
-  const starts = field.startsWith(needle)
-  const word = field.split(/[\\s._/-]+/).some((part) => part.startsWith(needle))
-  let cursor = 0
-  for (const character of needle) {
-    cursor = field.indexOf(character, cursor)
-    if (cursor < 0) return null
-    cursor += 1
-  }
-  return (
-    (field === needle ? 1000 : 0) +
-    (starts ? 500 : 0) +
-    (word ? 250 : 0) +
-    (field.includes(needle) ? 100 : 0) -
-    entry.relativePath.length / 100
-  )
+  const tierBonus = searchPath ? 0 : name === needle ? 1_000_000 : name.startsWith(needle) ? 100_000 : 0
+  return { entry, score: match.score + tierBonus, positions: match.positions }
 }
 
 interface ProjectDocumentSearchProps {
@@ -60,13 +57,13 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
   const [selected, setSelected] = useState(0)
   const entries = useMemo(() => flatten(props.files), [props.files])
   const results = useMemo(() => {
-    if (!query.trim()) return entries.slice(0, 30)
+    const normalizedQuery = query.trim()
+    if (!normalizedQuery) return []
     return entries
-      .map((entry) => ({ entry, score: score(entry, query.trim()) }))
-      .filter((item): item is { entry: SearchEntry; score: number } => item.score !== null)
+      .map((entry) => score(entry, normalizedQuery))
+      .filter((item): item is SearchResult => item !== null)
       .sort((a, b) => b.score - a.score || a.entry.relativePath.localeCompare(b.entry.relativePath))
       .slice(0, 30)
-      .map((item) => item.entry)
   }, [entries, query])
   useEffect(() => inputRef.current?.focus(), [])
   useEffect(() => setSelected(0), [query])
@@ -78,15 +75,9 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
     else props.onOpenCurrent(entry.path)
     props.onClose()
   }
-  const highlightedText = (text: string) => {
+  const highlightedText = (text: string, positions: number[]) => {
     const characters = Array.from(text)
-    const needle = Array.from(query.trim().toLocaleLowerCase())
-    const matching = new Set<number>()
-    let cursor = 0
-    for (const character of needle) {
-      while (cursor < characters.length && characters[cursor].toLocaleLowerCase() !== character) cursor += 1
-      if (cursor < characters.length) matching.add(cursor++)
-    }
+    const matching = new Set(positions)
     return characters.map((character, index) =>
       matching.has(index) ? <strong key={index}>{character}</strong> : <span key={index}>{character}</span>,
     )
@@ -143,7 +134,7 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
                 setSelected((value) => Math.max(value - 1, 0))
               } else if (event.key === 'Enter' && results[selected]) {
                 event.preventDefault()
-                open(results[selected], event.altKey ? 'window' : event.metaKey || event.ctrlKey ? 'tab' : 'current')
+                open(results[selected].entry, event.altKey ? 'window' : event.metaKey || event.ctrlKey ? 'tab' : 'current')
               }
             }}
           />
@@ -151,47 +142,53 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
             <X />
           </button>
         </div>
-        <div className="project-search-results" role="listbox" aria-label={labels.title}>
-          {results.length ? (
-            results.map((entry, index) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={index === selected}
-                className={index === selected ? 'selected' : ''}
-                key={entry.path}
-                ref={(element) => {
-                  if (element) resultRefs.current.set(index, element)
-                  else resultRefs.current.delete(index)
-                }}
-                onMouseEnter={() => setSelected(index)}
-                onClick={() => open(entry, 'current')}
-              >
-                <FileText aria-hidden="true" />
-                <span className="project-search-file-name">{query.includes('/') ? entry.name : highlightedText(entry.name)}</span>
-                <span className="project-search-file-path">
-                  {query.includes('/') ? highlightedText(entry.relativePath) : entry.relativePath}
-                </span>
-                {entry.path === props.activePath ? (
-                  <span className="project-search-current">{props.locale === 'zh-CN' ? '当前' : 'Current'}</span>
-                ) : null}
+        {query.trim() || !entries.length ? (
+          <div className="project-search-results" role="listbox" aria-label={labels.title}>
+            {results.length ? (
+              results.map((result, index) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index === selected}
+                  className={index === selected ? 'selected' : ''}
+                  key={result.entry.path}
+                  ref={(element) => {
+                    if (element) resultRefs.current.set(index, element)
+                    else resultRefs.current.delete(index)
+                  }}
+                  onMouseEnter={() => setSelected(index)}
+                  onClick={() => open(result.entry, 'current')}
+                >
+                  <FileText aria-hidden="true" />
+                  <span className="project-search-file-name">
+                    {query.includes('/') ? result.entry.name : highlightedText(result.entry.name, result.positions)}
+                  </span>
+                  <span className="project-search-file-path">
+                    {query.includes('/') ? highlightedText(result.entry.relativePath, result.positions) : result.entry.relativePath}
+                  </span>
+                  {result.entry.path === props.activePath ? (
+                    <span className="project-search-current">{props.locale === 'zh-CN' ? '当前' : 'Current'}</span>
+                  ) : null}
+                </button>
+              ))
+            ) : (
+              <p className="project-search-empty">{entries.length ? labels.empty : labels.noProject}</p>
+            )}
+          </div>
+        ) : null}
+        {query.trim() || !entries.length ? (
+          <footer className="project-search-footer">
+            {!entries.length ? (
+              <button type="button" onClick={props.onOpenFolder}>
+                {labels.openFolder}
               </button>
-            ))
-          ) : (
-            <p className="project-search-empty">{entries.length ? labels.empty : labels.noProject}</p>
-          )}
-        </div>
-        <footer className="project-search-footer">
-          {!entries.length ? (
-            <button type="button" onClick={props.onOpenFolder}>
-              {labels.openFolder}
-            </button>
-          ) : (
-            <span>{labels.current}</span>
-          )}
-          <span>{labels.tab}</span>
-          <span>{labels.window}</span>
-        </footer>
+            ) : (
+              <span>{labels.current}</span>
+            )}
+            <span>{labels.tab}</span>
+            <span>{labels.window}</span>
+          </footer>
+        ) : null}
       </section>
     </div>
   )

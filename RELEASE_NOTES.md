@@ -1,3 +1,17 @@
+# TextMark v0.10.11
+
+TextMark 0.10.11 refines project document search to match Markdown Preview's fuzzy ranking and compact initial search panel. Results now use the best subsequence alignment for ranking and highlights, and the result list stays collapsed until a query is entered.
+
+TextMark 0.10.11 进一步对齐 Markdown Preview 的项目文稿搜索排序和紧凑初始面板。搜索结果依据最佳子序列匹配排序并高亮；输入查询前保持结果列表收起。
+
+## Highlights / 主要更新
+
+- 搜索排序与高亮：使用动态规划为模糊匹配选择更合适的连续片段和词边界，排序与高亮位置保持一致。
+- 紧凑搜索面板：空查询时仅显示搜索框；输入查询后再展示结果和操作提示。
+- 验证：前端 48 个测试文件、429 项测试通过；ESLint、格式检查和生产构建通过。
+
+---
+
 # TextMark v0.10.10
 
 TextMark 0.10.10 aligns project document search with Markdown Preview: filename queries only match filenames, and queries containing `/` search relative project paths with matching characters highlighted in the path.

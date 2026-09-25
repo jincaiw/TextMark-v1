@@ -41,3 +41,10 @@
 - 已修正：普通查询只匹配文件名；查询包含 `/` 时才匹配相对路径，并在相对路径中高亮匹配字符。
 - 新增目录名误匹配和相对路径模糊匹配回归用例；项目搜索测试 4 项通过，全套前端测试 47 个测试文件、425 项通过，ESLint、Prettier 与生产构建通过。
 - 上游参考：[v0.0.62 FileSearchMatcher](https://github.com/pluk-inc/markdown-preview/blob/main/md-preview/Features/FileSearch/FileSearchMatcher.swift)、[搜索结果行](https://github.com/pluk-inc/markdown-preview/blob/main/md-preview/Features/FileSearch/FileSearchPanelController.swift)。
+
+## v0.10.11 后续复核
+
+- 再次对照上游 `FileSearchMatcher` 的结果排序与 `FileSearchPanelController` 的初始布局，发现 TextMark 使用贪心子序列匹配，且空查询时提前显示结果列表和页脚，与上游的动态规划命中及紧凑面板状态不一致。
+- 已新增动态规划 fuzzy subsequence 匹配器，偏好连续片段、词边界和驼峰边界，并回溯实际匹配字符供高亮使用；搜索调色板无查询时收起结果列表，输入后再展开。
+- 新增匹配算法与紧凑初始状态组件回归用例；全量前端测试 48 个文件、429 项通过；ESLint、Prettier 格式检查、生产构建通过。
+- 尚未进行候选原生窗口截图比对：本机 Mac 仍锁屏，CUA 无法连接；应用布局与交互的实机视觉验收仍需解锁后完成。源码对照不等同于桌面视觉完全一致。
