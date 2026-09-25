@@ -1,3 +1,16 @@
+# TextMark v0.10.13
+
+TextMark 0.10.13 aligns the default desktop toolbar spacing with Markdown Preview 0.0.62 and migrates the previous default layout automatically.
+
+TextMark 0.10.13 对齐 Markdown Preview 0.0.62 的默认桌面工具栏间距，并自动迁移旧版默认布局。
+
+## Highlights / 主要更新
+
+- 工具栏布局：在“主题与设置”和“简介”之间补上上游默认的小间隔；升级时只迁移此前的默认布局，保留用户自定义顺序。
+- 更新器核查：确认已安装 v0.10.8 与当前发布清单使用相同的更新端点和签名公钥，v0.10.12 提供受签名保护的 macOS 通用更新包。
+
+---
+
 # TextMark v0.10.12
 
 TextMark 0.10.12 brings project document search closer to Markdown Preview's floating desktop palette, improves large-project responsiveness, and completes keyboard result navigation.

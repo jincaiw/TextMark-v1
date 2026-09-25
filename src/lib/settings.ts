@@ -47,6 +47,7 @@ export const DEFAULT_TOOLBAR: ToolbarItem[] = [
   'openActions',
   'space',
   'themesAndSettings',
+  'space',
   'inspector',
   'share',
   'edit',
@@ -61,6 +62,21 @@ const LEGACY_COMBINED_DEFAULT_TOOLBAR: ToolbarItem[] = [
   'space',
   'themesAndSettings',
   'documentActions',
+  'search',
+]
+
+// v0.10.12 default before matching Markdown Preview 0.0.62's separator
+// between the appearance and inspector controls.
+const V7_DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'openActions',
+  'space',
+  'themesAndSettings',
+  'inspector',
+  'share',
+  'edit',
   'search',
 ]
 
@@ -119,7 +135,8 @@ export function normalizeSettings(value: unknown): AppSettings {
       : rawToolbar.map((item) => (item === 'openWith' ? ('openActions' as ToolbarItem) : item))
   const matchesToolbar = (expected: ToolbarItem[]) =>
     rawToolbar.length === expected.length && rawToolbar.every((item, index) => item === expected[index])
-  const usesPriorDefault = matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR)
+  const usesPriorDefault =
+    matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) || matchesToolbar(V7_DEFAULT_TOOLBAR)
   return {
     schemaVersion: 7,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
