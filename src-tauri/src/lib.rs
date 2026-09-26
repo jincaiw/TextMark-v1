@@ -2318,7 +2318,7 @@ fn restore_macos_window_chrome() {
     NSWindow::setAllowsAutomaticWindowTabbing(false, mtm);
     let app = NSApplication::sharedApplication(mtm);
     for window in app.windows() {
-        window.setTitleVisibility(NSWindowTitleVisibility::Visible);
+        window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
         for kind in [
             NSWindowButton::CloseButton,
             NSWindowButton::MiniaturizeButton,

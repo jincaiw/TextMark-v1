@@ -179,10 +179,9 @@ describe('Toolbar', () => {
     expect(host.querySelector('.toolbar-navigation')).toBeNull()
   })
 
-  it('由原生窗口标题显示文稿名，工具栏不重复绘制标题', () => {
+  it('将文稿名绘制在首个弹性空位的中心', () => {
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'flexibleSpace', 'openActions', 'search'] }))
-    expect(host.querySelector('.toolbar-document-title')).toBeNull()
-    expect(host.querySelector('.toolbar-document-title-fallback')).toBeNull()
+    expect(host.querySelector('.toolbar-flexible-space .toolbar-document-title')?.textContent).toBe('A long document name.md')
 
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'openActions', 'search'] }))
     expect(host.querySelector('.toolbar-document-title')).toBeNull()

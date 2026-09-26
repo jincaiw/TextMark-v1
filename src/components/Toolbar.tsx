@@ -251,7 +251,15 @@ export function Toolbar(props: ToolbarProps) {
       </span>
     )
     if (item === 'flexibleSpace')
-      return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
+      return (
+        <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle}>
+          {index === toolbarItems.indexOf('flexibleSpace') && props.documentName ? (
+            <span className="toolbar-document-title" title={props.documentName}>
+              {props.documentName}
+            </span>
+          ) : null}
+        </span>
+      )
     if (item === 'space')
       return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
     if (item === 'navigation')
