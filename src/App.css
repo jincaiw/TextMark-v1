@@ -402,11 +402,14 @@ select:focus-visible {
   position: absolute;
   z-index: 1;
   top: 50%;
-  left: 50%;
+  /* AppKit places the document title in the middle toolbar lane, just after
+     the tracked sidebar region; the full web flex gap is wider than that lane. */
+  left: calc(50% - 10vw);
   display: block;
   width: min(360px, 100%);
   overflow: hidden;
   color: var(--text);
+  opacity: 0.58;
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -537,28 +540,21 @@ select:focus-visible {
   height: 10px;
 }
 .document-search {
-  width: 26px;
+  width: clamp(180px, 22vw, 320px);
   height: var(--control-h-sm);
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 0 5px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
+  gap: var(--space-2);
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
   box-shadow: none;
   cursor: text;
-  transition:
-    width 140ms ease,
-    background 140ms ease;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
-.document-search:focus-within,
-.document-search:has(input:not(:placeholder-shown)) {
-  width: clamp(140px, 16vw, 220px);
-  gap: var(--space-2);
-  padding-inline: var(--space-3);
+.document-search:focus-within {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--surface);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .search-trigger {
@@ -575,7 +571,7 @@ select:focus-visible {
   color: var(--muted);
 }
 .document-search input {
-  width: 0;
+  width: 100%;
   min-width: 0;
   flex: 1 1 auto;
   border: 0;
@@ -583,11 +579,6 @@ select:focus-visible {
   background: transparent;
   color: var(--text);
   font-size: var(--text-md);
-  opacity: 0;
-}
-.document-search:focus-within input,
-.document-search:has(input:not(:placeholder-shown)) input {
-  width: 100%;
   opacity: 1;
 }
 .document-search input::placeholder {
@@ -3601,8 +3592,8 @@ mark.search-match.active {
   backdrop-filter: blur(8px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer {
-  width: min(760px, calc(100vw - 64px));
-  max-height: min(560px, calc(100vh - 80px));
+  width: min(600px, calc(100vw - 64px));
+  max-height: min(640px, calc(100vh - 80px));
   padding: 0 22px 16px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--window) 94%, transparent);
@@ -3611,19 +3602,20 @@ mark.search-match.active {
   backdrop-filter: blur(32px) saturate(150%);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header {
-  align-items: center;
-  justify-content: center;
-  padding: 17px 0 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 18px 0 12px;
   border-bottom: 0;
-  text-align: center;
+  text-align: left;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header h2 {
-  font-size: 15px;
-  font-weight: 600;
+  display: none;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header p {
-  margin-top: 4px;
-  font-size: 12px;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer > header > button {
   display: none;
@@ -3633,10 +3625,13 @@ mark.search-match.active {
   font-size: 12px;
   font-weight: 600;
 }
+:root[data-runtime='tauri'][data-platform='macos'] .tc-section:first-of-type {
+  display: none;
+}
 :root[data-runtime='tauri'][data-platform='macos'] .tc-palette {
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
-  padding: 5px;
+  padding: 8px 5px;
   border: 0;
   border-radius: 8px;
   background: color-mix(in srgb, var(--sidebar) 72%, transparent);
@@ -3711,9 +3706,7 @@ mark.search-match.active {
     gap: 18px;
   }
   .document-search {
-    width: 26px;
-    justify-content: center;
-    cursor: pointer;
+    width: clamp(150px, 18vw, 220px);
   }
   .open-with summary {
     padding-inline: 10px;

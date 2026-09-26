@@ -1,3 +1,29 @@
+# TextMark v0.10.19
+TextMark 0.10.19 completes another desktop-toolbar parity pass against Markdown Preview 0.0.62: the document title sits in the same left-center toolbar lane, in-document search stays visible as a native-width field, and toolbar customization uses a compact five-column palette.
+
+TextMark 0.10.19 对照 Markdown Preview 0.0.62 完成新一轮桌面工具栏对齐：文稿标题定位到相同的中左工具栏区域，文稿内搜索改为常驻原生宽度输入框，自定义工具栏采用紧凑的五列项目板。
+
+## Highlights / 主要更新
+
+- 顶部工具栏：文稿名按上游工具栏标题区域对齐，默认显示完整文稿内搜索框。
+- 自定义工具栏：面板宽高与五列项目布局贴近 macOS 原生自定义面板，保留拖放排序与恢复默认操作。
+
+---
+
+---
+
+# TextMark v0.10.18
+TextMark 0.10.18 centers the document name within the customizable toolbar's flexible space, matching Markdown Preview's placement between the leading and trailing toolbar groups. The macOS native overlay title is hidden to prevent a second, left-aligned title.
+
+TextMark 0.10.18 将文稿名居中放入自定义工具栏弹性空隙，对齐 Markdown Preview 中位于前后工具组之间的标题位置；同时隐藏 macOS 覆盖式标题栏中的系统标题，避免左侧出现重复标题。
+
+## Highlights / 主要更新
+
+- 顶部区域：文稿标题随弹性空位动态居中，工具栏自定义布局变化时同步定位。
+- 原生标题：保留窗口标题供系统窗口列表、文稿切换及未保存状态使用，隐藏覆盖式标题栏的左对齐显示。
+
+---
+
 # TextMark v0.10.17
 
 TextMark 0.10.17 uses macOS's native centered window title for the open document, matching Markdown Preview's title-bar behavior and removing the misplaced duplicate title from the web toolbar.
@@ -714,15 +740,3 @@ This release does not use Apple Developer ID notarization or Windows Authenticod
 Updater artifacts remain independently signed and are rejected by TextMark if their updater signature is invalid.
 
 应用内更新产物使用独立签名；签名无效时 TextMark 会拒绝安装更新。
-# TextMark v0.10.18
-
-TextMark 0.10.18 centers the document name within the customizable toolbar's flexible space, matching Markdown Preview's placement between the leading and trailing toolbar groups. The macOS native overlay title is hidden to prevent a second, left-aligned title.
-
-TextMark 0.10.18 将文稿名居中放入自定义工具栏弹性空隙，对齐 Markdown Preview 中位于前后工具组之间的标题位置；同时隐藏 macOS 覆盖式标题栏中的系统标题，避免左侧出现重复标题。
-
-## Highlights / 主要更新
-
-- 顶部区域：文稿标题随弹性空位动态居中，工具栏自定义布局变化时同步定位。
-- 原生标题：保留窗口标题供系统窗口列表、文稿切换及未保存状态使用，隐藏覆盖式标题栏的左对齐显示。
-
----
