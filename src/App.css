@@ -394,9 +394,9 @@ select:focus-visible {
   display: none;
 }
 .native-actions > .toolbar-flexible-space {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
 }
 .native-actions > .toolbar-space {
   flex: 0 0 14px;
@@ -3556,7 +3556,7 @@ mark.search-match.active {
   left: 50%;
   top: 50%;
   display: block;
-  width: min(360px, 30vw);
+  width: min(360px, 100%);
   overflow: hidden;
   color: var(--text);
   font-size: 13px;
@@ -3566,6 +3566,12 @@ mark.search-match.active {
   white-space: nowrap;
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-document-title-fallback {
+  width: min(360px, 30vw);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-toolbar:has(.toolbar-document-title-fallback) .native-actions {
+  padding-inline: min(180px, 20vw);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs {
   min-height: 36px;

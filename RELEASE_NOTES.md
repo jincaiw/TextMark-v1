@@ -1,3 +1,16 @@
+# TextMark v0.10.16
+
+TextMark 0.10.16 aligns the macOS document title with the upstream toolbar's flexible spacing so it no longer covers toolbar actions.
+
+TextMark 0.10.16 调整 macOS 文稿标题的位置，使其随工具栏弹性空隙排列，避免遮挡工具栏操作。
+
+## Highlights / 主要更新
+
+- 顶部工具栏：文稿名放入导航与右侧工具项之间的弹性空隙；用户自定义布局移除弹性空隙后仍保留标题，并给操作区留出空间。
+- 验证：Toolbar 测试通过（23 项），TypeScript/Vite 生产构建通过，Prettier 与 `git diff --check` 通过。
+
+---
+
 # TextMark v0.10.15
 
 TextMark 0.10.15 fixes a macOS title-bar regression found during desktop verification: the native title is hidden while the centered document title and traffic lights remain visible.
