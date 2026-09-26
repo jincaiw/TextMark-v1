@@ -936,6 +936,19 @@ select:focus-visible {
   font-size: var(--text-sm);
   cursor: pointer;
 }
+.find-bar .find-replace-toggle {
+  flex: 0 0 auto;
+  width: auto;
+  height: var(--control-h-sm);
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
 .find-bar button:hover,
 .find-bar button.selected {
   background: var(--selected);
@@ -1060,6 +1073,10 @@ select:focus-visible {
 }
 .document-shell.with-sidebar.with-inspector {
   grid-template-columns: var(--sidebar-width) 6px minmax(420px, 1fr) 6px var(--inspector-width);
+}
+.document-shell:not(.with-sidebar) > .native-sidebar,
+.document-shell:not(.with-sidebar) > .panel-resizer-sidebar {
+  display: none;
 }
 .panel-resizer {
   position: relative;
@@ -3786,6 +3803,9 @@ mark.search-match.active {
     grid-template-columns: minmax(0, 1fr);
   }
   .native-sidebar {
+    display: none;
+  }
+  .panel-resizer-sidebar {
     display: none;
   }
   .markdown-body,

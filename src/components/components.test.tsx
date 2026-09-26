@@ -79,30 +79,40 @@ const settingsDialogProps = {
 } satisfies ComponentProps<typeof SettingsDialog>
 
 describe('localized desktop components', () => {
-  it('renders the upstream Contains/Begins With find modes in Chinese', () => {
-    const html = renderToStaticMarkup(
-      <FindBar
-        locale="zh-CN"
-        query="Text"
-        current={0}
-        count={2}
-        matchCase={false}
-        mode="contains"
-        onQueryChange={vi.fn()}
-        onPrevious={vi.fn()}
-        onNext={vi.fn()}
-        onMatchCaseChange={vi.fn()}
-        onModeChange={vi.fn()}
-        replacement=""
-        onReplacementChange={vi.fn()}
-        onReplace={vi.fn()}
-        onReplaceAll={vi.fn()}
-        onClose={vi.fn()}
-      />,
+  it('keeps replace controls collapsed until requested and preserves search modes', async () => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <FindBar
+          locale="zh-CN"
+          query="Text"
+          current={0}
+          count={2}
+          matchCase={false}
+          mode="contains"
+          onQueryChange={vi.fn()}
+          onPrevious={vi.fn()}
+          onNext={vi.fn()}
+          onMatchCaseChange={vi.fn()}
+          onModeChange={vi.fn()}
+          replacement=""
+          onReplacementChange={vi.fn()}
+          onReplace={vi.fn()}
+          onReplaceAll={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      ),
     )
-    expect(html).toContain('包含')
-    expect(html).toContain('开头为')
-    expect(html).toContain('第 1 项，共 2 项')
+    expect(host.textContent).toContain('第 1 项，共 2 项')
+    expect(host.querySelector('[title="上一个匹配项"]')).not.toBeNull()
+    expect(host.querySelector('[title="下一个匹配项"]')).not.toBeNull()
+    expect(host.textContent).not.toContain('包含')
+    await act(async () => host.querySelector<HTMLButtonElement>('.find-replace-toggle')!.click())
+    expect(host.textContent).toContain('包含')
+    expect(host.textContent).toContain('开头为')
+    expect(host.querySelector('.find-replace-row')).not.toBeNull()
+    await act(async () => root.unmount())
   })
   it('offers explicit restore and discard choices for a local draft', () => {
     const html = renderToStaticMarkup(

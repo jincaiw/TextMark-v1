@@ -350,7 +350,18 @@ export function PreviewPane(props: PreviewPaneProps) {
     const active = matches[props.searchIndex % Math.max(matches.length, 1)]
     if (active) {
       active.classList.add('active')
-      active.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      // Keep navigation inside the preview scroller. scrollIntoView can also
+      // move the window/document ancestors, which makes repeated Next clicks
+      // shift the whole desktop layout (especially in half-width windows).
+      const pane = paneRef.current
+      if (pane) {
+        const paneBounds = pane.getBoundingClientRect()
+        const matchBounds = active.getBoundingClientRect()
+        const topInset = paneBounds.top + pane.clientTop + Number.parseFloat(getComputedStyle(pane).paddingTop || '0')
+        const bottomInset = paneBounds.bottom - pane.clientTop
+        if (matchBounds.top < topInset) pane.scrollTop -= topInset - matchBounds.top
+        else if (matchBounds.bottom > bottomInset) pane.scrollTop += matchBounds.bottom - bottomInset
+      }
     }
 
     const hydrate = async () => {

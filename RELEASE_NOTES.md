@@ -1,3 +1,19 @@
+# TextMark v0.10.22
+
+TextMark 0.10.22 improves sidebar state retention, editor launching, narrow-window find and replace, and direct PDF export.
+
+TextMark 0.10.22 优化侧栏状态保留、外部编辑器启动、窄窗口查找与替换，并改为应用内直接生成 PDF 文件。
+
+## Highlights / 主要更新
+
+- 侧栏：隐藏和切换大纲/文件模式时保留目录展开与标题折叠状态。
+- 外部编辑器：macOS“系统默认编辑器”改为调用系统文本编辑器；补充 VS Code Insiders、VSCodium、Fleet、IntelliJ IDEA、MarkText、MacDown 和 Emacs。
+- 查找：上一个/下一个命中控件在窄窗口仍保持可见；替换行默认折叠、按需打开；匹配导航只滚动预览区域，避免带动整个窗口。
+- 导出：PDF 由应用内生成并保存，不再调起系统打印机/打印面板；导出窗口使用 PDF 文件语义。
+- 验证：前端构建通过，433 项单元测试通过，Rust 检查通过；桌面 WDIO 冒烟仍受 macOS 原生工具栏不可见于 DOM 的既有选择器限制。
+
+---
+
 # TextMark v0.10.21
 
 TextMark 0.10.21 improves keyboard shortcut routing so formatting commands work predictably without hijacking text fields or repeating while a shortcut is held.

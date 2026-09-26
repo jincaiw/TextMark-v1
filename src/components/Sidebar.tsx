@@ -64,6 +64,7 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
 }
 
 interface SidebarProps {
+  visible?: boolean
   mode: SidebarMode
   fileName: string
   /** Identifies the active document. Heading collapse state is kept per
@@ -121,7 +122,7 @@ export function Sidebar(props: SidebarProps) {
     closeContext()
   }
   return (
-    <aside className="native-sidebar">
+    <aside className={`native-sidebar ${props.visible === false ? 'sidebar-collapsed' : ''}`} aria-hidden={props.visible === false}>
       <div className="sidebar-section-title">
         <strong>{props.mode === 'outline' ? props.fileName : (workspaceName ?? t(props.locale, 'project'))}</strong>
       </div>

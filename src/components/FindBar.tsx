@@ -1,4 +1,5 @@
 import { CaseSensitive, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
 import { t } from '../lib/i18n'
 import type { Locale, SearchMode } from '../types'
 
@@ -22,6 +23,7 @@ interface FindBarProps {
 }
 
 export function FindBar(props: FindBarProps) {
+  const [replaceExpanded, setReplaceExpanded] = useState(false)
   const modeToggle = (value: SearchMode, label: Parameters<typeof t>[1]) => (
     <button
       role="button"
@@ -68,35 +70,44 @@ export function FindBar(props: FindBarProps) {
         <button className="find-icon" title={t(props.locale, 'nextMatch')} disabled={!props.count} onClick={props.onNext}>
           <ChevronDown />
         </button>
+        <button
+          className={`find-replace-toggle ${replaceExpanded ? 'selected' : ''}`}
+          aria-expanded={replaceExpanded}
+          onClick={() => setReplaceExpanded((value) => !value)}
+        >
+          {t(props.locale, 'replace')}
+        </button>
         <button className="find-done" onClick={props.onClose}>
           {t(props.locale, 'done')}
         </button>
       </div>
-      <div className="find-replace-row">
-        <div className="find-mode-group">
-          <span className="find-match-label">{t(props.locale, 'match')}</span>
-          {modeToggle('contains', 'contains')}
-          {modeToggle('beginsWith', 'beginsWith')}
+      {replaceExpanded ? (
+        <div className="find-replace-row">
+          <div className="find-mode-group">
+            <span className="find-match-label">{t(props.locale, 'match')}</span>
+            {modeToggle('contains', 'contains')}
+            {modeToggle('beginsWith', 'beginsWith')}
+          </div>
+          <div className="find-replacement-group">
+            <input
+              className="find-replacement"
+              value={props.replacement}
+              onChange={(event) => props.onReplacementChange(event.target.value)}
+              placeholder={t(props.locale, 'replacement')}
+              aria-label={t(props.locale, 'replacement')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') props.onReplace()
+              }}
+            />
+            <button className="find-action" onClick={props.onReplace} disabled={!props.query}>
+              {t(props.locale, 'replace')}
+            </button>
+            <button className="find-action" onClick={props.onReplaceAll} disabled={!props.query}>
+              {t(props.locale, 'replaceAll')}
+            </button>
+          </div>
         </div>
-        <div className="find-replacement-group">
-          <input
-            className="find-replacement"
-            value={props.replacement}
-            onChange={(event) => props.onReplacementChange(event.target.value)}
-            placeholder={t(props.locale, 'replacement')}
-            aria-label={t(props.locale, 'replacement')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') props.onReplace()
-            }}
-          />
-          <button className="find-action" onClick={props.onReplace} disabled={!props.query}>
-            {t(props.locale, 'replace')}
-          </button>
-          <button className="find-action" onClick={props.onReplaceAll} disabled={!props.query}>
-            {t(props.locale, 'replaceAll')}
-          </button>
-        </div>
-      </div>
+      ) : null}
     </div>
   )
 }

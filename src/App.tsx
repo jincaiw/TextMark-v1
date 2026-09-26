@@ -63,7 +63,6 @@ import { configureCrashReporting, crashReportingAvailable } from './lib/telemetr
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
-import { pdfCapability } from './lib/pdfCapability'
 import { isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
 import type { EditorSessionState, ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
 
@@ -494,7 +493,7 @@ function DocumentApp() {
       }
     }
     try {
-      if (application === 'system') await openExternalPath(documents.document.path)
+      if (application === 'system' && !isMacos()) await openExternalPath(documents.document.path)
       else await openInApplication(documents.document.path, application)
     } catch {
       flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.')
@@ -502,7 +501,7 @@ function DocumentApp() {
   }
   const openFileWith = (path: string, application: string) => {
     if (!isTauri()) return
-    if (application === 'system')
+    if (application === 'system' && !isMacos())
       void openExternalPath(path).catch(() =>
         flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.'),
       )
@@ -593,16 +592,7 @@ function DocumentApp() {
   const exportPdf = async () => {
     const restoreEditMode = viewMode === 'edit'
     const previewReady = beginPreviewOutput(restoreEditMode)
-    // macOS's print dialog provides the native “Save as PDF” workflow and
-    // preserves selectable text/vector diagrams. Keep the byte-export path
-    // for browser and non-macOS desktop runtimes; its raster contract is
-    // intentionally explicit until a platform-specific vector printer exists.
     try {
-      const capability = pdfCapability({ tauri: isTauri(), macos: isMacos(), printAvailable: typeof window.print === 'function' })
-      if (capability === 'native-vector') {
-        await printDocument(true)
-        return
-      }
       await previewReady
       const root = document.querySelector<HTMLElement>('.markdown-body')
       if (!root) return
@@ -1251,33 +1241,32 @@ function DocumentApp() {
           className={`document-shell ${sidebarVisible ? 'with-sidebar' : ''} ${inspectorVisible ? 'with-inspector' : ''}`}
           style={{ '--sidebar-width': `${sidebarWidth}px`, '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
         >
-          {sidebarVisible ? (
-            <>
-              <Sidebar
-                locale={settings.locale}
-                mode={sidebarMode}
-                fileName={documents.document.name}
-                documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
-                files={documents.files}
-                workspacePath={documents.workspacePath}
-                activePath={documents.document.path}
-                outline={rendered.outline}
-                activeHeading={activeHeading}
-                applications={applications}
-                defaultOpenTarget={settings.defaultOpenTarget}
-                onOpenFolder={() => void documents.openFolder()}
-                onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
-                onOpenFileInTab={(path) => void documents.openPath(path, true)}
-                onOpenFileInWindow={(path) => void openDocumentWindow(path)}
-                onOpenFileWith={openFileWith}
-                onRevealFile={(path) => void revealInFileManager(path)}
-                onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
-                onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
-                onOutlineSelect={selectOutline}
-              />
-              <PanelResizer side="sidebar" width={sidebarWidth} min={230} max={400} onWidthChange={setSidebarWidth} />
-            </>
-          ) : null}
+          <>
+            <Sidebar
+              visible={sidebarVisible}
+              locale={settings.locale}
+              mode={sidebarMode}
+              fileName={documents.document.name}
+              documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
+              files={documents.files}
+              workspacePath={documents.workspacePath}
+              activePath={documents.document.path}
+              outline={rendered.outline}
+              activeHeading={activeHeading}
+              applications={applications}
+              defaultOpenTarget={settings.defaultOpenTarget}
+              onOpenFolder={() => void documents.openFolder()}
+              onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
+              onOpenFileInTab={(path) => void documents.openPath(path, true)}
+              onOpenFileInWindow={(path) => void openDocumentWindow(path)}
+              onOpenFileWith={openFileWith}
+              onRevealFile={(path) => void revealInFileManager(path)}
+              onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
+              onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
+              onOutlineSelect={selectOutline}
+            />
+            <PanelResizer side="sidebar" width={sidebarWidth} min={230} max={400} onWidthChange={setSidebarWidth} />
+          </>
           <div className="document-workspace">
             <DocumentTools>
               {findOpen ? (

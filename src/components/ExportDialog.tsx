@@ -1,4 +1,4 @@
-import { FileDown, Image, Printer, X } from 'lucide-react'
+import { FileDown, Image, FileText, X } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import type { Locale } from '../types'
@@ -45,7 +45,7 @@ export function ExportDialog({ open, locale, onExportHtml, onExportPng, onExport
             <X />
           </button>
         </header>
-        {item(<Printer />, t(locale, 'exportPdf'), t(locale, 'print'), onExportPdf)}
+        {item(<FileText />, t(locale, 'exportPdf'), 'PDF', onExportPdf)}
         {item(<FileDown />, t(locale, 'exportHtml'), '', onExportHtml)}
         {item(<Image />, t(locale, 'exportPng'), '', onExportPng)}
       </section>

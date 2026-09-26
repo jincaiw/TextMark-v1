@@ -581,13 +581,19 @@ fn watch_paths(
 fn known_application_name(application_id: &str) -> Option<&'static str> {
     match application_id {
         "vscode" => Some("Visual Studio Code"),
+        "vscode-insiders" => Some("Visual Studio Code - Insiders"),
+        "vscodium" => Some("VSCodium"),
         "cursor" => Some("Cursor"),
         "windsurf" => Some("Windsurf"),
         "trae" => Some("Trae"),
         "zed" => Some("Zed"),
+        "fleet" => Some("Fleet"),
+        "intellij" => Some("IntelliJ IDEA"),
         "sublime" => Some("Sublime Text"),
         "obsidian" => Some("Obsidian"),
         "typora" => Some("Typora"),
+        "marktext" => Some("MarkText"),
+        "macdown" => Some("MacDown"),
         "bbedit" => Some("BBEdit"),
         "nova" => Some("Nova"),
         "coteditor" => Some("CotEditor"),
@@ -595,6 +601,7 @@ fn known_application_name(application_id: &str) -> Option<&'static str> {
         "macvim" => Some("MacVim"),
         "xcode" => Some("Xcode"),
         "textedit" => Some("TextEdit"),
+        "emacs" => Some("Emacs"),
         _ => None,
     }
 }
@@ -602,6 +609,11 @@ fn known_application_name(application_id: &str) -> Option<&'static str> {
 fn spawn_known_application(path: &str, application_id: &str) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     let mut command = {
+        if application_id == "system" {
+            let mut command = Command::new("open");
+            command.args(["-t", path]);
+            return command.spawn().map(|_| ()).map_err(io_error);
+        }
         let name = known_application_name(application_id).ok_or(AppError {
             code: "invalid_path",
         })?;
@@ -1407,6 +1419,22 @@ fn discover_applications() -> Vec<ExternalApplication> {
             Some("Visual Studio Code.app"),
         ),
         (
+            "vscode-insiders",
+            "Visual Studio Code Insiders",
+            "editor",
+            false,
+            &["code-insiders"][..],
+            Some("Visual Studio Code - Insiders.app"),
+        ),
+        (
+            "vscodium",
+            "VSCodium",
+            "editor",
+            false,
+            &["codium"][..],
+            Some("VSCodium.app"),
+        ),
+        (
             "cursor",
             "Cursor",
             "editor",
@@ -1431,6 +1459,22 @@ fn discover_applications() -> Vec<ExternalApplication> {
             Some("Trae.app"),
         ),
         ("zed", "Zed", "editor", false, &["zed"][..], Some("Zed.app")),
+        (
+            "fleet",
+            "Fleet",
+            "editor",
+            false,
+            &["fleet"][..],
+            Some("Fleet.app"),
+        ),
+        (
+            "intellij",
+            "IntelliJ IDEA",
+            "editor",
+            false,
+            &["idea"][..],
+            Some("IntelliJ IDEA.app"),
+        ),
         (
             "sublime",
             "Sublime Text",
@@ -1462,6 +1506,22 @@ fn discover_applications() -> Vec<ExternalApplication> {
             false,
             &["typora"][..],
             Some("Typora.app"),
+        ),
+        (
+            "marktext",
+            "MarkText",
+            "editor",
+            false,
+            &["marktext"][..],
+            Some("MarkText.app"),
+        ),
+        (
+            "macdown",
+            "MacDown",
+            "editor",
+            false,
+            &[][..],
+            Some("MacDown.app"),
         ),
         (
             "bbedit",
@@ -1511,6 +1571,14 @@ fn discover_applications() -> Vec<ExternalApplication> {
             false,
             &[][..],
             Some("TextEdit.app"),
+        ),
+        (
+            "emacs",
+            "Emacs",
+            "editor",
+            false,
+            &["emacs"][..],
+            Some("Emacs.app"),
         ),
         (
             "codex",
