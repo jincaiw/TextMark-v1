@@ -580,4 +580,57 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+  it('keeps footnote fragment navigation inside the preview scroller', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const rendered: RenderedMarkdown = {
+      html: '<p>Reference<a href="#fn1" class="footnote-ref">1</a></p><section class="footnotes"><ol><li id="fn1">Footnote text</li></ol></section>',
+      outline: [],
+      hasMermaid: false,
+      hasMath: false,
+      frontmatter: [],
+      sourceMap: [],
+      tables: [],
+      tasks: [],
+      optionalRenderers: [],
+      direction: 'auto',
+    }
+    const props = {
+      rendered,
+      documentKey: 'footnotes',
+      initialScrollTop: 0,
+      baseDirectory: null,
+      workspacePath: null,
+      zoom: 100,
+      contentWidth: 'normal' as const,
+      searchQuery: '',
+      searchIndex: 0,
+      matchCase: false,
+      searchMode: 'contains' as const,
+      locale: 'zh-CN' as const,
+      onSearchCount: vi.fn(),
+      onActiveHeading: vi.fn(),
+      onZoomChange: vi.fn(),
+      onOpenRelative: vi.fn(),
+      onRenameImage: vi.fn(),
+      onToggleTask: vi.fn(),
+      onEditTable: vi.fn(),
+    }
+    await act(async () => root.render(<PreviewPane {...props} />))
+    const pane = host.querySelector<HTMLElement>('.preview-pane')!
+    const note = host.querySelector<HTMLElement>('#fn1')!
+    pane.scrollTop = 16
+    pane.scrollTo = vi.fn()
+    pane.getBoundingClientRect = () => ({ top: 80 }) as DOMRect
+    note.getBoundingClientRect = () => ({ top: 380 }) as DOMRect
+
+    await act(async () => host.querySelector<HTMLAnchorElement>('.footnote-ref')!.click())
+
+    expect(pane.scrollTo).toHaveBeenCalledWith({ top: 316, behavior: 'smooth' })
+    expect(window.location.hash).toBe('#fn1')
+    await act(async () => root.unmount())
+    host.remove()
+    window.history.replaceState(window.history.state, '', window.location.pathname)
+  })
 })

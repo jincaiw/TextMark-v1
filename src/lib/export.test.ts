@@ -27,12 +27,12 @@ describe('self-contained HTML export', () => {
     document.documentElement.dataset.theme = 'dark'
     document.documentElement.style.setProperty('--document-text', '#f3f3f3')
     const style = document.createElement('style')
-    style.textContent = '.injected-export-style{color:rgb(1,2,3)}'
+    style.textContent = '.injected-export-style{color:rgb(1,2,3)}html,body,#root{height:100%;overflow:hidden}'
     document.head.append(style)
     const root = document.createElement('article')
     root.className = 'markdown-body'
     root.innerHTML =
-      '<h1>导出</h1><img alt="local" src="data:image/png;base64,AA=="><img alt="missing" src=""><button class="copy-code-button">Copy</button><mark class="search-match">命中</mark>'
+      '<h1>导出</h1><img alt="local" src="data:image/png;base64,AA=="><img alt="missing" src=""><button class="copy-code-button">Copy</button><mark class="search-match">命中</mark><h2>下半部分</h2><p>长文档末尾内容</p>'
     document.body.append(root)
     const html = await buildSelfContainedHtml('示例.md', root)
     expect(html).toContain('<html lang="zh-CN" data-theme="dark" style="--document-text:#f3f3f3">')
@@ -40,6 +40,10 @@ describe('self-contained HTML export', () => {
     expect(html).toContain('.injected-export-style')
     expect(html).toContain('<img alt="missing" class="asset-error">')
     expect(html).toContain("default-src 'none'")
+    expect(html).toContain('长文档末尾内容')
+    expect(html.lastIndexOf('html,body{height:auto;min-height:100%;overflow:visible}')).toBeGreaterThan(
+      html.lastIndexOf('html,body,#root{height:100%;overflow:hidden}'),
+    )
     expect(html).not.toContain('copy-code-button">Copy')
     expect(html).not.toContain('search-match')
     expect(html).toContain('命中')

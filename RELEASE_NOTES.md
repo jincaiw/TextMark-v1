@@ -1,3 +1,17 @@
+# TextMark v0.10.25
+
+TextMark 0.10.25 fixes footnote navigation in the preview and prevents standalone HTML exports from being clipped to the app window.
+
+TextMark 0.10.25 修复预览内脚注跳转异常，并解决导出 HTML 被应用窗口高度截断的问题。
+
+## Highlights / 主要更新
+
+- 脚注：片段跳转和回跳只滚动预览区域，保留浏览器历史定位，不再连带移动窗口/页面外层。
+- HTML 导出：移除应用窗口的固定视口与隐藏溢出约束，导出文件可正常滚动浏览完整长文档。
+- 验证：新增片段导航与导出完整性回归覆盖；前端测试、Rust 测试、构建、lint、格式检查和包体预算通过。
+
+---
+
 # TextMark v0.10.24
 
 TextMark 0.10.24 fixes document-title overlap in narrow desktop toolbars and improves sidebar control layout reliability.

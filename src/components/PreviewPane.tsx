@@ -11,6 +11,7 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
 import { buildSearchPattern } from '../lib/search'
+import { scrollPreviewToFragment } from '../lib/previewNavigation'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
 
 interface PreviewPaneProps {
@@ -134,6 +135,21 @@ export function PreviewPane(props: PreviewPaneProps) {
     const pane = paneRef.current
     pane.scrollTop = clampScrollFraction(props.initialScrollFraction) * Math.max(0, pane.scrollHeight - pane.clientHeight)
   }, [props.initialScrollFraction])
+
+  useEffect(() => {
+    const pane = paneRef.current
+    const root = containerRef.current
+    if (!pane || !root) return
+    const restoreFragment = () => {
+      if (window.location.hash) scrollPreviewToFragment(pane, root, window.location.hash)
+    }
+    window.addEventListener('popstate', restoreFragment)
+    window.addEventListener('hashchange', restoreFragment)
+    return () => {
+      window.removeEventListener('popstate', restoreFragment)
+      window.removeEventListener('hashchange', restoreFragment)
+    }
+  }, [props.documentKey, props.rendered.html])
 
   useEffect(() => {
     const pane = paneRef.current
@@ -619,7 +635,15 @@ export function PreviewPane(props: PreviewPaneProps) {
           const anchor = target.closest<HTMLAnchorElement>('a[href]')
           if (!anchor) return
           const href = anchor.getAttribute('href') ?? ''
-          if (href.startsWith('#')) return
+          if (href.startsWith('#')) {
+            const pane = paneRef.current
+            const root = containerRef.current
+            if (pane && root && scrollPreviewToFragment(pane, root, href)) {
+              event.preventDefault()
+              if (window.location.hash !== href) window.history.pushState(window.history.state, '', href)
+            }
+            return
+          }
           event.preventDefault()
           if (/^https?:/i.test(href)) isTauri() ? void openUrl(href) : window.open(href, '_blank', 'noopener,noreferrer')
           else if (/\.(?:md|markdown|mdown|mkd|mkdn)(?:[?#].*)?$/i.test(href)) props.onOpenRelative(href)

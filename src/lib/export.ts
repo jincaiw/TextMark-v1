@@ -2,6 +2,11 @@ export const documentCss = `
 :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#1d1d1f;font:16px/1.58 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.markdown-body{width:min(820px,100%);margin:0 auto;padding:48px 40px 80px;overflow-wrap:anywhere}h1,h2,h3,h4,h5,h6{line-height:1.2;letter-spacing:-.02em}h1{font-size:2.15em}h2{margin-top:1.55em;font-size:1.65em}strong{font-weight:650}s,del{color:#6e6e73;text-decoration-thickness:1.5px}sub,sup{line-height:0}a{color:#0678de}blockquote,.markdown-alert{margin:1.2em 0;padding:1em 1.15em;border-radius:10px;background:#f4f4f6}details{margin:1.2em 0;padding:12px 14px;border:1px solid #ddd;border-radius:9px;background:#fafafa}summary{cursor:pointer;font-weight:600}details[open] summary{margin-bottom:10px}pre{overflow:auto;padding:18px 20px;border-radius:10px;background:#f2f2f5}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}kbd{display:inline-block;min-width:1.7em;padding:.08em .42em;border:1px solid #d2d2d7;border-bottom-width:2px;border-radius:5px;background:#f5f5f7;font:82%/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center}img,svg{max-width:100%;height:auto}.markdown-alert-icon{width:1em;height:1em;margin-right:.5em;vertical-align:-.12em;fill:currentColor}table{width:100%;border-spacing:0;border-collapse:separate;border:1px solid #ddd;border-radius:9px;overflow:hidden}td,th{padding:.62em .75em;border-right:1px solid #ddd;border-bottom:1px solid #ddd;text-align:left}th{background:#f5f5f6}.footnotes{margin-top:2.35em;padding-top:1em;border-top:1px solid #ddd;font-size:.9em}.diagram{margin:1.4em 0;padding:18px;border:1px solid #ddd;border-radius:10px}.copy-code-button,.diagram-hud{display:none!important}@media print{@page{size:A4;margin:16mm 15mm 18mm}body{font-size:11pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}.markdown-body{width:100%;padding:0}h1,h2,h3,h4,h5,h6{break-after:avoid-page}pre,table,blockquote,.markdown-alert,.diagram,details,img{break-inside:avoid-page}thead{display:table-header-group}}
 `
 
+// The live application stylesheet intentionally pins its shell to one window
+// viewport. An exported document has no shell and must be allowed to grow and
+// scroll with all of its Markdown content.
+const exportDocumentViewportCss = 'html,body{height:auto;min-height:100%;overflow:visible}#root{height:auto;overflow:visible}'
+
 const cleanName = (name: string) =>
   name.replace(/\.(?:md|markdown|mdown|mkd|mkdn|mdwn|mdtxt|mdtext|rmd|txt)$/i, '').replace(/[<>:"/\\|?*]/g, '-')
 
@@ -234,7 +239,7 @@ export async function buildSelfContainedHtml(name: string, root: HTMLElement) {
   const clone = exportClone(root)
   await inlineImages(root, clone)
   const title = name.replace(/[<&>]/g, '')
-  const css = await selfContainedStyles()
+  const css = `${await selfContainedStyles()}\n${exportDocumentViewportCss}`
   const html = document.documentElement
   const theme = html.dataset.theme || 'light'
   const themeStyle = documentThemeProperties
