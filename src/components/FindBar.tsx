@@ -34,8 +34,9 @@ export function FindBar(props: FindBarProps) {
   )
   return (
     <div className="find-bar" role="search">
-      <div className="find-stack-left">
+      <div className="find-query-row">
         <input
+          className="find-query"
           autoFocus
           value={props.query}
           onChange={(event) => props.onQueryChange(event.target.value)}
@@ -46,26 +47,6 @@ export function FindBar(props: FindBarProps) {
             if (event.key === 'Escape') props.onClose()
           }}
         />
-        <span className="find-match-label">{t(props.locale, 'match')}</span>
-        {modeToggle('contains', 'contains')}
-        {modeToggle('beginsWith', 'beginsWith')}
-        <input
-          value={props.replacement}
-          onChange={(event) => props.onReplacementChange(event.target.value)}
-          placeholder={t(props.locale, 'replacement')}
-          aria-label={t(props.locale, 'replacement')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') props.onReplace()
-          }}
-        />
-        <button className="find-action" onClick={props.onReplace} disabled={!props.query}>
-          {t(props.locale, 'replace')}
-        </button>
-        <button className="find-action" onClick={props.onReplaceAll} disabled={!props.query}>
-          {t(props.locale, 'replaceAll')}
-        </button>
-      </div>
-      <div className="find-stack-right">
         <span className="find-count">
           {props.query
             ? props.count
@@ -90,6 +71,31 @@ export function FindBar(props: FindBarProps) {
         <button className="find-done" onClick={props.onClose}>
           {t(props.locale, 'done')}
         </button>
+      </div>
+      <div className="find-replace-row">
+        <div className="find-mode-group">
+          <span className="find-match-label">{t(props.locale, 'match')}</span>
+          {modeToggle('contains', 'contains')}
+          {modeToggle('beginsWith', 'beginsWith')}
+        </div>
+        <div className="find-replacement-group">
+          <input
+            className="find-replacement"
+            value={props.replacement}
+            onChange={(event) => props.onReplacementChange(event.target.value)}
+            placeholder={t(props.locale, 'replacement')}
+            aria-label={t(props.locale, 'replacement')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') props.onReplace()
+            }}
+          />
+          <button className="find-action" onClick={props.onReplace} disabled={!props.query}>
+            {t(props.locale, 'replace')}
+          </button>
+          <button className="find-action" onClick={props.onReplaceAll} disabled={!props.query}>
+            {t(props.locale, 'replaceAll')}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import {
-  AppWindow,
   ChevronLeft,
   Clipboard,
   FileDown,
+  FileOutput,
+  FileSearch,
   FilePenLine,
+  Files,
+  FolderOpen,
   GripVertical,
   Info,
+  ExternalLink,
   PanelLeft,
   Pin,
   Printer,
@@ -76,8 +80,9 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
     case 'sidebar':
       return <PanelLeft />
     case 'openActions':
+      return <FolderOpen />
     case 'openWith':
-      return <AppWindow />
+      return <ExternalLink />
     case 'openInLlm':
       return <Sparkles />
     case 'zoom':
@@ -85,7 +90,7 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
     case 'themesAndSettings':
       return <Settings />
     case 'documentActions':
-      return <Info />
+      return <Files />
     case 'inspector':
       return <Info />
     case 'alwaysOnTop':
@@ -95,13 +100,15 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
     case 'edit':
       return <FilePenLine />
     case 'search':
-    case 'documentSearch':
       return <Search />
+    case 'documentSearch':
+      return <FileSearch />
     case 'print':
       return <Printer />
     case 'copy':
       return <Clipboard />
     case 'export':
+      return <FileOutput />
     case 'exportPdf':
       return <FileDown />
     case 'flexibleSpace':

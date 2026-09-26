@@ -745,11 +745,19 @@ select:focus-visible {
   z-index: 9;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 5px;
   padding: var(--space-1) 18px;
   border-bottom: 1px solid var(--border);
   background: var(--chrome);
+}
+.find-query-row .find-query {
+  width: clamp(150px, 22vw, 280px);
+  flex: 0 1 240px;
+}
+.find-replace-row .find-replacement {
+  width: clamp(120px, 16vw, 210px);
+  flex: 0 1 180px;
 }
 .project-search-backdrop {
   position: fixed;
@@ -1097,6 +1105,7 @@ select:focus-visible {
   position: absolute;
   z-index: 9;
   inset: 0 0 auto;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
 }
@@ -1111,20 +1120,31 @@ select:focus-visible {
   flex-shrink: 0;
 }
 .document-tools .find-bar {
-  flex-wrap: wrap;
+  align-items: center;
   padding: 4px 10px;
 }
-.document-tools .find-stack-left {
-  flex: 1 1 430px;
-  flex-wrap: wrap;
+.find-query-row,
+.find-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
-.document-tools .find-stack-left > input {
-  width: clamp(88px, 14vw, 180px);
-  flex: 1 1 88px;
+.find-query-row {
+  flex: 0 1 540px;
 }
-.document-tools .find-stack-right {
-  flex: 0 0 auto;
-  margin-left: auto;
+.find-replace-row {
+  flex: 0 1 auto;
+}
+.find-mode-group,
+.find-replacement-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.find-replacement-group {
+  flex: 0 1 auto;
 }
 .preview-pane {
   scroll-padding-top: var(--document-tools-height, 0px);
@@ -2160,10 +2180,15 @@ select:focus-visible {
   background: var(--document-grid);
 }
 .markdown-body blockquote {
-  margin: 20px 0 0;
-  padding: 2px 0 2px 1em;
-  border-inline-start: 3px solid color-mix(in srgb, var(--accent-color) 40%, var(--document-grid));
+  margin: 18px 0 0;
+  padding: 2px 0 2px 14px;
+  border-inline-start: 4px solid color-mix(in srgb, var(--document-secondary) 38%, transparent);
   color: var(--document-secondary);
+}
+.markdown-body blockquote blockquote {
+  margin-top: 12px;
+  margin-inline-start: 8px;
+  border-inline-start-color: color-mix(in srgb, var(--document-secondary) 24%, transparent);
 }
 .markdown-body blockquote p:first-child {
   margin-top: 0;
@@ -2192,14 +2217,18 @@ select:focus-visible {
   width: 100%;
   margin: 20px 0 0;
   overflow-x: auto;
-  border-radius: var(--radius-md);
+  border-radius: calc(var(--radius-md) + 1px);
 }
 .markdown-body table {
   width: 100%;
   min-width: max-content;
   margin: 0;
+  border: 1px solid var(--document-grid);
   border-spacing: 0;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
   font-size: 0.92em;
 }
 .markdown-body.textmark-exporting {
@@ -2230,8 +2259,17 @@ select:focus-visible {
 .markdown-body th,
 .markdown-body td {
   padding: 8px 10px;
-  border: 1px solid var(--document-grid);
+  border: 0;
+  border-inline-end: 1px solid var(--document-grid);
+  border-block-end: 1px solid var(--document-grid);
   text-align: start;
+}
+.markdown-body tr > :last-child {
+  border-inline-end: 0;
+}
+.markdown-body tbody > tr:last-child > td,
+.markdown-body tr:last-child > th {
+  border-block-end: 0;
 }
 .markdown-body th {
   background: color-mix(in srgb, var(--document-fill) 68%, transparent);
@@ -2488,7 +2526,10 @@ pre:hover .copy-code-button {
   width: 100%;
   margin: 0;
   table-layout: fixed;
+  border: 0;
+  border-radius: 0;
   overflow: visible;
+  background: transparent;
   font-size: 0.92em;
   line-height: 1.5;
 }
@@ -3753,6 +3794,71 @@ mark.search-match.active {
   }
   .find-bar input {
     width: min(190px, 45vw);
+  }
+}
+@container (max-width: 1200px) {
+  .document-tools .find-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px 10px;
+  }
+  .find-query-row,
+  .find-replace-row {
+    width: 100%;
+    min-width: 0;
+  }
+  .find-query-row .find-query {
+    width: auto;
+    min-width: 48px;
+    flex: 1 1 100px;
+  }
+  .find-query-row .find-count {
+    min-width: 52px;
+    white-space: nowrap;
+  }
+  .find-query-row .find-icon {
+    width: 28px;
+    flex: 0 0 28px;
+  }
+  .find-query-row .find-done {
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
+  .find-replace-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  .find-mode-group,
+  .find-replacement-group {
+    flex-wrap: nowrap;
+  }
+  .find-replace-row .find-replacement {
+    width: auto;
+    min-width: 48px;
+    flex: 1 1 80px;
+  }
+  .find-replace-row .find-mode,
+  .find-replace-row .find-action {
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+}
+@container (max-width: 560px) {
+  .find-replace-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+  .find-mode-group {
+    justify-content: flex-start;
+  }
+  .find-replacement-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .find-replace-row .find-replacement {
+    min-width: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

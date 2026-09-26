@@ -24,6 +24,8 @@ afterEach(() => {
 describe('self-contained HTML export', () => {
   it('keeps rendered content and data images while removing screen-only controls', async () => {
     document.documentElement.lang = 'zh-CN'
+    document.documentElement.dataset.theme = 'dark'
+    document.documentElement.style.setProperty('--document-text', '#f3f3f3')
     const style = document.createElement('style')
     style.textContent = '.injected-export-style{color:rgb(1,2,3)}'
     document.head.append(style)
@@ -33,7 +35,7 @@ describe('self-contained HTML export', () => {
       '<h1>导出</h1><img alt="local" src="data:image/png;base64,AA=="><img alt="missing" src=""><button class="copy-code-button">Copy</button><mark class="search-match">命中</mark>'
     document.body.append(root)
     const html = await buildSelfContainedHtml('示例.md', root)
-    expect(html).toContain('<html lang="zh-CN">')
+    expect(html).toContain('<html lang="zh-CN" data-theme="dark" style="--document-text:#f3f3f3">')
     expect(html).toContain('data:image/png;base64,AA==')
     expect(html).toContain('.injected-export-style')
     expect(html).toContain('<img alt="missing" class="asset-error">')
@@ -88,7 +90,7 @@ describe('raster dimensions', () => {
 })
 
 describe('raster export appearance', () => {
-  it('captures with the light palette and restores inline theme colors exactly', async () => {
+  it('preserves the on-screen palette and restores inline theme colors exactly', async () => {
     const html = document.documentElement
     const root = document.createElement('article')
     document.body.append(root)
@@ -97,9 +99,9 @@ describe('raster export appearance', () => {
     html.style.setProperty('--document-text', '#ffffff', 'important')
     html.style.setProperty('--unrelated-export-token', 'preserved')
     mockedToBlob.mockImplementation(async () => {
-      expect(html.dataset.theme).toBe('light')
-      expect(html.style.getPropertyValue('--window')).toBe('')
-      expect(html.style.getPropertyValue('--document-text')).toBe('')
+      expect(html.dataset.theme).toBe('dark')
+      expect(html.style.getPropertyValue('--window')).toBe('#101010')
+      expect(html.style.getPropertyValue('--document-text')).toBe('#ffffff')
       expect(html.style.getPropertyValue('--unrelated-export-token')).toBe('preserved')
       expect(root.classList).toContain('textmark-exporting')
       return new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })

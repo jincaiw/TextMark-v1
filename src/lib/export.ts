@@ -71,7 +71,7 @@ interface RasterCapture {
 
 const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 
-async function captureLiveRaster(root: HTMLElement, pixelRatio = 2): Promise<RasterCapture> {
+async function captureLiveRaster(root: HTMLElement, pixelRatio = 2, preserveTheme = false): Promise<RasterCapture> {
   // Rasterize the live, laid-out node (offscreen fixed clones render blank in
   // desktop webviews). Force the light palette during capture so dark-mode
   // documents export as readable light documents. Blob output avoids the very
@@ -95,10 +95,12 @@ async function captureLiveRaster(root: HTMLElement, pixelRatio = 2): Promise<Ras
     value: html.style.getPropertyValue(property),
     priority: html.style.getPropertyPriority(property),
   }))
-  html.dataset.theme = 'light'
-  // Theme presets are applied as inline custom properties, which otherwise
-  // override the light export palette even after data-theme changes.
-  documentThemeProperties.forEach((property) => html.style.removeProperty(property))
+  if (!preserveTheme) {
+    html.dataset.theme = 'light'
+    // Theme presets are applied as inline custom properties, which otherwise
+    // override the light export palette even after data-theme changes.
+    documentThemeProperties.forEach((property) => html.style.removeProperty(property))
+  }
   try {
     await document.fonts?.ready
     const attempts = [
@@ -233,7 +235,16 @@ export async function buildSelfContainedHtml(name: string, root: HTMLElement) {
   await inlineImages(root, clone)
   const title = name.replace(/[<&>]/g, '')
   const css = await selfContainedStyles()
-  return `<!doctype html><html lang="${document.documentElement.lang || 'zh-CN'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"><title>${title}</title><style>${css}</style></head><body>${clone.outerHTML}</body></html>`
+  const html = document.documentElement
+  const theme = html.dataset.theme || 'light'
+  const themeStyle = documentThemeProperties
+    .map((property) => {
+      const value = html.style.getPropertyValue(property)
+      return value ? `${property}:${value}` : ''
+    })
+    .filter(Boolean)
+    .join(';')
+  return `<!doctype html><html lang="${html.lang || 'zh-CN'}" data-theme="${theme}" style="${themeStyle}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"><title>${title}</title><style>${css}</style></head><body>${clone.outerHTML}</body></html>`
 }
 
 export async function downloadHtml(name: string, root: HTMLElement) {
@@ -251,7 +262,8 @@ export async function buildHtmlExport(name: string, root: HTMLElement) {
 }
 
 export async function buildPngExport(name: string, root: HTMLElement) {
-  const { blob } = await captureLiveRaster(root, 2)
+  // PNG is a screenshot-style export: preserve the exact on-screen theme.
+  const { blob } = await captureLiveRaster(root, 2, true)
   return { name: `${cleanName(name)}@2x.png`, bytes: new Uint8Array(await blob.arrayBuffer()) }
 }
 

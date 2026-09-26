@@ -1,3 +1,18 @@
+# TextMark v0.10.20
+
+TextMark 0.10.20 improves document search at narrow widths, closes table borders cleanly, strengthens nested quote styling, and preserves the active theme in HTML and PNG exports. Toolbar customization also uses distinct icons for similar actions.
+
+TextMark 0.10.20 优化窄窗口查找布局、表格边框衔接和嵌套引用显示；HTML 与 PNG 导出保留当前主题，并区分自定义工具栏中相似操作的图标。
+
+## Highlights / 主要更新
+
+- 查找与替换：按实际工具区宽度自适应分组，避免半屏窗口下控件折叠或散落。
+- Markdown 渲染：表格四角和外边框连贯，引用层级更清晰；frontmatter 表格保持原有紧凑样式。
+- 导出：HTML 文件保留文档主题变量，PNG 保留屏幕当前配色；macOS PDF 继续走原生矢量打印流程。
+- 自定义工具栏：为打开、搜索、导出等相近项目提供易区分的图标。
+
+---
+
 # TextMark v0.10.19
 TextMark 0.10.19 completes another desktop-toolbar parity pass against Markdown Preview 0.0.62: the document title sits in the same left-center toolbar lane, in-document search stays visible as a native-width field, and toolbar customization uses a compact five-column palette.
 
