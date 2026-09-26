@@ -64,6 +64,7 @@ import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
 import { pdfCapability } from './lib/pdfCapability'
+import { isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
 import type { EditorSessionState, ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
@@ -724,8 +725,9 @@ function DocumentApp() {
     else if (externalMenuUrl(command)) void openUrl(externalMenuUrl(command)!)
     else if (command === 'help') void openUrl('https://github.com/jincaiw/TextMark-v1#readme')
     else if (command === 'customize-toolbar') setToolbarOpen(true)
-    else if (command.startsWith('format-')) format(command.slice('format-'.length) as FormatCommand)
-    else if (command === 'go-up') scrollPreviewLine(-1)
+    else if (command.startsWith('format-')) {
+      if (!isTextEntryControl(document.activeElement)) format(command.slice('format-'.length) as FormatCommand)
+    } else if (command === 'go-up') scrollPreviewLine(-1)
     else if (command === 'go-down') scrollPreviewLine(1)
     else if (command === 'go-page-up') scrollPreviewPage(-1)
     else if (command === 'go-page-down') scrollPreviewPage(1)
@@ -822,6 +824,7 @@ function DocumentApp() {
       const modifier = event.metaKey || event.ctrlKey
       const target = event.target as HTMLElement
       const isTyping = target.matches('input, textarea, select, [contenteditable=true]')
+      if (modifier && event.repeat) return
       if (event.key === 'Escape' && findOpen) {
         event.preventDefault()
         setFindOpen(false)
@@ -880,6 +883,7 @@ function DocumentApp() {
       }
       if (!modifier) return
       const key = event.key.toLowerCase()
+      if (isTextEntryControl(target) && isFormattingShortcut(event)) return
       if (event.altKey && (key === '0' || key === '1' || key === '2' || key === '3')) {
         event.preventDefault()
         format((key === '0' ? 'h0' : `h${key}`) as FormatCommand)

@@ -1,3 +1,16 @@
+# TextMark v0.10.21
+
+TextMark 0.10.21 improves keyboard shortcut routing so formatting commands work predictably without hijacking text fields or repeating while a shortcut is held.
+
+TextMark 0.10.21 优化快捷键路由：格式快捷键不会抢占查找等文本输入框，按住组合键也不会重复触发文稿操作。
+
+## Highlights / 主要更新
+
+- 快捷键：编辑和预览共用格式菜单快捷键；焦点位于输入框时保留输入控件自身操作，原生菜单快捷键也遵循相同规则。
+- 操作体验：修复按住组合键时重复执行文稿操作的问题；新增快捷键路由回归测试。
+
+---
+
 # TextMark v0.10.20
 
 TextMark 0.10.20 improves document search at narrow widths, closes table borders cleanly, strengthens nested quote styling, and preserves the active theme in HTML and PNG exports. Toolbar customization also uses distinct icons for similar actions.
