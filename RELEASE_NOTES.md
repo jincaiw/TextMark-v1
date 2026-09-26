@@ -1,3 +1,17 @@
+# TextMark v0.10.24
+
+TextMark 0.10.24 fixes document-title overlap in narrow desktop toolbars and improves sidebar control layout reliability.
+
+TextMark 0.10.24 修复窄窗口桌面工具栏中文稿标题与操作按钮重叠的问题，并提升侧边栏控件布局稳定性。
+
+## Highlights / 主要更新
+
+- 工具栏：文稿标题限制在自定义弹性空间内，窗口变窄时自动省略，不再覆盖侧栏或首个工具栏操作。
+- 侧边栏：回归检查确认大纲/文件模式切换会正确恢复侧栏，显隐开关状态同步。
+- 验证：工具栏组件测试、生产构建与 lint 通过。
+
+---
+
 # TextMark v0.10.23
 
 TextMark 0.10.23 improves Edit Mode navigation, toolbar layout, external editor discovery, and direct PDF output.

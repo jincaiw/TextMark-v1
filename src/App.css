@@ -399,14 +399,11 @@ select:focus-visible {
   min-width: 0;
 }
 .toolbar-document-title {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  /* AppKit places the document title in the middle toolbar lane, just after
-     the tracked sidebar region; the full web flex gap is wider than that lane. */
-  left: calc(50% - 10vw);
+  /* Keep the title inside its flexible toolbar slot. Absolute positioning here
+     let it escape the slot and overlap the first action at half-window widths. */
   display: block;
-  width: min(360px, 100%);
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   color: var(--text);
   opacity: 0.58;
@@ -415,7 +412,6 @@ select:focus-visible {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .native-actions > .toolbar-space {

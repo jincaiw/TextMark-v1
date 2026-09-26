@@ -179,7 +179,7 @@ describe('Toolbar', () => {
     expect(host.querySelector('.toolbar-navigation')).toBeNull()
   })
 
-  it('将文稿名绘制在首个弹性空位的中心', () => {
+  it('将文稿名限制在首个弹性空位内，避免覆盖工具栏操作', () => {
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'flexibleSpace', 'openActions', 'search'] }))
     expect(host.querySelector('.toolbar-flexible-space .toolbar-document-title')?.textContent).toBe('A long document name.md')
 
