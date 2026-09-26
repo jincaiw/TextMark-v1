@@ -1,3 +1,19 @@
+# TextMark v0.10.23
+
+TextMark 0.10.23 improves Edit Mode navigation, toolbar layout, external editor discovery, and direct PDF output.
+
+TextMark 0.10.23 优化编辑模式的导航与工具栏布局，扩充外部编辑器发现，并改进应用内 PDF 导出路径。
+
+## Highlights / 主要更新
+
+- 编辑模式：格式工具栏收敛为悬浮胶囊布局，窄窗口查找/替换控件保持可见；查找定位只滚动编辑器内容，不再带动整个页面上移。
+- 文件导航：默认折叠目录，并跳过 macOS 应用包、框架及文稿包，避免侧栏被包内文件淹没。
+- 外部编辑器：增加 MarkEdit、Mellow、Taio 的应用发现；macOS 仍按系统 Markdown/纯文本编辑角色筛选可用应用。
+- 打印/PDF：打印操作统一使用 TextMark 内置 PDF 导出及保存流程，不再打开系统打印面板。
+- 验证：格式、lint、生产构建、433 项前端测试和 Rust 单元测试通过。
+
+---
+
 # TextMark v0.10.22
 
 TextMark 0.10.22 improves sidebar state retention, editor launching, narrow-window find and replace, and direct PDF export.

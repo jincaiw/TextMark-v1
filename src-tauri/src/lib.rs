@@ -592,6 +592,9 @@ fn known_application_name(application_id: &str) -> Option<&'static str> {
         "sublime" => Some("Sublime Text"),
         "obsidian" => Some("Obsidian"),
         "typora" => Some("Typora"),
+        "markedit" => Some("MarkEdit"),
+        "mellow" => Some("Mellow"),
+        "taio" => Some("Taio"),
         "marktext" => Some("MarkText"),
         "macdown" => Some("MacDown"),
         "bbedit" => Some("BBEdit"),
@@ -1508,6 +1511,23 @@ fn discover_applications() -> Vec<ExternalApplication> {
             Some("Typora.app"),
         ),
         (
+            "markedit",
+            "MarkEdit",
+            "editor",
+            false,
+            &[][..],
+            Some("MarkEdit.app"),
+        ),
+        (
+            "mellow",
+            "Mellow",
+            "editor",
+            false,
+            &[][..],
+            Some("Mellow.app"),
+        ),
+        ("taio", "Taio", "editor", false, &[][..], Some("Taio.app")),
+        (
             "marktext",
             "MarkText",
             "editor",
@@ -1637,6 +1657,13 @@ fn scan_directory(path: &Path, depth: usize) -> AppResult<Vec<FileNode>> {
                 return None;
             }
             let is_directory = entry_path.is_dir();
+            // macOS document bundles and package directories are containers,
+            // not workspace folders. Traversing them exposes hundreds of
+            // implementation files in the Markdown navigator and wastes the
+            // scan budget before reaching documents the user can open.
+            if is_directory && is_package_directory(&entry_path) {
+                return None;
+            }
             if !is_directory && !is_markdown(&entry_path) {
                 return None;
             }
@@ -1659,6 +1686,17 @@ fn scan_directory(path: &Path, depth: usize) -> AppResult<Vec<FileNode>> {
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(entries)
+}
+
+fn is_package_directory(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "app" | "bundle" | "framework" | "rtfd" | "pkg" | "playground" | "photoslibrary"
+            )
+        })
 }
 
 #[tauri::command]
@@ -2227,13 +2265,6 @@ fn open_settings_window(app: tauri::AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-fn print_current_window(window: tauri::WebviewWindow) -> AppResult<()> {
-    // Wry exposes the system print dialog on macOS. Unlike an image-backed
-    // export, this keeps text and vector diagrams selectable in “Save as PDF”.
-    window.print().map_err(io_error)
-}
-
 #[cfg(unix)]
 fn install_cli_on_platform(exe: &Path, home: &str) -> IntegrationResult {
     let bin = Path::new(home).join(".local").join("bin");
@@ -2573,7 +2604,6 @@ pub fn run() {
             install_update_channel,
             open_mermaid_window,
             open_settings_window,
-            print_current_window,
             install_cli,
             set_default_handler,
             refresh_menu,
@@ -2818,6 +2848,19 @@ mod tests {
     }
 
     #[test]
+    fn file_navigator_treats_application_and_document_bundles_as_packages() {
+        for path in [
+            "/Applications/Editor.app",
+            "/Library/Frameworks/Example.framework",
+            "/Users/example/Documents/Notes.rtfd",
+            "/Users/example/Photos.photoslibrary",
+        ] {
+            assert!(is_package_directory(Path::new(path)), "{path}");
+        }
+        assert!(!is_package_directory(Path::new("/Users/example/Notes")));
+    }
+
+    #[test]
     fn external_application_catalog_includes_common_editors_and_ai_apps() {
         let ids = discover_applications()
             .into_iter()
@@ -2834,6 +2877,9 @@ mod tests {
             "notepadpp",
             "obsidian",
             "typora",
+            "markedit",
+            "mellow",
+            "taio",
             "codex",
             "claude",
             "chatgpt",
@@ -2860,6 +2906,9 @@ mod tests {
             ("sublime", "Sublime Text"),
             ("obsidian", "Obsidian"),
             ("typora", "Typora"),
+            ("markedit", "MarkEdit"),
+            ("mellow", "Mellow"),
+            ("taio", "Taio"),
             ("bbedit", "BBEdit"),
             ("nova", "Nova"),
             ("coteditor", "CotEditor"),

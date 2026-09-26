@@ -43,7 +43,6 @@ import {
   installCli,
   openDocumentWindow,
   openSettingsWindow,
-  printCurrentWindow,
   openInApplication,
   readDocument,
   recordRecentFile,
@@ -53,8 +52,6 @@ import {
   setDefaultHandler,
   shareSourceNatively,
   shouldUseDedicatedSettingsWindow,
-  tempExportPath,
-  writeExportBytes,
 } from './lib/platform'
 import { partitionDroppedPaths } from './lib/documentPresentation'
 import { editMarkdownTable } from './lib/table'
@@ -609,48 +606,9 @@ function DocumentApp() {
       if (restoreEditMode) switchViewMode('edit')
     }
   }
-  const printDocument = async (exportingPdf = false) => {
-    const restoreEditMode = viewMode === 'edit'
-    const previewReady = beginPreviewOutput(restoreEditMode)
-    const html = document.documentElement
-    const previousPdfMode = html.getAttribute('data-export-pdf')
-    if (exportingPdf) html.dataset.exportPdf = '1'
-    try {
-      // Use Wry's native macOS print dialog first. Its “Save as PDF” path keeps
-      // text and vector diagrams selectable instead of flattening the page.
-      if (isTauri() && isMacos()) {
-        await previewReady
-        try {
-          await printCurrentWindow()
-          return
-        } catch {
-          // Older WebKit/Wry builds can reject native printing. Preserve the
-          // portable PDF-preview fallback for those installations.
-        }
-        const root = document.querySelector<HTMLElement>('.markdown-body')
-        if (!root) return
-        try {
-          const exporter = await import('./lib/export')
-          const { bytes } = await exporter.buildPdfExport(documents.document.name, root)
-          const path = await tempExportPath('pdf')
-          await writeExportBytes(path, bytes)
-          await openExternalPath(path)
-          flash(settings.locale === 'zh-CN' ? '已生成打印预览。' : 'Print preview generated.')
-        } catch {
-          flash(settings.locale === 'zh-CN' ? '打印失败。' : 'Print failed.')
-        }
-        return
-      }
-      await previewReady
-      window.print()
-    } finally {
-      if (exportingPdf) {
-        if (previousPdfMode === null) html.removeAttribute('data-export-pdf')
-        else html.setAttribute('data-export-pdf', previousPdfMode)
-      }
-      if (restoreEditMode) switchViewMode('edit')
-    }
-  }
+  // Keep document output inside TextMark. The print toolbar action creates a
+  // selectable PDF through the in-app exporter and save dialog.
+  const printDocument = () => void exportPdf()
   const menuCommandRef = useRef<(command: string) => void>(() => {})
   menuCommandRef.current = (command: string) => {
     if (command === 'open') void documents.openFile()

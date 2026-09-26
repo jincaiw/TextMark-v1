@@ -16,7 +16,10 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(depth < 2)
+  // Start with a compact navigator. Expanding two levels by default makes
+  // large workspaces (and especially application bundles) flood the sidebar
+  // and squeeze the document canvas before the reader has chosen a folder.
+  const [expanded, setExpanded] = useState(false)
   if (node.isDirectory) {
     return (
       <div>
