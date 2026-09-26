@@ -2297,10 +2297,11 @@ fn set_default_handler_on_platform() -> IntegrationResult {
 /// the top of the toolbar. The window no longer opts into native tabbing, so
 /// the leftover key is dropped to guarantee a clean chrome on user machines.
 ///
-/// Also forces the title and traffic lights visible and disables automatic
-/// window tabbing at runtime. Binaries linked against older macOS SDKs
-/// otherwise shipped with the lights suppressed on LaunchServices launches,
-/// so this is re-applied (idempotently) right after setup and once more a
+/// Also keeps the native title text hidden (the document title is rendered
+/// in the centered web toolbar) while forcing the traffic lights visible and
+/// disabling automatic window tabbing. Binaries linked against older macOS
+/// SDKs otherwise shipped with the lights suppressed on LaunchServices
+/// launches, so this is re-applied (idempotently) after setup and once more a
 /// beat later, after the window server has settled.
 #[cfg(target_os = "macos")]
 fn restore_macos_window_chrome() {
@@ -2317,7 +2318,7 @@ fn restore_macos_window_chrome() {
     NSWindow::setAllowsAutomaticWindowTabbing(false, mtm);
     let app = NSApplication::sharedApplication(mtm);
     for window in app.windows() {
-        window.setTitleVisibility(NSWindowTitleVisibility::Visible);
+        window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
         for kind in [
             NSWindowButton::CloseButton,
             NSWindowButton::MiniaturizeButton,

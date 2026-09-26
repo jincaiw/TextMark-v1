@@ -1,3 +1,15 @@
+# TextMark v0.10.15
+
+TextMark 0.10.15 fixes a macOS title-bar regression found during desktop verification: the native title is hidden while the centered document title and traffic lights remain visible.
+
+TextMark 0.10.15 修复桌面实测发现的 macOS 标题栏回归：隐藏原生标题，同时保留居中文稿名和交通灯控件。
+
+## Highlights / 主要更新
+
+- macOS 顶部区域：避免系统标题与工具栏文稿名重复或遮挡；已在本机重建候选版并通过窗口截图验证。
+
+---
+
 # TextMark v0.10.14
 
 TextMark 0.10.14 refines the macOS desktop chrome to match Markdown Preview's toolbar and tab layout more closely, and updates the toolbar customization palette to use a compact native-style sheet.
