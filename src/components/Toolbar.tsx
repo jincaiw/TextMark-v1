@@ -251,15 +251,7 @@ export function Toolbar(props: ToolbarProps) {
       </span>
     )
     if (item === 'flexibleSpace')
-      return (
-        <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle}>
-          {index === toolbarItems.indexOf('flexibleSpace') && props.documentName ? (
-            <span className="toolbar-document-title" title={props.documentName}>
-              {props.documentName}
-            </span>
-          ) : null}
-        </span>
-      )
+      return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
     if (item === 'space')
       return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
     if (item === 'navigation')
@@ -461,11 +453,6 @@ export function Toolbar(props: ToolbarProps) {
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}
     >
-      {!toolbarItems.includes('flexibleSpace') && props.documentName ? (
-        <div className="toolbar-document-title toolbar-document-title-fallback" data-tauri-drag-region title={props.documentName}>
-          {props.documentName}
-        </div>
-      ) : null}
       <div className="window-leading" data-tauri-drag-region>
         <div className="traffic-lights">
           <button aria-label={tx('close')} onClick={() => windowAction('close')} />

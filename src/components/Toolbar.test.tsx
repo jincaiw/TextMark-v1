@@ -179,14 +179,13 @@ describe('Toolbar', () => {
     expect(host.querySelector('.toolbar-navigation')).toBeNull()
   })
 
-  it('将 macOS 文档标题放入弹性工具栏空隙，避免覆盖两侧工具项', () => {
+  it('由原生窗口标题显示文稿名，工具栏不重复绘制标题', () => {
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'flexibleSpace', 'openActions', 'search'] }))
-    const spacer = element<HTMLElement>('[data-toolbar-item="flexibleSpace"]')
-    expect(spacer.querySelector('.toolbar-document-title')?.textContent).toBe('A long document name.md')
+    expect(host.querySelector('.toolbar-document-title')).toBeNull()
     expect(host.querySelector('.toolbar-document-title-fallback')).toBeNull()
 
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'openActions', 'search'] }))
-    expect(host.querySelector('.toolbar-document-title-fallback')?.textContent).toBe('A long document name.md')
+    expect(host.querySelector('.toolbar-document-title')).toBeNull()
   })
 
   it.each([

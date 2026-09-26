@@ -1,3 +1,16 @@
+# TextMark v0.10.17
+
+TextMark 0.10.17 uses macOS's native centered window title for the open document, matching Markdown Preview's title-bar behavior and removing the misplaced duplicate title from the web toolbar.
+
+TextMark 0.10.17 改用 macOS 原生窗口标题居中显示当前文稿名，对齐 Markdown Preview 的标题栏行为，并移除位置错误的网页工具栏重复标题。
+
+## Highlights / 主要更新
+
+- macOS 顶部区域：显示原生居中文稿名；文稿切换、重命名和未保存状态仍由窗口标题实时更新。
+- 自定义工具栏：保留原有项目拖放与顺序设置，标题不再挤占或覆盖可用工具项。
+
+---
+
 # TextMark v0.10.16
 
 TextMark 0.10.16 aligns the macOS document title with the upstream toolbar's flexible spacing so it no longer covers toolbar actions.
