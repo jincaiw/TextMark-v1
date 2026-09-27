@@ -61,7 +61,17 @@ import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
 import { isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
-import type { EditorSessionState, ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
+import { readToolbarVisibility, saveToolbarVisibility, toolbarVisibilityStorageKey } from './lib/toolbarVisibility'
+import type {
+  EditorFormattingState,
+  EditorSessionState,
+  ExternalApplication,
+  FormatCommand,
+  InspectorMode,
+  SearchMode,
+  SidebarMode,
+  ViewMode,
+} from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
@@ -99,7 +109,8 @@ function DocumentApp() {
   const [inspectorWidth, setInspectorWidth] = useState(() =>
     Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 270)),
   )
-  const [toolbarVisible, setToolbarVisible] = useState(true)
+  const toolbarVisibilityKey = toolbarVisibilityStorageKey(isTauri() ? getCurrentWindow().label : 'browser')
+  const [toolbarVisible, setToolbarVisible] = useState(() => readToolbarVisibility(localStorage, toolbarVisibilityKey))
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPane, setSettingsPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
@@ -128,6 +139,19 @@ function DocumentApp() {
   const [notice, setNotice] = useState<string | null>(null)
   const [applications, setApplications] = useState<ExternalApplication[]>([])
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
+  const [formattingState, setFormattingState] = useState<EditorFormattingState>({
+    heading: 'h0',
+    bold: false,
+    italic: false,
+    strikethrough: false,
+    code: false,
+    link: false,
+    highlight: false,
+    bulletList: false,
+    orderedList: false,
+    taskList: false,
+    quote: false,
+  })
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const editorState = documents.document.editorState
   const editorRef = useRef<EditorPaneHandle>(null)
@@ -239,16 +263,36 @@ function DocumentApp() {
     }
   }, [alwaysOnTop])
   useEffect(() => {
+    saveToolbarVisibility(localStorage, toolbarVisibilityKey, toolbarVisible)
+  }, [toolbarVisibilityKey, toolbarVisible])
+  useEffect(() => {
     if (!isTauri()) return
-    void refreshMenu({
-      locale: settings.locale,
-      appearance: settings.theme,
-      contentWidth: settings.contentWidth,
-      sidebarMode,
-      sidebarVisible,
-      alwaysOnTop,
-    })
-  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible, alwaysOnTop])
+    const updateMenu = () =>
+      void refreshMenu({
+        locale: settings.locale,
+        appearance: settings.theme,
+        contentWidth: settings.contentWidth,
+        sidebarMode,
+        sidebarVisible,
+        alwaysOnTop,
+        toolbarVisible,
+      })
+    updateMenu()
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) updateMenu()
+      })
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible, alwaysOnTop, toolbarVisible])
   useEffect(() => {
     if (!isTauri() || !documents.document.path) return
     void recordRecentFile(documents.document.path).then(() =>
@@ -259,6 +303,7 @@ function DocumentApp() {
         sidebarMode,
         sidebarVisible,
         alwaysOnTop,
+        toolbarVisible,
       }),
     )
   }, [documents.document.path])
@@ -622,6 +667,7 @@ function DocumentApp() {
           sidebarMode,
           sidebarVisible,
           alwaysOnTop,
+          toolbarVisible,
         }),
       )
     else if (command === 'open-folder') {
@@ -1250,7 +1296,14 @@ function DocumentApp() {
                   onClose={() => setFindOpen(false)}
                 />
               ) : null}
-              {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
+              {viewMode === 'edit' ? (
+                <FormattingToolbar
+                  locale={settings.locale}
+                  onFormat={format}
+                  onInsertLink={(label, destination) => editorRef.current?.insertLink(label, destination)}
+                  state={formattingState}
+                />
+              ) : null}
             </DocumentTools>
             {viewMode === 'edit' ? (
               <Suspense fallback={<div className="editor-loading" />}>
@@ -1279,6 +1332,7 @@ function DocumentApp() {
                   workspacePath={documents.workspacePath}
                   onRenameImage={(path) => void documents.renamePastedImage(path)}
                   onCursorChange={(line, column) => setCursor({ line, column })}
+                  onFormattingStateChange={setFormattingState}
                   searchQuery={searchQuery}
                   searchIndex={searchIndex}
                   matchCase={matchCase}

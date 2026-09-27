@@ -12,7 +12,39 @@ export type ContentWidth = 'normal' | 'full'
 export type ToolbarDisplayMode = 'iconOnly' | 'iconAndLabel'
 export type SearchMode = 'contains' | 'beginsWith'
 export type FormatCommand =
-  'h0' | 'h1' | 'h2' | 'h3' | 'bold' | 'italic' | 'strikethrough' | 'code' | 'link' | 'bulletList' | 'orderedList' | 'taskList' | 'quote'
+  | 'h0'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'h5'
+  | 'h6'
+  | 'bold'
+  | 'italic'
+  | 'strikethrough'
+  | 'code'
+  | 'link'
+  | 'highlight'
+  | 'bulletList'
+  | 'orderedList'
+  | 'taskList'
+  | 'quote'
+  | 'codeBlock'
+  | 'horizontalRule'
+
+export interface EditorFormattingState {
+  heading: 'h0' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  bold: boolean
+  italic: boolean
+  strikethrough: boolean
+  code: boolean
+  link: boolean
+  highlight: boolean
+  bulletList: boolean
+  orderedList: boolean
+  taskList: boolean
+  quote: boolean
+}
 
 export interface TextDocument {
   path: string | null

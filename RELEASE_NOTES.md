@@ -1,3 +1,18 @@
+# TextMark v0.10.26
+
+TextMark 0.10.26 improves Edit Mode parity with Markdown Preview 0.0.62: formatting controls now use grouped list and more-format menus, link insertion has a focused label/URL popover, and inactive Markdown syntax is visually quiet while the active line remains editable. Formatting state follows the current heading, inline style, and list context.
+
+TextMark 0.10.26 对照 Markdown Preview 0.0.62 完善编辑模式：格式工具栏新增列表类型和更多格式菜单，链接通过文本/网址弹窗插入；非活动行弱化 Markdown 标记，同时保留当前编辑行的原始语法与可编辑性。工具栏状态会随当前标题、行内格式和列表类型更新。
+
+## Highlights / 主要更新
+
+- 编辑工具栏：按标题、行内样式、链接、列表和更多格式分组；支持引用、行内代码、高亮、围栏代码块与水平分隔线。
+- 链接：插入前编辑标签和网址，保留选中文本并拒绝不安全的显式协议。
+- 编辑区：弱化非活动行的结构和行内 Markdown 标记，标题不再使用编辑器默认下划线样式。
+- 验证：前端 51 个测试文件 / 444 项、Rust 25 项、生产构建、lint、格式检查、包体预算和 760 px 窄窗口编辑格式自动化通过。
+
+---
+
 # TextMark v0.10.25
 
 TextMark 0.10.25 fixes footnote navigation in the preview and prevents standalone HTML exports from being clipped to the app window.

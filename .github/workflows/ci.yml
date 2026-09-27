@@ -63,7 +63,9 @@ jobs:
           export TEXTMARK_CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-preview.png 1440 900 preview
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-edit.png 1440 900 edit
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-edit-formatting.png 1440 900 edit-formatting
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-customizer.png 1440 900 customizer
+          node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-toolbar-hidden.png 1440 900 toolbar-hidden
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-dark.png 1440 900 dark
           node scripts/capture-ui.mjs http://127.0.0.1:1420/ artifacts/ui-narrow.png 760 760 preview
           TEXTMARK_EXPORT_EXPECT_FULL=1 node scripts/verify-exports.mjs e2e/fixtures/export-regression.md artifacts/export-qa

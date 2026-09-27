@@ -177,6 +177,19 @@ struct MenuUiState {
     content_width: &'static str, // "normal" | "full"
     sidebar_mode: &'static str,  // "outline" | "files"
     sidebar_visible: bool,
+    toolbar_hidden: bool,
+    always_on_top: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MenuRefreshRequest {
+    locale: String,
+    appearance: String,
+    content_width: String,
+    sidebar_mode: String,
+    sidebar_visible: bool,
+    toolbar_visible: bool,
     always_on_top: bool,
 }
 
@@ -939,7 +952,13 @@ fn build_menu(
     // Keep Cmd/Ctrl+I available for italic while editing. The inspector remains
     // available from the View menu and the preview toolbar.
     let inspector = item("inspector", "显示简介", "Get Info", None)?;
-    let show_toolbar = item("show-toolbar", "显示工具栏", "Show Toolbar", None)?;
+    let (show_toolbar_zh, show_toolbar_en) = toolbar_menu_labels(state.toolbar_hidden);
+    let show_toolbar = item(
+        "show-toolbar",
+        show_toolbar_zh,
+        show_toolbar_en,
+        Some("CmdOrCtrl+Alt+T"),
+    )?;
     let zoom_in = item("zoom-in", "放大", "Zoom In", Some("CmdOrCtrl++"))?;
     let zoom_out = item("zoom-out", "缩小", "Zoom Out", Some("CmdOrCtrl+-"))?;
     let zoom_reset = item("zoom-reset", "实际大小", "Actual Size", Some("CmdOrCtrl+0"))?;
@@ -1219,34 +1238,35 @@ fn build_menu(
         .build()
 }
 
+fn toolbar_menu_labels(toolbar_hidden: bool) -> (&'static str, &'static str) {
+    if toolbar_hidden {
+        ("显示工具栏", "Show Toolbar")
+    } else {
+        ("隐藏工具栏", "Hide Toolbar")
+    }
+}
+
 #[tauri::command]
-fn refresh_menu(
-    app: tauri::AppHandle,
-    locale: String,
-    appearance: String,
-    content_width: String,
-    sidebar_mode: String,
-    sidebar_visible: bool,
-    always_on_top: bool,
-) -> AppResult<()> {
+fn refresh_menu(app: tauri::AppHandle, request: MenuRefreshRequest) -> AppResult<()> {
     let state = MenuUiState {
-        appearance: match appearance.as_str() {
+        appearance: match request.appearance.as_str() {
             "light" => "light",
             "dark" => "dark",
             _ => "system",
         },
-        content_width: match content_width.as_str() {
+        content_width: match request.content_width.as_str() {
             "full" => "full",
             _ => "normal",
         },
-        sidebar_mode: match sidebar_mode.as_str() {
+        sidebar_mode: match request.sidebar_mode.as_str() {
             "files" => "files",
             _ => "outline",
         },
-        sidebar_visible,
-        always_on_top,
+        sidebar_visible: request.sidebar_visible,
+        toolbar_hidden: !request.toolbar_visible,
+        always_on_top: request.always_on_top,
     };
-    let menu = build_menu(&app, &locale, &state, &load_recent_files()).map_err(io_error)?;
+    let menu = build_menu(&app, &request.locale, &state, &load_recent_files()).map_err(io_error)?;
     app.set_menu(menu).map_err(io_error)?;
     Ok(())
 }
@@ -2655,6 +2675,12 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn toolbar_menu_label_tracks_visibility_in_both_locales() {
+        assert_eq!(toolbar_menu_labels(false), ("隐藏工具栏", "Hide Toolbar"));
+        assert_eq!(toolbar_menu_labels(true), ("显示工具栏", "Show Toolbar"));
+    }
 
     #[test]
     fn updater_accepts_only_stable_and_beta_channels() {

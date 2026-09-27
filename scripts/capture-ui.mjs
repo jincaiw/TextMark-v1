@@ -246,7 +246,7 @@ if (toolbarFixtures[scenario]) {
   await delay(200)
 }
 const ready = await waitFor("isVisible(document.querySelector('.markdown-body h1'))", '初始预览标题可见')
-if (scenario === 'edit') {
+if (scenario === 'edit' || scenario === 'edit-formatting') {
   await send('Runtime.evaluate', {
     expression: `(() => {
     const button = document.querySelector(
@@ -1228,10 +1228,20 @@ if (scenario === 'edit') {
   })()`,
     returnByValue: true,
   })
+} else if (scenario === 'toolbar-hidden') {
+  await send('Runtime.evaluate', {
+    expression: `(() => {
+      localStorage.setItem('textmark.toolbarVisible.browser', 'false');
+      location.reload();
+      return true;
+    })()`,
+    returnByValue: true,
+  })
 }
 const expectedSelector =
   {
     edit: '.editor-pane .cm-editor',
+    'edit-formatting': '.editor-pane .cm-editor',
     customizer: '.toolbar-customizer',
     tabs: '.cm-editor',
     'tabs-find': '.document-tools .find-bar',
@@ -1249,6 +1259,9 @@ if (scenario === 'tabs') expectedCondition += " && [...document.querySelectorAll
 if (scenario === 'tabs-find' || scenario === 'print-tabs-find')
   expectedCondition += ` && isVisible(document.querySelector('.cm-editor')) && [...document.querySelectorAll('.document-tab')].filter(isVisible).length >= 2 && ${toolsMeasuredCondition}`
 if (scenario === 'dark') expectedCondition += " && document.documentElement.dataset.theme === 'dark'"
+if (scenario === 'toolbar-hidden')
+  expectedCondition +=
+    " && document.querySelector('.app-shell')?.classList.contains('toolbar-hidden') && getComputedStyle(document.querySelector('.app-shell')).getPropertyValue('--toolbar-height').trim() === '0px'"
 if (appearance) {
   const dark = scenario === 'appearance-dark'
   expectedCondition += ` && document.documentElement.dataset.theme === '${dark ? 'dark' : 'light'}' &&
@@ -1258,6 +1271,108 @@ if (appearance) {
 }
 const scenarioReady = await waitFor(expectedCondition, `场景 ${scenario}，条件：${expectedCondition}`)
 await delay(250)
+if (scenario === 'edit-formatting') {
+  const interaction = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const view = window.__TEXTMARK_EDITOR_VIEW__;
+      const button = [...document.querySelectorAll('.formatting-toolbar button')].find((item) => item.title === '高亮' || item.title === 'Highlight');
+      if (!view || !button) return { applied: false, reason: !view ? 'editor view unavailable' : 'highlight control unavailable' };
+      const source = view.state.doc.toString();
+      const phrase = 'Welcome to TextMark';
+      const from = source.indexOf(phrase);
+      if (from < 0) return { applied: false, reason: 'fixture phrase unavailable' };
+      view.dispatch({ selection: { anchor: from, head: from + phrase.length } });
+      button.click();
+      return { clicked: true };
+    })()`,
+    returnByValue: true,
+  })
+  if (!interaction.result.value?.clicked) failures.push(`编辑格式交互失败：${interaction.result.value?.reason ?? '高亮控件不可用'}`)
+  await waitFor("window.__TEXTMARK_EDITOR_VIEW__?.state.doc.toString().includes('==Welcome to TextMark==')", '高亮格式应用到编辑器内容')
+  const highlighted = await send('Runtime.evaluate', {
+    expression: `(() => ({ pressed: document.querySelector('.formatting-toolbar button[title="高亮"], .formatting-toolbar button[title="Highlight"]')?.getAttribute('aria-pressed'), rendered: Boolean(document.querySelector('.cm-md-highlight')) }))()`,
+    returnByValue: true,
+  })
+  if (highlighted.result.value?.pressed !== 'true') failures.push('高亮格式应用后，工具栏没有显示激活状态')
+  if (!highlighted.result.value?.rendered) failures.push('高亮格式应用后，编辑器没有显示高亮预览样式')
+  const menus = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const groups = [...document.querySelectorAll('.formatting-menu')];
+      const list = groups.find((group) => group.querySelector('summary')?.getAttribute('aria-label') === '列表' || group.querySelector('summary')?.getAttribute('aria-label') === 'Lists');
+      const more = groups.find((group) => group.querySelector('summary')?.getAttribute('aria-label') === '更多格式' || group.querySelector('summary')?.getAttribute('aria-label') === 'More Formatting');
+      if (!list || !more) return { ok: false, reason: 'format menus unavailable' };
+      list.querySelector('summary').click();
+      const lists = [...list.querySelectorAll('[role="menu"] button')].map((button) => button.getAttribute('title'));
+      list.open = false;
+      more.querySelector('summary').click();
+      const formats = [...more.querySelectorAll('[role="menu"] button')].map((button) => button.getAttribute('title'));
+      more.open = false;
+      return { ok: lists.length === 3 && formats.some((label) => label === '代码块' || label === 'Code block') && formats.some((label) => label === '引用' || label === 'Block quote'), lists, formats };
+    })()`,
+    returnByValue: true,
+  })
+  if (!menus.result.value?.ok) failures.push(`编辑格式菜单不完整：${menus.result.value?.reason ?? '缺少列表或更多格式选项'}`)
+  const link = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const view = window.__TEXTMARK_EDITOR_VIEW__;
+      const group = [...document.querySelectorAll('.formatting-link-menu')][0];
+      const workspace = document.querySelector('.document-workspace')?.getBoundingClientRect();
+      if (!view || !group) return { ok: false, reason: 'link popover unavailable' };
+      const source = view.state.doc.toString();
+      const phrase = 'Cross-platform Markdown';
+      const from = source.indexOf(phrase);
+      if (from < 0) return { ok: false, reason: 'link fixture unavailable' };
+      view.dispatch({ selection: { anchor: from, head: from + phrase.length } });
+      group.querySelector('summary').click();
+      const popover = group.querySelector('.formatting-link-popover');
+      const popoverRect = popover.getBoundingClientRect();
+      if (!popover.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || !workspace || popoverRect.left < workspace.left || popoverRect.right > workspace.right)
+        return { ok: false, reason: 'link popover is clipped or outside the editor pane' };
+      const inputs = [...group.querySelectorAll('input')];
+      const setValue = (input, value) => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      if (inputs.length !== 2) return { ok: false, reason: 'link fields unavailable' };
+      setValue(inputs[0], '');
+      setValue(inputs[1], 'https://example.com');
+      group.querySelector('form').requestSubmit();
+      return { ok: true };
+    })()`,
+    returnByValue: true,
+  })
+  if (!link.result.value?.ok) failures.push(`链接插入交互失败：${link.result.value?.reason ?? '无法打开链接弹窗'}`)
+  await waitFor(
+    "window.__TEXTMARK_EDITOR_VIEW__?.state.doc.toString().includes('[Cross-platform Markdown](https://example.com)')",
+    '链接弹窗插入文稿链接',
+  )
+  const codeBlock = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const view = window.__TEXTMARK_EDITOR_VIEW__;
+      const menu = [...document.querySelectorAll('.formatting-menu')].find((group) => group.querySelector('summary')?.getAttribute('aria-label') === '更多格式' || group.querySelector('summary')?.getAttribute('aria-label') === 'More Formatting');
+      if (!view || !menu) return { ok: false, reason: 'more formatting menu unavailable' };
+      const source = view.state.doc.toString();
+      const phrase = 'Safe local image loading';
+      const from = source.indexOf(phrase);
+      if (from < 0) return { ok: false, reason: 'code block fixture unavailable' };
+      const line = view.state.doc.lineAt(from);
+      view.dispatch({ selection: { anchor: line.from, head: line.to } });
+      menu.querySelector('summary').click();
+      const action = [...menu.querySelectorAll('[role="menu"] button')].find((button) => button.title === '代码块' || button.title === 'Code block');
+      if (!action) return { ok: false, reason: 'code block action unavailable' };
+      action.click();
+      return { ok: true };
+    })()`,
+    returnByValue: true,
+  })
+  if (!codeBlock.result.value?.ok) failures.push(`代码块格式操作失败：${codeBlock.result.value?.reason ?? '无法执行代码块操作'}`)
+  await waitFor(
+    "window.__TEXTMARK_EDITOR_VIEW__?.state.doc.toString().includes('```\\n- Safe local image loading\\n```')",
+    '更多格式菜单插入围栏代码块',
+  )
+}
 const geometry = await send('Runtime.evaluate', {
   expression: `(() => {
     const selectors = [
@@ -1355,7 +1470,7 @@ const geometry = await send('Runtime.evaluate', {
       scrollWidth,
       overlaps,
       assertions: {
-        searchVisibleAtDesktopWidth: innerWidth < 980 || searchVisible,
+        searchVisibleAtDesktopWidth: innerWidth < 980 || searchVisible || document.querySelector('.app-shell')?.classList.contains('toolbar-hidden'),
         sidebarModePickerAligned,
         noPageHorizontalOverflow: scrollWidth <= pageWidth,
         majorSlotsDoNotOverlap: overlaps.length === 0,
@@ -1372,6 +1487,10 @@ const state = await send('Runtime.evaluate', {
 if (state.result.value.renderer !== 'worker') failures.push(`Expected worker renderer, received ${state.result.value.renderer}`)
 for (const [assertion, passed] of Object.entries(geometry.result.value.assertions)) {
   if (passed === false) failures.push(`几何断言失败：${assertion}`)
+}
+if (scenario === 'toolbar-hidden') {
+  if (geometry.result.value.elements['.native-toolbar']?.height !== 0) failures.push('隐藏工具栏后仍保留了可见的顶部空白')
+  if (geometry.result.value.elements['.native-actions']?.display !== 'none') failures.push('隐藏工具栏后操作项仍可见')
 }
 if (toolbarFixtures[scenario]) {
   const result = await send('Runtime.evaluate', {

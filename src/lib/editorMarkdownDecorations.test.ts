@@ -34,6 +34,22 @@ describe('inactive Markdown syntax markers', () => {
     ])
     expect(markdownSyntaxMarkers('```mermaid')).toEqual([{ from: 0, to: 3, className: 'cm-md-fence-marker' }])
   })
+
+  it('marks inline wrappers so inactive lines can display as formatted text', () => {
+    expect(markdownSyntaxMarkers('**bold** and `code`')).toEqual([
+      { from: 0, to: 2, className: 'cm-md-inline-syntax' },
+      { from: 6, to: 8, className: 'cm-md-inline-syntax' },
+      { from: 13, to: 14, className: 'cm-md-inline-syntax' },
+      { from: 18, to: 19, className: 'cm-md-inline-syntax' },
+    ])
+  })
+
+  it('marks link destination syntax while retaining the label', () => {
+    expect(markdownSyntaxMarkers('[guide](https://example.com)')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-inline-syntax' },
+      { from: 6, to: 28, className: 'cm-md-inline-syntax' },
+    ])
+  })
 })
 
 describe('editor image previews', () => {

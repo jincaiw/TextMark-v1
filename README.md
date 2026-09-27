@@ -4,7 +4,7 @@ TextMark is a fast, secure, cross-platform Markdown reader and editor for Window
 
 It is the portable successor to `pluk-inc/markdown-preview`. The original AppKit application has been restructured around a Tauri 2 native shell, a React/TypeScript interface and a small Rust filesystem boundary.
 
-## TextMark 0.9
+## TextMark 0.10
 
 - Preview-first native desktop UI matching Markdown Preview
 - In-place Edit Mode with headings, emphasis, lists, checklist, quote, code and link formatting
@@ -20,7 +20,7 @@ It is the portable successor to `pluk-inc/markdown-preview`. The original AppKit
 - macOS Quick Look, Windows Explorer Preview Handler, Freedesktop thumbnails/desktop action and KDE 6 thumbnail integration
 - Windows x64/ARM64 MSI, NSIS and portable ZIP; Linux x64/ARM64 AppImage/DEB/RPM; macOS Universal 2 and Apple Silicon ARM64 app/DMG
 - Signed in-app updater metadata, SHA-256 checksums and CycloneDX SBOM release assets
-- Traceable parity against the current upstream `v0.0.51` / `main` baseline, with 280 frontend and 13 Rust tests
+- Traceable feature and Edit Mode parity against Markdown Preview `v0.0.62`, with 444 frontend and 25 Rust tests
 
 The first run is always Simplified Chinese. Choose English in Preferences at any time; the setting is persisted locally.
 
@@ -37,7 +37,7 @@ textmark README.md docs/
 tm --new-window one.md two.md
 ```
 
-The v0.9.7 binaries are updater-signed but do not use Apple Developer ID notarization or Windows Authenticode. Review the release trust notice and verify `SHA256SUMS.txt` when installing.
+Release updates are signed with the Tauri updater key and include SHA-256 checksums. Windows installers do not currently use Authenticode, and macOS builds are not notarized with an Apple Developer ID; review the first-launch trust notice and verify `SHA256SUMS.txt` when installing.
 
 ## Development
 

@@ -1,4 +1,3 @@
-import { RangeSetBuilder } from '@codemirror/state'
 import { Range } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 import { BlockWrapper, Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
@@ -55,10 +54,27 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   if (/^\s*\|.*\|\s*$/.test(line)) {
     for (const match of line.matchAll(/\|/g)) add(match.index ?? 0, (match.index ?? 0) + 1, 'cm-md-table-marker')
   }
+  // Keep Markdown syntax visible on the active line (the caller skips markers
+  // there), and let inactive lines read like rendered content. These ranges
+  // are intentionally limited to simple, single-line inline constructs.
+  for (const match of line.matchAll(/\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|`[^`\n]+`|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g)) {
+    const value = match[0]
+    const start = match.index ?? 0
+    const delimiter = value.startsWith('**') || value.startsWith('~~') || value.startsWith('==') ? 2 : 1
+    add(start, start + delimiter, 'cm-md-inline-syntax')
+    add(start + value.length - delimiter, start + value.length, 'cm-md-inline-syntax')
+  }
+  for (const match of line.matchAll(/\[([^\]\n]+)\]\(([^)\n]+)\)/g)) {
+    const start = match.index ?? 0
+    const labelEnd = start + match[0].indexOf(']')
+    add(start, start + 1, 'cm-md-inline-syntax')
+    add(labelEnd, start + match[0].length, 'cm-md-inline-syntax')
+  }
   return markers.sort((left, right) => left.from - right.from || left.to - right.to)
 }
 
-const inlinePattern = /`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\[[^\]\n]+\]\([^\)\n]+\)/g
+const inlinePattern =
+  /==[^=\n]+==|`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\[[^\]\n]+\]\([^\)\n]+\)|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g
 export interface EditorImageReference {
   alt: string
   path: string
@@ -114,7 +130,8 @@ class ImagePreviewWidget extends WidgetType {
 }
 
 function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOptions): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
+  const ranges: Range<Decoration>[] = []
+  const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
   const tree = syntaxTree(view.state)
   for (const { from, to } of view.visibleRanges) {
     const first = view.state.doc.lineAt(from)
@@ -125,7 +142,7 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
       while (codeNode && codeNode.name !== 'FencedCode') codeNode = codeNode.parent!
       if (codeNode) {
         const isFence = /^\s*(?:`{3,}|~{3,})/.test(line.text)
-        builder.add(
+        add(
           line.from,
           line.from,
           Decoration.line({
@@ -135,25 +152,31 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
         )
       } else {
         const className = lineClass(line.text)
-        if (className) builder.add(line.from, line.from, Decoration.line({ class: className }))
+        if (className) add(line.from, line.from, Decoration.line({ class: className }))
       }
       const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
       if (!activeLine)
         for (const marker of markdownSyntaxMarkers(line.text))
-          builder.add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
+          add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
       inlinePattern.lastIndex = 0
       for (const match of line.text.matchAll(inlinePattern)) {
         const value = match[0]
         const offset = match.index ?? 0
-        const inlineClass = value.startsWith('`') ? 'cm-md-inline-code' : value.startsWith('[') ? 'cm-md-link' : 'cm-md-emphasis'
-        builder.add(line.from + offset, line.from + offset + value.length, Decoration.mark({ class: inlineClass }))
+        const inlineClass = value.startsWith('==')
+          ? 'cm-md-highlight'
+          : value.startsWith('`')
+            ? 'cm-md-inline-code'
+            : value.startsWith('[')
+              ? 'cm-md-link'
+              : 'cm-md-emphasis'
+        add(line.from + offset, line.from + offset + value.length, Decoration.mark({ class: inlineClass }))
       }
       if (options.resolveImage)
         for (const image of editorImageReferences(line.text)) {
           let node = tree.resolveInner(line.from + image.from, 1)
           while (node && node.name !== 'Image') node = node.parent!
           if (!node) continue
-          builder.add(
+          add(
             line.from + image.to,
             line.from + image.to,
             Decoration.widget({ widget: new ImagePreviewWidget(image.path, image.alt, options), side: 1 }),
@@ -161,7 +184,7 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
         }
     }
   }
-  return builder.finish()
+  return Decoration.set(ranges, true)
 }
 
 function buildCodeBlockWrappers(view: EditorView) {

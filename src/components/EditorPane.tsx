@@ -20,7 +20,8 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { caretToOffset } from '../lib/readingPosition'
 import { loadLocalAsset } from '../lib/platform'
 import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
-import type { ContentWidth, EditorSessionState, FormatCommand, SearchMode } from '../types'
+import type { ContentWidth, EditorFormattingState, EditorSessionState, FormatCommand, SearchMode } from '../types'
+import { editorFormattingStateFromSource } from '../lib/editorFormattingState'
 
 export interface EditorPaneHandle {
   focus: () => void
@@ -30,6 +31,7 @@ export interface EditorPaneHandle {
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
   format: (command: FormatCommand) => void
+  insertLink: (label: string, destination: string) => void
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
   getScrollFraction: () => number
@@ -77,6 +79,7 @@ interface EditorPaneProps {
   workspacePath?: string | null
   onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
+  onFormattingStateChange?: (state: EditorFormattingState) => void
   onStateChange?: (state: EditorSessionState) => void
   /** Find-bar state. The preview pane highlights matches in rendered text;
    * the editor highlights the same matches in source text so the match
@@ -94,6 +97,13 @@ const wrappers: Partial<Record<FormatCommand, [string, string]>> = {
   strikethrough: ['~~', '~~'],
   code: ['`', '`'],
   link: ['[', '](https://)'],
+  highlight: ['==', '=='],
+}
+
+function editorFormattingState(view: EditorView): EditorFormattingState {
+  const selection = view.state.selection.main
+  const line = view.state.doc.lineAt(selection.head)
+  return editorFormattingStateFromSource(view.state.doc.toString(), selection.from, selection.to, line.text)
 }
 
 function toggledInline(selected: string, wrapper: [string, string]) {
@@ -155,8 +165,22 @@ function applyFormat(view: EditorView, command: FormatCommand) {
   const from = startLine.from
   const to = endLine.to
   const lines = view.state.sliceDoc(from, to).split('\n')
-  const heading = command.match(/^h([0-3])$/)?.[1]
-  const allHave = (pattern: RegExp) => lines.every((line) => pattern.test(line))
+  if (command === 'codeBlock') {
+    const source = view.state.sliceDoc(from, to).replace(/^```\w*\n?|\n?```$/g, '')
+    const wrapped = `\`\`\`\n${source || 'code'}\n\`\`\``
+    view.dispatch({ changes: { from, to, insert: wrapped }, selection: { anchor: from + wrapped.length } })
+    view.focus()
+    return
+  }
+  if (command === 'horizontalRule') {
+    const separator = `${view.state.sliceDoc(from, to)}\n---`
+    view.dispatch({ changes: { from, to, insert: separator }, selection: { anchor: from + separator.length } })
+    view.focus()
+    return
+  }
+  const heading = command.match(/^h([0-6])$/)?.[1]
+  const nonEmptyLines = lines.filter((line) => line.trim())
+  const allHave = (pattern: RegExp) => nonEmptyLines.length > 0 && nonEmptyLines.every((line) => pattern.test(line))
   const removing =
     heading !== undefined
       ? allHave(heading === '0' ? /^#{1,6}\s+/ : new RegExp(`^#{${heading}}\\s+`))
@@ -173,12 +197,13 @@ function applyFormat(view: EditorView, command: FormatCommand) {
   const transformed = lines
     .map((line) => {
       if (heading !== undefined)
-        return removing || heading === '0'
+        return !line.trim() || removing || heading === '0'
           ? line.replace(/^#{1,6}\s+/, '')
           : `${'#'.repeat(Number(heading))} ${line.replace(/^#{1,6}\s+/, '')}`
-      if (command === 'bulletList') return removing ? line.replace(/^\s*[-+*]\s+/, '') : `- ${stripListMarker(line)}`
-      if (command === 'orderedList') return removing ? line.replace(/^\s*\d+[.)]\s+/, '') : `${++index}. ${stripListMarker(line)}`
-      if (command === 'taskList') return removing ? stripTaskMarker(line) : `- [ ] ${stripTaskMarker(line)}`
+      if (command === 'bulletList') return !line.trim() ? line : removing ? line.replace(/^\s*[-+*]\s+/, '') : `- ${stripListMarker(line)}`
+      if (command === 'orderedList')
+        return !line.trim() ? line : removing ? line.replace(/^\s*\d+[.)]\s+/, '') : `${++index}. ${stripListMarker(line)}`
+      if (command === 'taskList') return !line.trim() ? line : removing ? stripTaskMarker(line) : `- [ ] ${stripTaskMarker(line)}`
       if (command === 'quote') return removing ? line.replace(/^>\s?/, '') : `> ${line.replace(/^>\s?/, '')}`
       return line
     })
@@ -196,6 +221,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     workspacePath: props.workspacePath,
     onRenameImage: props.onRenameImage,
   })
+  const onFormattingStateChangeRef = useRef(props.onFormattingStateChange)
+  onFormattingStateChangeRef.current = props.onFormattingStateChange
   imageContextRef.current = {
     baseDirectory: props.baseDirectory,
     workspacePath: props.workspacePath,
@@ -361,6 +388,24 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       },
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
+      },
+      insertLink: (label, destination) => {
+        const view = viewRef.current
+        if (!view) return
+        const selection = view.state.selection.main
+        const selected = view.state.sliceDoc(selection.from, selection.to)
+        const text = selected || label || 'link'
+        const safeText = text.replace(/\\/g, '\\\\').replace(/([\[\]])/g, '\\$1')
+        const trimmedDestination = destination.trim()
+        const scheme = trimmedDestination.match(/^([a-z][a-z\d+.-]*):/i)?.[1]?.toLowerCase()
+        if (scheme && !['http', 'https', 'mailto', 'tel'].includes(scheme)) return
+        const safeDestination = trimmedDestination.replace(/[<>\s()]/g, (character) => encodeURIComponent(character))
+        const markdown = `[${safeText}](${safeDestination})`
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: markdown },
+          selection: { anchor: selection.from + markdown.length },
+        })
+        view.focus()
       },
       getScrollFraction: () => {
         const dom = viewRef.current?.scrollDOM
@@ -543,6 +588,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             const line = view.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
+            onFormattingStateChangeRef.current?.(editorFormattingState(view))
             onStateChangeRef.current?.(getEditorState(view))
             setReady(true)
           }}
@@ -560,6 +606,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             const line = update.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(update.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
+            onFormattingStateChangeRef.current?.(editorFormattingState(update.view))
             onStateChangeRef.current?.(getEditorState(update.view))
           }}
           basicSetup={{
