@@ -143,6 +143,8 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   activeIdRef.current = activeId
   const undoRef = useRef(new Map<string, { undo: string[]; redo: string[] }>())
   const pendingRenameRef = useRef<{ originalPath: string; candidate: string | null } | null>(null)
+  const autoWorkspacePathRef = useRef(false)
+  const workspaceScanRequestRef = useRef(0)
   const startupLoadedRef = useRef(false)
   const sessionRestoreDoneRef = useRef(false)
   const pendingActivePathRef = useRef<string | null>(null)
@@ -207,6 +209,8 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
 
   const openFolderPath = useCallback(
     async (path: string) => {
+      autoWorkspacePathRef.current = false
+      workspaceScanRequestRef.current += 1
       setWorkspacePath(path)
       const nextFiles = await scanFolder(path)
       setFiles(nextFiles)
@@ -233,14 +237,24 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
   )
 
   // A document opened on its own still has a meaningful project navigator:
-  // show its containing folder, as the native reference app does. Explicitly
-  // opened workspaces keep their chosen root.
+  // show its containing folder, as the native reference app does. Follow
+  // standalone files across folders, but never replace a user-selected root.
   useEffect(() => {
-    if (!isTauri() || workspacePath || !active?.path) return
+    if (!isTauri() || !active?.path) return
     const folder = parentDirectory(active.path)
     if (!folder) return
+    if (workspacePath && (!autoWorkspacePathRef.current || workspacePath === folder)) return
+    autoWorkspacePathRef.current = true
+    const request = workspaceScanRequestRef.current + 1
+    workspaceScanRequestRef.current = request
     setWorkspacePath(folder)
-    void scanFolder(folder).then(setFiles).catch(showError)
+    void scanFolder(folder)
+      .then((nextFiles) => {
+        if (workspaceScanRequestRef.current === request) setFiles(nextFiles)
+      })
+      .catch((error) => {
+        if (workspaceScanRequestRef.current === request) showError(error)
+      })
   }, [active?.path, showError, workspacePath])
 
   useEffect(() => {
@@ -373,6 +387,8 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
       }
       pendingActivePathRef.current = planRestoredSession(snapshot, readableDocuments).activePath
       setWorkspacePath(snapshot.workspacePath ?? null)
+      autoWorkspacePathRef.current = false
+      workspaceScanRequestRef.current += 1
       if (snapshot.workspacePath) {
         try {
           setFiles(await scanFolder(snapshot.workspacePath))

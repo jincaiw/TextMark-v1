@@ -1,3 +1,19 @@
+# TextMark v0.10.28
+
+TextMark 0.10.28 improves standalone-file navigation and fixes Markdown highlight styling and the Edit Mode starting position. It also updates desktop layout regression checks for the current native tab bar, responsive toolbar, search, sidebar picker, and appearance controls.
+
+TextMark 0.10.28 改进单文件打开后的文件夹导航，修复 Markdown 高亮样式和编辑模式起始位置；更新桌面布局回归检查，覆盖原生标签栏、窄窗口工具栏与搜索、边栏模式选择和外观缩放。
+
+## Highlights / 主要更新
+
+- 文件导航：单独打开文档时显示并定位到所在文件夹；自动目录会随文档切换，手动选择的工作区保持不变，过期扫描不会覆盖新结果。
+- 预览和编辑：编辑模式位于首个标题前时从文档第 1 行开始；回到预览恢复文档顶部。
+- Markdown 高亮：修正 `==文本==` 缺少背景色的问题，并让独立 HTML 导出也显示相同高亮。
+- 桌面回归：校正原生标签栏、侧栏模式、外观缩放和导航按钮的测试契约；增加 760 px 窗口下工具栏与查找入口的布局检查。
+- 验证：前端 445 项、Rust 25 项、Clippy、构建、lint、格式、包体预算、updater 实时清单检查、22 项桌面 Shell 回归、窄窗布局以及 HTML/PNG/PDF 导出回归通过。
+
+---
+
 # TextMark v0.10.27
 
 TextMark 0.10.27 aligns Show/Hide Toolbar with Markdown Preview 0.0.62. Hiding the toolbar removes every top action, including Outline, Folders, and Sidebar; the macOS title area still shows the document name. The menu label now follows the active window when multiple windows are open.

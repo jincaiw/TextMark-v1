@@ -31,6 +31,10 @@ describe('TextMark desktop shell', () => {
     expect(await browser.getTitle()).toBe('textmark-v030-e2e.md')
     expect(await browser.execute(() => document.documentElement.dataset.renderer)).toBe('worker')
     expect(await browser.execute(() => document.documentElement.dataset.runtime)).toBe('tauri')
+    await $(".sidebar-mode-picker button[aria-label='文件夹']").click()
+    const activeFile = await $('.native-file-tree .tree-row.file.active')
+    await activeFile.waitForDisplayed()
+    await expect(activeFile).toHaveText('textmark-v030-e2e.md')
   })
 
   it('keeps a stable native window geometry contract', async () => {
@@ -258,7 +262,7 @@ describe('TextMark toolbar click matrix', () => {
     })
   })
 
-  it('sidebar toggle and mode dropdown (hide / outline / folders)', async () => {
+  it('sidebar toggle and direct mode picker (hide / outline / folders)', async () => {
     const toggle = await $('.sidebar-control button[aria-label="显示或隐藏边栏"]')
     if ((await $('.document-shell').getAttribute('class')).includes('with-sidebar')) await toggle.click()
     await expect(await $('.document-shell')).not.toHaveClassContaining('with-sidebar')
@@ -266,16 +270,12 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.document-shell')).toHaveClassContaining('with-sidebar')
     await expect(await $('.native-sidebar')).toBeDisplayed()
 
-    const summary = await $('.sidebar-control summary[aria-label="选择边栏模式"]')
-    await summary.click()
-    await expect(await $('.sidebar-control details').getAttribute('open')).not.toBeNull()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='文件夹']").click()
+    await $(".sidebar-mode-picker button[aria-label='文件夹']").click()
     await expect(await $('.native-file-tree')).toBeDisplayed()
-    await summary.click()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='大纲']").click()
+    await $('.native-file-tree .tree-row.file.active').waitForDisplayed()
+    await $(".sidebar-mode-picker button[aria-label='大纲']").click()
     await expect(await $('.native-outline')).toBeDisplayed()
-    await summary.click()
-    await $("//div[contains(@class,'sidebar-menu')]//button[normalize-space()='隐藏边栏']").click()
+    await toggle.click()
     await expect(await $('.document-shell')).not.toHaveClassContaining('with-sidebar')
   })
 
@@ -294,14 +294,17 @@ describe('TextMark toolbar click matrix', () => {
   })
 
   it('zoom in/out updates the zoom percentage', async () => {
-    const zoom = await $('.zoom-buttons')
-    const before = await zoom.getAttribute('aria-label')
-    await $('.zoom-buttons button[title="放大"]').click()
-    const afterIn = await zoom.getAttribute('aria-label')
+    const appearance = await $('details.themes-and-settings')
+    await appearance.$('summary').click()
+    const zoom = await $('.appearance-popover output')
+    const before = await zoom.getText()
+    await $('.appearance-quick-controls button[title="放大"]').click()
+    const afterIn = await zoom.getText()
     expect(afterIn).not.toBe(before)
-    await $('.zoom-buttons button[title="缩小"]').click()
-    const afterOut = await zoom.getAttribute('aria-label')
+    await $('.appearance-quick-controls button[title="缩小"]').click()
+    const afterOut = await zoom.getText()
     expect(afterOut).not.toBe(afterIn)
+    await appearance.$('summary').click()
   })
 
   it('search opens the find bar and its controls respond', async () => {
@@ -421,9 +424,8 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.settings-dialog')).not.toBeDisplayed()
   })
 
-  it('navigation buttons exist and reflect history state', async () => {
-    await expect(await $('.history-buttons button[aria-label="Back"]')).toExist()
-    await expect(await $('.history-buttons button[aria-label="Forward"]')).toExist()
+  it('hides navigation actions until document history is available', async () => {
+    await expect(await $('.history-buttons')).not.toExist()
   })
 
   it('window control buttons exist in the top area', async () => {
