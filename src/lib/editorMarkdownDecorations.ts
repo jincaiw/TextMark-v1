@@ -5,15 +5,29 @@ import { markdownImageReferences } from './pastedImages'
 import { splitFrontmatter } from './frontmatter'
 
 const lineClass = (line: string) => {
-  const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?/)
+  const quotePrefix = markdownQuotePrefix(line)
+  const quoteContent = line.slice(quotePrefix.length)
+  const alert = quoteContent.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)
+  if (alert) return `cm-md-quote cm-md-quote-alert cm-md-quote-alert-${alert[1].toLowerCase()}`
+  const fence = quoteContent.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?/)
   if (fence) return fence[2]?.toLowerCase() === 'mermaid' ? 'cm-md-mermaid-fence' : 'cm-md-code-fence'
   if (/^\s*(?:\$\$|\\\[|\\\])\s*$/.test(line)) return 'cm-md-math'
   if (/^\s*(?:[-+*]|\d+[.)])\s+\[[ xX]\]\s+/.test(line)) return 'cm-md-task'
   if (/^\s*\|.*\|\s*$/.test(line) && /\|\s*:?-{3,}:?\s*(?:\||$)/.test(line)) return 'cm-md-table'
   if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) return 'cm-md-rule'
-  if (/^\s*>/.test(line)) return 'cm-md-quote'
+  if (quotePrefix) return 'cm-md-quote'
   if (/^\s*(?:[-+*]|\d+[.)])\s+/.test(line)) return 'cm-md-list'
   return ''
+}
+
+function markdownQuotePrefix(line: string): string {
+  return line.match(/^(?:[ \t]{0,3}>[ \t]?)+/)?.[0] ?? ''
+}
+
+function markdownCodeContentOffset(line: string): number {
+  const quotePrefixLength = markdownQuotePrefix(line).length
+  const indentation = line.slice(quotePrefixLength).match(/^[\t ]*/)?.[0].length ?? 0
+  return quotePrefixLength + indentation
 }
 
 const tableSeparator = (line: string) => {
@@ -128,6 +142,24 @@ export function markdownMathLines(source: string): Set<number> {
   return result
 }
 
+export function markdownAlertLines(source: string): Map<number, string> {
+  const lines = source.split(/\r?\n/)
+  const result = new Map<number, string>()
+  for (let index = 0; index < lines.length; index += 1) {
+    const prefix = markdownQuotePrefix(lines[index])
+    const match = lines[index].slice(prefix.length).match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)
+    if (!prefix || !match) continue
+    const className = `cm-md-quote-alert cm-md-quote-alert-${match[1].toLowerCase()}`
+    let end = index
+    while (end < lines.length && markdownQuotePrefix(lines[end])) {
+      result.set(end + 1, className)
+      end += 1
+    }
+    index = end - 1
+  }
+  return result
+}
+
 /** Public for lightweight fixture tests; the view plugin only processes the
  * viewport, keeping large Markdown files responsive. */
 export function markdownLineClass(line: string) {
@@ -167,13 +199,20 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   const add = (from: number, to: number, className = 'cm-md-syntax-marker') => {
     if (to > from) markers.push({ from, to, className })
   }
-  const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)|^(\s*)(>)(?=\s?)/)
+  const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)/)
   if (prefix) {
-    const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? prefix[5]?.length ?? 0
-    const marker = prefix[2] ?? prefix[4] ?? prefix[6] ?? ''
+    const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? 0
+    const marker = prefix[2] ?? prefix[4] ?? ''
     const markerClass = prefix[4] ? (/^\d/.test(marker) ? 'cm-md-list-ordered-marker' : 'cm-md-list-marker') : 'cm-md-syntax-marker'
     add(markerStart, markerStart + marker.length, markerClass)
   }
+  for (const match of line.matchAll(/(^|\s)(>)(?=\s|$)/g)) {
+    const start = (match.index ?? 0) + match[1].length
+    add(start, start + 1)
+  }
+  const quotePrefix = markdownQuotePrefix(line)
+  const admonition = line.slice(quotePrefix.length).match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)
+  if (admonition) add(quotePrefix.length, quotePrefix.length + admonition[0].length, 'cm-md-admonition-marker')
   const task = line.match(/^(\s*)(?:[-+*]|\d+[.)])\s+(\[[ xX]\])/)
   if (task)
     add(
@@ -205,8 +244,16 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   return markers.sort((left, right) => left.from - right.from || left.to - right.to)
 }
 
-const inlinePattern =
-  /==[^=\n]+==|`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\[[^\]\n]+\]\([^\)\n]+\)|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g
+const inlinePattern = /==[^=\n]+==/g
+const inlineNodeClasses: Record<string, string> = {
+  StrongEmphasis: 'cm-md-strong',
+  Emphasis: 'cm-md-italic',
+  Strikethrough: 'cm-md-strikethrough',
+  InlineCode: 'cm-md-inline-code',
+  Link: 'cm-md-link',
+  Autolink: 'cm-md-link',
+  URL: 'cm-md-link',
+}
 export interface EditorImageReference {
   alt: string
   path: string
@@ -285,25 +332,82 @@ function buildDecorations(
   tableAlignments: Map<number, Array<'left' | 'center' | 'right'>>,
   frontmatterLines: Map<number, string>,
   mathLines: Set<number>,
+  alertLines: Map<number, string>,
 ): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
   const tree = syntaxTree(view.state)
+  const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number
+  const syntaxMarkerClasses: Record<string, string> = {
+    QuoteMark: 'cm-md-syntax-marker',
+    HeaderMark: 'cm-md-syntax-marker',
+    EmphasisMark: 'cm-md-inline-syntax',
+    CodeMark: 'cm-md-inline-syntax',
+    LinkMark: 'cm-md-inline-syntax',
+    ListMark: 'cm-md-list-marker',
+    TaskMarker: 'cm-md-task-marker',
+  }
+  for (const visible of view.visibleRanges)
+    tree.iterate({
+      from: visible.from,
+      to: visible.to,
+      enter(node) {
+        const className = inlineNodeClasses[node.name]
+        if (className && node.from !== node.to) {
+          const first = view.state.doc.lineAt(node.from).number
+          const source = view.state.sliceDoc(node.from, node.to)
+          const isAlertLabel = node.name === 'Link' && /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/i.test(source)
+          if (!isAlertLabel && !frontmatterLines.has(first) && !mathLines.has(first))
+            add(node.from, node.to, Decoration.mark({ class: className }))
+        }
+        const markerClass = syntaxMarkerClasses[node.name]
+        if (!markerClass || node.from === node.to) return
+        const line = view.state.doc.lineAt(node.from)
+        if (line.number === activeLine || frontmatterLines.has(line.number) || mathLines.has(line.number)) return
+        const codeOffset = markdownCodeContentOffset(line.text)
+        const insideCode = tree.resolveInner(line.from + Math.min(codeOffset, Math.max(0, line.length - 1)), 1)
+        let ancestor = insideCode
+        while (ancestor && ancestor.name !== 'FencedCode' && ancestor.name !== 'CodeBlock') ancestor = ancestor.parent!
+        if (ancestor && !['CodeMark', 'QuoteMark'].includes(node.name)) return
+        const source = view.state.sliceDoc(node.from, node.to)
+        const cls =
+          node.name === 'TaskMarker' && /^\[[xX]\]/.test(source)
+            ? 'cm-md-task-marker cm-md-task-checked'
+            : node.name === 'ListMark' && /^\d/.test(source)
+              ? 'cm-md-list-ordered-marker'
+              : markerClass
+        add(node.from, node.to, Decoration.mark({ class: cls }))
+      },
+    })
   for (const { from, to } of view.visibleRanges) {
     const first = view.state.doc.lineAt(from)
     const last = view.state.doc.lineAt(to)
     for (let number = first.number; number <= last.number; number += 1) {
       const line = view.state.doc.line(number)
       let codeNode = tree.resolveInner(line.from, 1)
-      while (codeNode && codeNode.name !== 'FencedCode') codeNode = codeNode.parent!
+      while (codeNode && codeNode.name !== 'FencedCode' && codeNode.name !== 'CodeBlock') codeNode = codeNode.parent!
+      if (!codeNode) {
+        const codeOffset = markdownCodeContentOffset(line.text)
+        if (codeOffset > 0 && codeOffset < line.length) {
+          codeNode = tree.resolveInner(line.from + codeOffset, 1)
+          while (codeNode && codeNode.name !== 'FencedCode' && codeNode.name !== 'CodeBlock') codeNode = codeNode.parent!
+        }
+      }
       if (codeNode) {
-        const isFence = /^\s*(?:`{3,}|~{3,})/.test(line.text)
+        const quotePrefix = markdownQuotePrefix(line.text)
+        const codeText = line.text.slice(quotePrefix.length)
+        const fence = codeNode.name === 'FencedCode' && codeText.match(/^(\s*)(`{3,}|~{3,})/)
+        const isFence = Boolean(fence)
+        if (fence) {
+          const fenceStart = line.from + quotePrefix.length + fence[1].length
+          add(fenceStart, fenceStart + fence[2].length, Decoration.mark({ class: 'cm-md-fence-marker' }))
+        }
         add(
           line.from,
           line.from,
           Decoration.line({
             class: isFence ? 'cm-md-code-fence' : 'cm-md-code-line',
-            attributes: { 'data-code-fence-from': String(codeNode.from) },
+            attributes: codeNode.name === 'FencedCode' ? { 'data-code-fence-from': String(codeNode.from) } : {},
           }),
         )
       } else {
@@ -311,9 +415,10 @@ function buildDecorations(
           frontmatterLines.get(number) ??
           (mathLines.has(number)
             ? 'cm-md-math-block'
-            : tableLines.has(number)
-              ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : tableLines.has(number + 1) ? '' : ' cm-md-table-last-row'}`
-              : lineClass(line.text))
+            : (alertLines.get(number) ??
+              (tableLines.has(number)
+                ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : tableLines.has(number + 1) ? '' : ' cm-md-table-last-row'}`
+                : lineClass(line.text))))
         if (className) add(line.from, line.from, Decoration.line({ class: className }))
       }
       if (tableLines.has(number) && !tableSeparator(line.text)) {
@@ -325,23 +430,23 @@ function buildDecorations(
             add(line.from + cell.from, line.from + cell.to, Decoration.mark({ class: `cm-md-table-cell cm-md-table-align-${alignment}` }))
         }
       }
-      const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
+      const isActiveLine = activeLine === number
       const isMetadataOrMath = frontmatterLines.has(number) || mathLines.has(number)
-      if (!activeLine && !isMetadataOrMath)
+      const isCodeLine = Boolean(codeNode)
+      if (!isActiveLine && !isMetadataOrMath && !isCodeLine)
         for (const marker of markdownSyntaxMarkers(line.text))
-          add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
-      if (isMetadataOrMath) continue
+          if (
+            marker.className === 'cm-md-table-marker' ||
+            marker.className === 'cm-md-admonition-marker' ||
+            (marker.className === 'cm-md-inline-syntax' && line.text.slice(marker.from, marker.to).includes('='))
+          )
+            add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
+      if (isMetadataOrMath || isCodeLine) continue
       inlinePattern.lastIndex = 0
       for (const match of line.text.matchAll(inlinePattern)) {
         const value = match[0]
         const offset = match.index ?? 0
-        const inlineClass = value.startsWith('==')
-          ? 'cm-md-highlight'
-          : value.startsWith('`')
-            ? 'cm-md-inline-code'
-            : value.startsWith('[')
-              ? 'cm-md-link'
-              : 'cm-md-emphasis'
+        const inlineClass = 'cm-md-highlight'
         add(line.from + offset, line.from + offset + value.length, Decoration.mark({ class: inlineClass }))
       }
       if (options.resolveImage)
@@ -365,7 +470,7 @@ function buildCodeBlockWrappers(view: EditorView) {
   const document = view.state.doc
   syntaxTree(view.state).iterate({
     enter(node) {
-      if (node.name !== 'FencedCode') return
+      if (node.name !== 'FencedCode' && node.name !== 'CodeBlock') return
       const first = document.lineAt(node.from)
       const last = document.lineAt(Math.max(node.from, node.to - 1))
       wrappers.push(
@@ -388,12 +493,22 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       tableAlignments: Map<number, Array<'left' | 'center' | 'right'>>
       frontmatterLines: Map<number, string>
       mathLines: Set<number>
+      alertLines: Map<number, string>
       constructor(view: EditorView) {
         this.tableLines = markdownTableLines(view.state.doc.toString())
         this.tableAlignments = markdownTableAlignmentMap(view.state.doc.toString())
         this.frontmatterLines = markdownFrontmatterLines(view.state.doc.toString())
         this.mathLines = markdownMathLines(view.state.doc.toString())
-        this.decorations = buildDecorations(view, options, this.tableLines, this.tableAlignments, this.frontmatterLines, this.mathLines)
+        this.alertLines = markdownAlertLines(view.state.doc.toString())
+        this.decorations = buildDecorations(
+          view,
+          options,
+          this.tableLines,
+          this.tableAlignments,
+          this.frontmatterLines,
+          this.mathLines,
+          this.alertLines,
+        )
         this.blockWrappers = buildCodeBlockWrappers(view)
       }
       update(update: ViewUpdate) {
@@ -403,6 +518,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
             this.tableAlignments = markdownTableAlignmentMap(update.state.doc.toString())
             this.frontmatterLines = markdownFrontmatterLines(update.state.doc.toString())
             this.mathLines = markdownMathLines(update.state.doc.toString())
+            this.alertLines = markdownAlertLines(update.state.doc.toString())
           }
           this.decorations = buildDecorations(
             update.view,
@@ -411,6 +527,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
             this.tableAlignments,
             this.frontmatterLines,
             this.mathLines,
+            this.alertLines,
           )
           this.blockWrappers = buildCodeBlockWrappers(update.view)
         }

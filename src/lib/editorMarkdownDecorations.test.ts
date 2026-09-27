@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { markdown } from '@codemirror/lang-markdown'
+import { EditorState } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import {
   editorImageReferences,
   markdownFrontmatterLines,
+  markdownAlertLines,
   markdownLineClass,
   markdownMathLines,
   markdownTableAlignmentMap,
   markdownSyntaxMarkers,
   markdownTableCellRanges,
   markdownTableLines,
+  createEditorMarkdownDecorations,
 } from './editorMarkdownDecorations'
 
 describe('editor Markdown line semantics', () => {
@@ -51,6 +56,77 @@ describe('editor Markdown line semantics', () => {
       new Map([
         [1, ['left', 'center', 'right']],
         [3, ['left', 'center', 'right']],
+      ]),
+    )
+  })
+})
+
+describe('editor code block presentation', () => {
+  it('renders indented code as a code card without applying inline Markdown styling', () => {
+    const source = 'Before\n\n    **code text**\n    second line\n\nAfter'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      expect(view.dom.querySelectorAll('.cm-md-code-card')).toHaveLength(1)
+      const codeLine = [...view.dom.querySelectorAll<HTMLElement>('.cm-md-code-line')].find((line) =>
+        line.textContent?.includes('code text'),
+      )
+      expect(codeLine).toBeDefined()
+      expect(codeLine?.querySelector('.cm-md-emphasis')).toBeNull()
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('renders quoted fences as code and styles nested emphasis and alerts without leaking quote markers', () => {
+    const source = [
+      '> 外层引用。',
+      '>',
+      '> > 内层引用 **加粗** 与 `代码`。',
+      '>',
+      '> ```text',
+      '> **代码内容不应加粗**',
+      '> ```',
+      '',
+      '> [!WARNING]',
+      '> 请检查这个提示。',
+    ].join('\n')
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      expect(view.dom.querySelectorAll('.cm-md-code-card')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-md-code-fence')).toHaveLength(2)
+      expect([...view.dom.querySelectorAll('.cm-md-fence-marker')].map((marker) => marker.textContent)).toEqual(['```', '```'])
+      expect(view.dom.querySelector('.cm-md-quote-alert-warning')).not.toBeNull()
+      expect(view.dom.querySelector('.cm-md-admonition-marker')).not.toBeNull()
+      expect(view.dom.querySelector('.cm-md-strong')?.textContent).toContain('加粗')
+      const nestedQuote = [...view.dom.querySelectorAll<HTMLElement>('.cm-line')].find((line) => line.textContent?.includes('内层引用'))
+      expect(nestedQuote?.querySelectorAll('.cm-md-inline-syntax')).toHaveLength(4)
+      expect(view.dom.querySelector('.cm-md-quote-alert-warning .cm-md-link')).toBeNull()
+      expect(view.dom.querySelector('.cm-md-code-card .cm-md-strong')).toBeNull()
+      expect(nestedQuote?.querySelectorAll('.cm-md-syntax-marker')).toHaveLength(2)
+    } finally {
+      view.destroy()
+    }
+  })
+})
+
+describe('editor alert blocks', () => {
+  it('styles all consecutive quoted lines under supported alert labels', () => {
+    expect(markdownAlertLines('> [!NOTE]\n> Note body\n\n> Plain quote')).toEqual(
+      new Map([
+        [1, 'cm-md-quote-alert cm-md-quote-alert-note'],
+        [2, 'cm-md-quote-alert cm-md-quote-alert-note'],
       ]),
     )
   })
@@ -114,6 +190,14 @@ describe('inactive Markdown syntax markers', () => {
     expect(markdownSyntaxMarkers('[guide](https://example.com)')).toEqual([
       { from: 0, to: 1, className: 'cm-md-inline-syntax' },
       { from: 6, to: 28, className: 'cm-md-inline-syntax' },
+    ])
+  })
+
+  it('marks every nested quote prefix without duplicating the outer marker', () => {
+    expect(markdownSyntaxMarkers('> > > Nested quote')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-syntax-marker' },
+      { from: 2, to: 3, className: 'cm-md-syntax-marker' },
+      { from: 4, to: 5, className: 'cm-md-syntax-marker' },
     ])
   })
 })

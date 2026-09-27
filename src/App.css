@@ -2260,14 +2260,14 @@ select:focus-visible {
 .editor-pane .cm-md-h5,
 .editor-pane .cm-md-h6 {
   line-height: 1.18;
-  padding-top: 1.6em;
+  padding-top: 0.9em;
   font-weight: 600;
   letter-spacing: -0.012em;
 }
 .editor-pane .cm-md-h1 {
   font-size: 1.802em;
   font-weight: 700;
-  padding-top: 0.8em;
+  padding-top: 0.45em;
 }
 .editor-pane .cm-md-h2 {
   font-size: 1.602em;
@@ -2426,6 +2426,44 @@ select:focus-visible {
   border-left: 2px solid color-mix(in srgb, var(--document-grid) 76%, var(--muted));
   color: var(--document-secondary);
 }
+.editor-pane .cm-line.cm-md-quote-alert {
+  padding-left: 14px;
+  border-left: 3px solid var(--editor-alert-color, var(--accent));
+  background: color-mix(in srgb, var(--editor-alert-color, var(--accent)) 7%, transparent);
+  color: var(--document-text);
+}
+.editor-pane .cm-line.cm-md-quote-alert-note {
+  --editor-alert-color: var(--alert-note);
+}
+.editor-pane .cm-line.cm-md-quote-alert-tip {
+  --editor-alert-color: var(--alert-tip);
+}
+.editor-pane .cm-line.cm-md-quote-alert-important {
+  --editor-alert-color: var(--alert-important);
+}
+.editor-pane .cm-line.cm-md-quote-alert-warning {
+  --editor-alert-color: var(--alert-warning);
+}
+.editor-pane .cm-line.cm-md-quote-alert-caution {
+  --editor-alert-color: var(--alert-caution);
+}
+.editor-pane .cm-md-admonition-marker {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--editor-alert-color, var(--accent)) 13%, transparent);
+  color: var(--editor-alert-color, var(--accent)) !important;
+  font-size: 0.76em;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  line-height: 1.5;
+  text-decoration: none !important;
+}
+.editor-pane .cm-md-strikethrough {
+  color: var(--document-secondary);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
 .editor-pane .cm-md-list {
   color: var(--text);
 }
@@ -2447,6 +2485,13 @@ select:focus-visible {
   color: var(--text);
   font-weight: 600;
 }
+.editor-pane .cm-md-strong {
+  color: var(--text);
+  font-weight: 650;
+}
+.editor-pane .cm-md-italic {
+  font-style: italic;
+}
 .editor-pane .cm-md-highlight {
   border-radius: 3px;
   background: color-mix(in srgb, var(--accent) 24%, transparent);
@@ -2459,7 +2504,7 @@ select:focus-visible {
 .editor-pane .cm-md-h4.cm-md-heading-after-blank,
 .editor-pane .cm-md-h5.cm-md-heading-after-blank,
 .editor-pane .cm-md-h6.cm-md-heading-after-blank {
-  padding-top: 4px;
+  padding-top: 2px;
 }
 .editor-status {
   position: absolute;

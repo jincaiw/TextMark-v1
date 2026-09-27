@@ -1,3 +1,18 @@
+# TextMark v0.10.31
+
+TextMark 0.10.31 improves Markdown rendering in Edit Mode. Syntax-aware decorations now handle nested emphasis and structural markers more reliably, quoted and indented code blocks keep their content distinct from surrounding prose, and quoted code-fence delimiters no longer leak into the rendered editor view. Heading spacing and callout styling are also refined.
+
+TextMark 0.10.31 优化编辑模式下的 Markdown 渲染：基于语法树处理嵌套强调与结构标记；改善嵌套引用、提示块和缩进代码块显示；隐藏引用代码块的起止围栏，避免源码标记混入正文；同时收紧标题间距。
+
+## Highlights / 主要更新
+
+- 编辑模式：使用语法树为粗体、斜体、删除线、行内代码及链接提供稳定样式，减少正则误判。
+- 引用与代码：改善嵌套引用和提示块样式；为围栏代码块和缩进代码块提供独立代码区域，隐藏引用代码围栏并保留语言标签。
+- 标题：减少标题上下留白，让长文档滚动阅读更紧凑。
+- 验证：前端 469 项测试、Rust 25 项测试、Lint、格式检查、生产构建、包体预算、HTML/PNG/PDF 导出回归通过；npm 审计无高危漏洞，Rust advisory 扫描有 7 条已允许的依赖告警。
+
+---
+
 # TextMark v0.10.30
 
 TextMark 0.10.30 improves Edit Mode rendering for Markdown tables and keeps document structure metadata out of heading navigation. Table cells now render as a readable aligned grid, including empty cells, and Tab / Shift+Tab move between cells while skipping the separator row; Tab at the last cell appends a new row.
