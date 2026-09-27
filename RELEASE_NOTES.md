@@ -1,3 +1,17 @@
+# TextMark v0.10.27
+
+TextMark 0.10.27 aligns Show/Hide Toolbar with Markdown Preview 0.0.62. Hiding the toolbar removes every top action, including Outline, Folders, and Sidebar; the macOS title area still shows the document name. The menu label now follows the active window when multiple windows are open.
+
+TextMark 0.10.27 对齐 Markdown Preview 0.0.62 的“显示工具栏／隐藏工具栏”：隐藏时移除大纲、文件夹、切换边栏等全部顶部操作；macOS 标题区仍显示文稿名称。多窗口下菜单文案跟随当前活动窗口。
+
+## Highlights / 主要更新
+
+- 隐藏工具栏：顶部所有按钮、菜单和搜索框一并卸载，恢复后维持原有自定义顺序；侧栏、标签栏与编辑格式栏不受影响。
+- macOS 标题区：隐藏工具栏后保留文稿名及原生窗口控制区域。
+- 多窗口菜单：后台窗口不再覆盖当前窗口的工具栏显隐文案。
+
+---
+
 # TextMark v0.10.26
 
 TextMark 0.10.26 improves Edit Mode parity with Markdown Preview 0.0.62: formatting controls now use grouped list and more-format menus, link insertion has a focused label/URL popover, and inactive Markdown syntax is visually quiet while the active line remains editable. Formatting state follows the current heading, inline style, and list context.

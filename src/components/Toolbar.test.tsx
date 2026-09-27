@@ -8,6 +8,7 @@ import { Toolbar } from './Toolbar'
 type ToolbarProps = ComponentProps<typeof Toolbar>
 
 const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
+  visible: true,
   busy: false,
   viewMode: 'preview',
   sidebarVisible: false,
@@ -155,6 +156,25 @@ describe('Toolbar', () => {
   function click(target: HTMLElement) {
     act(() => target.click())
   }
+
+  it('隐藏工具栏时卸载全部顶部操作，恢复后保留自定义顺序', () => {
+    const props = makeProps({
+      documentName: 'notes.md',
+      items: ['sidebar', 'documentActions', 'search', 'inspector'],
+    })
+    render(props)
+    expect(visibleItems()).toEqual(props.items)
+
+    render({ ...props, visible: false })
+    expect(host.querySelector('.native-actions')).toBeNull()
+    expect(host.querySelector('.window-leading')).toBeNull()
+    expect(host.querySelectorAll('header button, header summary, header input')).toHaveLength(0)
+    expect(host.querySelector('.toolbar-hidden-title')?.textContent).toBe('notes.md')
+
+    render(props)
+    expect(visibleItems()).toEqual(props.items)
+    expect(host.querySelector('.toolbar-hidden-title')).toBeNull()
+  })
 
   it('保持 items 的顺序与重复间隔，删除 sidebar/navigation 后不擅自补回', () => {
     const props = makeProps({

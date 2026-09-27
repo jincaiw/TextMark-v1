@@ -401,12 +401,32 @@ select:focus-visible {
   background: transparent;
   backdrop-filter: none;
 }
+.toolbar-hidden-title {
+  display: none;
+}
 .toolbar-hidden .native-actions {
   display: none;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-hidden.app-shell {
   /* Keep the native overlay titlebar and traffic-light drag/click area. */
-  --toolbar-height: 28px;
+  --toolbar-height: 32px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-hidden .native-toolbar {
+  display: flex;
+  justify-content: center;
+  padding-inline: 92px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-hidden-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .native-actions > .toolbar-flexible-space {
   position: relative;

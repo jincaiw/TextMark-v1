@@ -35,6 +35,7 @@ import { ToolbarAppearance } from './ToolbarAppearance'
 
 interface ToolbarProps {
   documentName?: string
+  visible: boolean
   busy: boolean
   viewMode: ViewMode
   sidebarVisible: boolean
@@ -239,7 +240,16 @@ export function Toolbar(props: ToolbarProps) {
     const observer = new ResizeObserver(compute)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [toolbarItems, props.displayMode, props.searchQuery, props.zoom, props.viewMode, props.sidebarVisible, props.sidebarWidth])
+  }, [
+    toolbarItems,
+    props.displayMode,
+    props.searchQuery,
+    props.zoom,
+    props.viewMode,
+    props.sidebarVisible,
+    props.sidebarWidth,
+    props.visible,
+  ])
 
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`
@@ -450,6 +460,16 @@ export function Toolbar(props: ToolbarProps) {
   const overflowItems = hiddenIndexes
     .map((index) => toolbarItems[index])
     .filter((item) => item !== 'space' && item !== 'flexibleSpace' && item !== 'copy')
+
+  if (!props.visible) {
+    return (
+      <header className="native-toolbar" data-tauri-drag-region>
+        <span className="toolbar-hidden-title" data-tauri-drag-region title={props.documentName}>
+          {props.documentName}
+        </span>
+      </header>
+    )
+  }
 
   return (
     <header

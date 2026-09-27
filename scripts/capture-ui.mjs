@@ -1261,7 +1261,7 @@ if (scenario === 'tabs-find' || scenario === 'print-tabs-find')
 if (scenario === 'dark') expectedCondition += " && document.documentElement.dataset.theme === 'dark'"
 if (scenario === 'toolbar-hidden')
   expectedCondition +=
-    " && document.querySelector('.app-shell')?.classList.contains('toolbar-hidden') && getComputedStyle(document.querySelector('.app-shell')).getPropertyValue('--toolbar-height').trim() === '0px'"
+    " && document.querySelector('.app-shell')?.classList.contains('toolbar-hidden') && getComputedStyle(document.querySelector('.app-shell')).getPropertyValue('--toolbar-height').trim() === '0px' && !document.querySelector('.native-toolbar .native-actions, .native-toolbar button, .native-toolbar summary, .native-toolbar input')"
 if (appearance) {
   const dark = scenario === 'appearance-dark'
   expectedCondition += ` && document.documentElement.dataset.theme === '${dark ? 'dark' : 'light'}' &&
@@ -1490,7 +1490,8 @@ for (const [assertion, passed] of Object.entries(geometry.result.value.assertion
 }
 if (scenario === 'toolbar-hidden') {
   if (geometry.result.value.elements['.native-toolbar']?.height !== 0) failures.push('隐藏工具栏后仍保留了可见的顶部空白')
-  if (geometry.result.value.elements['.native-actions']?.display !== 'none') failures.push('隐藏工具栏后操作项仍可见')
+  if (geometry.result.value.elements['.native-actions']?.display && geometry.result.value.elements['.native-actions'].display !== 'none')
+    failures.push('隐藏工具栏后操作项仍可见')
 }
 if (toolbarFixtures[scenario]) {
   const result = await send('Runtime.evaluate', {

@@ -1247,7 +1247,21 @@ fn toolbar_menu_labels(toolbar_hidden: bool) -> (&'static str, &'static str) {
 }
 
 #[tauri::command]
-fn refresh_menu(app: tauri::AppHandle, request: MenuRefreshRequest) -> AppResult<()> {
+fn refresh_menu(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    request: MenuRefreshRequest,
+) -> AppResult<()> {
+    // The macOS menu bar belongs to the application, while toolbar visibility
+    // belongs to one window. A background window must not overwrite the menu
+    // label and checked state of the active window.
+    if app
+        .webview_windows()
+        .into_values()
+        .any(|other| other.label() != window.label() && other.is_focused().unwrap_or(false))
+    {
+        return Ok(());
+    }
     let state = MenuUiState {
         appearance: match request.appearance.as_str() {
             "light" => "light",

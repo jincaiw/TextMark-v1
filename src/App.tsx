@@ -1158,6 +1158,7 @@ function DocumentApp() {
     <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? '' : 'toolbar-hidden'}`}>
       <Toolbar
         documentName={documents.document.name}
+        visible={toolbarVisible}
         busy={documents.busy}
         viewMode={viewMode}
         locale={settings.locale}
