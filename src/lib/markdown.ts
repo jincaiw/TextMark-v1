@@ -411,7 +411,7 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body
   let raw = renderer.render(mathNormalized, environment)
   const outline = anchorOutlineToSource(environment.outline ?? [], source)
-  const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ol></nav>`
+  const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ul>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ul></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
   raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw), locale))
   raw = `${frontmatterHtml(frontmatter.entries)}${raw}`

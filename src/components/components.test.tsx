@@ -336,6 +336,34 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+  it('moves toolbar items left and right with explicit order controls', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onChange = vi.fn()
+    await act(async () =>
+      root.render(
+        <ToolbarCustomizer
+          open
+          locale="en"
+          items={['sidebar', 'search']}
+          displayMode="iconOnly"
+          onChange={onChange}
+          onDisplayModeChange={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      ),
+    )
+
+    const cards = host.querySelectorAll<HTMLElement>('.tc-current-item')
+    const firstItemRight = cards[0].querySelectorAll<HTMLButtonElement>('.tc-order-button')[1]
+    expect(cards[0].querySelector<HTMLButtonElement>('.tc-order-button')!.disabled).toBe(true)
+    await act(async () => firstItemRight.click())
+    expect(onChange).toHaveBeenLastCalledWith(['search', 'sidebar'])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
   it('keeps LLM applications out of the default editor target preference', () => {
     const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} />)
     expect(html).toContain('Visual Studio Code')
@@ -573,10 +601,20 @@ describe('localized desktop components', () => {
     expect(host.querySelector('.md-code-language')?.textContent).toBe('typescript')
     const card = host.querySelector<HTMLElement>('.md-code-card')!
     const wrap = host.querySelector<HTMLButtonElement>('.md-code-toggle-wrap')!
+    const copy = host.querySelector<HTMLButtonElement>('.md-code-copy')!
+    expect(Array.from(host.querySelector('.md-code-actions')!.children).map((button) => (button as HTMLElement).className)).toEqual([
+      'md-code-action md-code-toggle-wrap',
+      'md-code-action md-code-copy',
+    ])
+    expect(wrap.getAttribute('aria-label')).toBe('Wrap code')
+    expect(copy.getAttribute('aria-label')).toBe('Copy code')
+    expect(copy.querySelector('svg')).not.toBeNull()
+    expect(copy.textContent).toBe('')
     expect(card.classList.contains('is-wrapped')).toBe(false)
     await act(async () => wrap.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(card.classList.contains('is-wrapped')).toBe(true)
     expect(wrap.getAttribute('aria-pressed')).toBe('true')
+    expect(wrap.getAttribute('aria-label')).toBe('Unwrap code')
     await act(async () => root.unmount())
     host.remove()
   })

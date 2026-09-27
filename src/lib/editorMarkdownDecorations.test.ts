@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { editorImageReferences, markdownLineClass, markdownSyntaxMarkers } from './editorMarkdownDecorations'
+import {
+  editorImageReferences,
+  markdownFrontmatterLines,
+  markdownLineClass,
+  markdownSyntaxMarkers,
+  markdownTableLines,
+} from './editorMarkdownDecorations'
 
 describe('editor Markdown line semantics', () => {
   it.each([
-    ['---', 'cm-md-frontmatter-boundary'],
-    ['title: Draft', 'cm-md-frontmatter-value'],
+    ['---', 'cm-md-rule'],
+    ['title: Draft', ''],
     ['```ts', 'cm-md-code-fence'],
     ['```mermaid', 'cm-md-mermaid-fence'],
     ['| A | B |', ''],
@@ -15,14 +21,39 @@ describe('editor Markdown line semantics', () => {
     ['- [x] Done', 'cm-md-task'],
     ['1. Item', 'cm-md-list'],
   ])('classifies %s', (line, expected) => expect(markdownLineClass(line)).toBe(expected))
+
+  it('marks the header, separator, and body rows of a GFM table', () => {
+    expect(markdownTableLines('Before\n| A | B |\n| --- | --- |\n| one | two |\n\nAfter')).toEqual(new Set([2, 3, 4]))
+  })
+
+  it('supports tables without outer pipes and ignores escaped inline pipes', () => {
+    expect(markdownTableLines('A | B\n:--- | ---:\none | two\n\ntext with a \\| pipe')).toEqual(new Set([1, 2, 3]))
+  })
+})
+
+describe('editor frontmatter styling', () => {
+  it('styles only the metadata block at the beginning of a valid document', () => {
+    expect(markdownFrontmatterLines('---\ntitle: Draft\ntags: [a, b]\n---\nBody\n---')).toEqual(
+      new Map([
+        [1, 'cm-md-frontmatter-boundary'],
+        [2, 'cm-md-frontmatter-value'],
+        [3, 'cm-md-frontmatter-value'],
+        [4, 'cm-md-frontmatter-boundary'],
+      ]),
+    )
+  })
+
+  it('leaves ordinary key-value prose and horizontal rules alone', () => {
+    expect(markdownFrontmatterLines('# Heading\n\nstatus: shipped\n\n---')).toEqual(new Map())
+  })
 })
 
 describe('inactive Markdown syntax markers', () => {
   it('marks structural punctuation without marking content', () => {
     expect(markdownSyntaxMarkers('  ## Heading')).toEqual([{ from: 2, to: 4, className: 'cm-md-syntax-marker' }])
     expect(markdownSyntaxMarkers('- [x] Done')).toEqual([
-      { from: 0, to: 1, className: 'cm-md-syntax-marker' },
-      { from: 2, to: 5, className: 'cm-md-task-marker' },
+      { from: 0, to: 1, className: 'cm-md-list-marker' },
+      { from: 2, to: 5, className: 'cm-md-task-marker cm-md-task-checked' },
     ])
   })
 

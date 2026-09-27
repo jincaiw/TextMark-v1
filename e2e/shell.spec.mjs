@@ -293,6 +293,20 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('details.toolbar-group.open-with').getAttribute('open')).toBeNull()
   })
 
+  it('closes toolbar dropdowns when clicking elsewhere in the document', async () => {
+    const openWith = await $('details.toolbar-group.open-with')
+    await openWith.$('summary').click()
+    await expect(await openWith.getAttribute('open')).not.toBeNull()
+    await $('.markdown-body h1').click()
+    await expect(await openWith.getAttribute('open')).toBeNull()
+
+    const more = await $('details.more-menu')
+    await more.$('summary').click()
+    await expect(await more.getAttribute('open')).not.toBeNull()
+    await $('.markdown-body h1').click()
+    await expect(await more.getAttribute('open')).toBeNull()
+  })
+
   it('zoom in/out updates the zoom percentage', async () => {
     const appearance = await $('details.themes-and-settings')
     await appearance.$('summary').click()
@@ -308,8 +322,13 @@ describe('TextMark toolbar click matrix', () => {
   })
 
   it('search opens the find bar and its controls respond', async () => {
+    const searchControl = await $('.document-search')
     const input = await $('.document-search input')
-    await input.click()
+    expect(await searchControl.getAttribute('class')).not.toContain('is-expanded')
+    expect(await input.getAttribute('tabindex')).toBe('-1')
+    await $('.document-search .search-trigger').click()
+    await expect(await $('.document-search')).toHaveClassContaining('is-expanded')
+    await expect(await input).toBeFocused()
     await expect(await $('.find-bar')).toBeDisplayed()
     const findInput = await $('.find-bar input')
     await findInput.setValue('TextMark')
@@ -320,6 +339,8 @@ describe('TextMark toolbar click matrix', () => {
     await $('.find-icon[title="上一个匹配项"]').click()
     await $('.find-bar .find-done').click()
     await expect(await $('.find-bar')).not.toBeDisplayed()
+    await $('.markdown-body h1').click()
+    await expect(await $('.document-search')).not.toHaveClassContaining('is-expanded')
   })
 
   it('edit mode toggles on and off from the toolbar', async () => {
@@ -330,6 +351,29 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.app-shell')).toHaveClassContaining('mode-edit')
     await edit.click()
     await expect(await $('.app-shell')).not.toHaveClassContaining('mode-edit')
+  })
+
+  it('applies formatting shortcuts and undo in edit mode', async () => {
+    const sourceText = () => browser.execute(() => document.querySelector('.cm-content')?.textContent ?? '')
+    await $('button[aria-label="编辑"]').click()
+    const editor = await $('.cm-content')
+    await editor.waitForDisplayed()
+    const baseline = await sourceText()
+    await editor.click()
+    await browser.keys('END')
+    await editor.addValue('\nShortcut regression')
+    await browser.keys(['SHIFT', 'HOME'])
+    const beforeFormat = await sourceText()
+    await browser.keys([process.platform === 'darwin' ? 'Meta' : 'Control', 'b'])
+    await browser.waitUntil(async () => (await sourceText()) !== beforeFormat, {
+      timeoutMsg: `format shortcut did not change source: ${await sourceText()}`,
+    })
+
+    await browser.keys([process.platform === 'darwin' ? 'Meta' : 'Control', 'z'])
+    await browser.waitUntil(async () => (await sourceText()) === baseline, {
+      timeoutMsg: `undo did not restore the original source. expected=${baseline} actual=${await sourceText()}`,
+    })
+    await expect(await $('.formatting-toolbar')).toBeDisplayed()
   })
 
   it('inspector opens and closes', async () => {
@@ -374,18 +418,24 @@ describe('TextMark toolbar click matrix', () => {
     await $('.more-menu summary[title="更多"]').click()
     await $("//details[contains(@class,'more-menu')]//button[normalize-space()='自定义工具栏…']").click()
     await expect(await $('.toolbar-customizer')).toBeDisplayed()
-    const originalToolbar = await $$('.tc-current-item .tc-card-label').map((item) => item.getText())
+    const originalToolbar = await browser.execute(() =>
+      [...document.querySelectorAll('.tc-current-item')].map((item) => item.getAttribute('data-toolbar-item')),
+    )
     expect(originalToolbar.length).toBeGreaterThan(2)
-    await browser.execute(() => {
-      const items = [...document.querySelectorAll('.tc-current-item')]
-      const transfer = new window.DataTransfer()
-      items[0].dispatchEvent(new window.DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }))
-      items[2].dispatchEvent(new window.DragEvent('dragover', { bubbles: true, dataTransfer: transfer }))
-      items[2].dispatchEvent(new window.DragEvent('drop', { bubbles: true, dataTransfer: transfer }))
-    })
+    for (let step = 0; step < 2; step += 1) {
+      const movingItem = (await $$('.tc-current-item'))[step]
+      const moveRight = (await movingItem.$$('.tc-order-button'))[1]
+      await moveRight.click()
+    }
     await browser.waitUntil(async () => {
-      const reordered = await $$('.tc-current-item .tc-card-label').map((item) => item.getText())
+      const reordered = await browser.execute(() =>
+        [...document.querySelectorAll('.tc-current-item')].map((item) => item.getAttribute('data-toolbar-item')),
+      )
       return reordered[2] === originalToolbar[0]
+    })
+    await browser.waitUntil(() => {
+      const savedItems = JSON.parse(readFileSync(configPath, 'utf8')).toolbar
+      return savedItems[2] === originalToolbar[0]
     })
     await $('.toolbar-customizer .tc-reset').click()
     await $('.toolbar-customizer footer button.primary').click()

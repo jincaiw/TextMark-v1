@@ -126,6 +126,13 @@ describe('upstream MarkdownHTML rendering parity', () => {
     expect(html).not.toContain('<br')
   })
   it('builds a localized TOC', () => expect(renderMarkdown('# A\n\n[TOC]', 'zh-CN').html).toContain('aria-label="目录"'))
+  it('renders the TOC as an unnumbered navigation list', () => {
+    const html = renderMarkdown('# First\n\n## Second\n\n[TOC]').html
+    const toc = html.match(/<nav class="table-of-contents"[\s\S]*?<\/nav>/)?.[0] ?? ''
+    expect(toc).toContain('<ul>')
+    expect(toc).not.toContain('<ol>')
+    expect(toc.match(/<li class=/g)).toHaveLength(2)
+  })
   it('builds Setext heading anchors', () =>
     expect(renderMarkdown('Heading\n=======').outline).toEqual([{ id: 'heading', text: 'Heading', level: 1, line: 1 }]))
   it('deduplicates heading anchors deterministically', () =>

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   AppWindow,
   Check,
@@ -107,8 +107,38 @@ const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameter
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key)
   const [copiedFlash, setCopiedFlash] = useState(false)
+  const [searchExpanded, setSearchExpanded] = useState(false)
   const [hiddenIndexes, setHiddenIndexes] = useState<number[]>([])
   const actionsRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const restoreSearchFocusRef = useRef(false)
+  useEffect(() => {
+    const closeOutsideMenus = (event: Event) => {
+      document
+        .querySelectorAll<HTMLDetailsElement>('.native-toolbar .open-with[open], .native-toolbar .more-menu[open]')
+        .forEach((menu) => {
+          if (!menu.contains(event.target as Node)) menu.open = false
+        })
+    }
+    const closeMenusOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const menus = [...document.querySelectorAll<HTMLDetailsElement>('.native-toolbar .open-with[open], .native-toolbar .more-menu[open]')]
+      if (!menus.length) return
+      event.preventDefault()
+      menus.forEach((menu) => {
+        menu.open = false
+      })
+      menus[menus.length - 1]?.querySelector<HTMLElement>('summary')?.focus()
+    }
+    document.addEventListener('pointerdown', closeOutsideMenus)
+    document.addEventListener('click', closeOutsideMenus)
+    document.addEventListener('keydown', closeMenusOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutsideMenus)
+      document.removeEventListener('click', closeOutsideMenus)
+      document.removeEventListener('keydown', closeMenusOnEscape)
+    }
+  }, [])
   const windowAction = (action: 'close' | 'minimize' | 'toggleMaximize') => {
     if (!isTauri()) return
     const window = getCurrentWindow()
@@ -417,14 +447,46 @@ export function Toolbar(props: ToolbarProps) {
       )
     if (item === 'search')
       return slot(
-        <div className="document-search">
-          <button className="search-trigger" title={tx('search')} aria-label={tx('search')} onClick={props.onSearchOpen}>
+        <div className={`document-search ${searchExpanded ? 'is-expanded' : ''}`}>
+          <button
+            className="search-trigger"
+            title={tx('search')}
+            aria-label={tx('search')}
+            aria-expanded={searchExpanded}
+            onClick={() => {
+              setSearchExpanded(true)
+              searchInputRef.current?.focus()
+            }}
+          >
             <Search />
           </button>
           <input
+            ref={searchInputRef}
             aria-label={tx('search')}
             value={props.searchQuery}
-            onFocus={props.onSearchOpen}
+            tabIndex={searchExpanded ? 0 : -1}
+            onFocus={() => {
+              setSearchExpanded(true)
+              if (restoreSearchFocusRef.current) {
+                restoreSearchFocusRef.current = false
+                return
+              }
+              props.onSearchOpen()
+              // Opening FindBar focuses its own query field. The toolbar input
+              // is the initiating control, so restore focus to it after mount
+              // unless the user has already moved focus elsewhere.
+              window.requestAnimationFrame(() =>
+                window.requestAnimationFrame(() => {
+                  if (document.activeElement?.classList.contains('find-query')) {
+                    restoreSearchFocusRef.current = true
+                    searchInputRef.current?.focus()
+                  }
+                }),
+              )
+            }}
+            onBlur={(event) => {
+              if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) setSearchExpanded(false)
+            }}
             onChange={(event) => props.onSearchQueryChange(event.target.value)}
             placeholder={tx('search')}
           />

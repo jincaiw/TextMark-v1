@@ -1,6 +1,6 @@
 import { Bold, ChevronDown, Code, Highlighter, Italic, Link, List, ListChecks, ListOrdered, Plus, Quote, Strikethrough } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { EditorFormattingState, FormatCommand, Locale } from '../types'
 import { t } from '../lib/i18n'
 
@@ -14,6 +14,31 @@ interface FormattingToolbarProps {
 export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: FormattingToolbarProps) {
   const [linkLabel, setLinkLabel] = useState('')
   const [linkDestination, setLinkDestination] = useState('https://')
+  useEffect(() => {
+    const closeOutsideMenus = (event: Event) => {
+      document.querySelectorAll<HTMLDetailsElement>('.formatting-toolbar details[open]').forEach((menu) => {
+        if (!menu.contains(event.target as Node)) menu.open = false
+      })
+    }
+    const closeMenusOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const menus = [...document.querySelectorAll<HTMLDetailsElement>('.formatting-toolbar details[open]')]
+      if (!menus.length) return
+      event.preventDefault()
+      menus.forEach((menu) => {
+        menu.open = false
+      })
+      menus[menus.length - 1]?.querySelector<HTMLElement>('summary')?.focus()
+    }
+    document.addEventListener('pointerdown', closeOutsideMenus)
+    document.addEventListener('click', closeOutsideMenus)
+    document.addEventListener('keydown', closeMenusOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutsideMenus)
+      document.removeEventListener('click', closeOutsideMenus)
+      document.removeEventListener('keydown', closeMenusOnEscape)
+    }
+  }, [])
   const labels =
     locale === 'zh-CN'
       ? {

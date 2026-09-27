@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   ChevronLeft,
+  ChevronRight,
   Clipboard,
   FileDown,
   FileOutput,
@@ -73,6 +74,9 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   space: 'space',
 }
 
+const movementLabel = (locale: Locale, item: ToolbarItem, direction: 'left' | 'right') =>
+  `${t(locale, direction === 'left' ? 'moveLeft' : 'moveRight')} ${t(locale, label[item])}`
+
 const itemIcon = (item: ToolbarItem): React.ReactNode => {
   switch (item) {
     case 'navigation':
@@ -141,6 +145,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
     onChange(next)
   }
   const move = (from: number, to: number) => {
+    if (from < 0 || to < 0 || from >= items.length || to >= items.length || from === to) return
     const next = [...items]
     const [item] = next.splice(from, 1)
     next.splice(to, 0, item)
@@ -204,6 +209,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
             {items.map((item, index) => (
               <div
                 key={`${item}-${index}`}
+                data-toolbar-item={item}
                 className={`tc-current-item ${overIndex === index ? 'drop-target' : ''}`}
                 draggable
                 onDragStart={(event) => {
@@ -232,6 +238,28 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
                 <GripVertical className="tc-grip" />
                 <span className="tc-card-icon">{itemIcon(item)}</span>
                 <span className="tc-card-label">{t(locale, label[item])}</span>
+                <span className="tc-order-controls" aria-label={t(locale, 'reorderToolbarItem')}>
+                  <button
+                    type="button"
+                    className="tc-order-button"
+                    aria-label={movementLabel(locale, item, 'left')}
+                    title={movementLabel(locale, item, 'left')}
+                    disabled={index === 0}
+                    onClick={() => move(index, index - 1)}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="tc-order-button"
+                    aria-label={movementLabel(locale, item, 'right')}
+                    title={movementLabel(locale, item, 'right')}
+                    disabled={index === items.length - 1}
+                    onClick={() => move(index, index + 1)}
+                  >
+                    <ChevronRight aria-hidden="true" />
+                  </button>
+                </span>
                 <button type="button" className="tc-remove" aria-label={t(locale, 'close')} onClick={() => remove(index)}>
                   <X />
                 </button>

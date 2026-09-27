@@ -60,7 +60,7 @@ import { configureCrashReporting, crashReportingAvailable } from './lib/telemetr
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
-import { isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
+import { formattingCommandForShortcut, isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
 import { readToolbarVisibility, saveToolbarVisibility, toolbarVisibilityStorageKey } from './lib/toolbarVisibility'
 import type {
   EditorFormattingState,
@@ -692,9 +692,13 @@ function DocumentApp() {
     else if (command === 'print') printDocument()
     else if (command === 'export') setExportOpen(true)
     else if (command === 'export-pdf') exportPdf()
-    else if (command === 'undo') documents.undo()
-    else if (command === 'redo') documents.redo()
-    else if (command === 'find') setFindOpen(true)
+    else if (command === 'undo') {
+      if (viewModeRef.current === 'edit') editorRef.current?.undo()
+      else documents.undo()
+    } else if (command === 'redo') {
+      if (viewModeRef.current === 'edit') editorRef.current?.redo()
+      else documents.redo()
+    } else if (command === 'find') setFindOpen(true)
     else if (command === 'search-documents') setProjectSearchOpen(true)
     else if (command === 'find-next') nextMatch(1)
     else if (command === 'find-prev') nextMatch(-1)
@@ -729,15 +733,15 @@ function DocumentApp() {
     else if (command === 'help') void openUrl('https://github.com/jincaiw/TextMark-v1#readme')
     else if (command === 'customize-toolbar') setToolbarOpen(true)
     else if (command.startsWith('format-')) {
-      if (!isTextEntryControl(document.activeElement)) format(command.slice('format-'.length) as FormatCommand)
-    } else if (command === 'go-up') scrollPreviewLine(-1)
-    else if (command === 'go-down') scrollPreviewLine(1)
-    else if (command === 'go-page-up') scrollPreviewPage(-1)
-    else if (command === 'go-page-down') scrollPreviewPage(1)
+      if (!isTextEntryControl(document.activeElement)) requestFormat(command.slice('format-'.length) as FormatCommand)
+    } else if (command === 'go-up') scrollSurface(-42)
+    else if (command === 'go-down') scrollSurface(42)
+    else if (command === 'go-page-up') scrollPage(-1)
+    else if (command === 'go-page-down') scrollPage(1)
     else if (command === 'go-prev-item') jumpToHeading(-1)
     else if (command === 'go-next-item') jumpToHeading(1)
-    else if (command === 'go-top') scrollPreviewEdge(false)
-    else if (command === 'go-bottom') scrollPreviewEdge(true)
+    else if (command === 'go-top') scrollEdge(false)
+    else if (command === 'go-bottom') scrollEdge(true)
   }
   useEffect(() => {
     if (!isTauri()) return
@@ -756,6 +760,14 @@ function DocumentApp() {
     setPendingFormat(command)
     switchViewMode('edit')
   }
+  const requestFormat = (command: FormatCommand) => {
+    if (viewModeRef.current === 'edit' && editorRef.current) {
+      setPendingFormat(null)
+      editorRef.current.format(command)
+      return
+    }
+    format(command)
+  }
   const nextMatch = (direction: 1 | -1) =>
     setSearchIndex((current) => (searchCount ? (current + direction + searchCount) % searchCount : 0))
   const replaceCurrent = () => {
@@ -770,7 +782,6 @@ function DocumentApp() {
   }
   const previewScrollTop = () => document.querySelector<HTMLElement>('.preview-pane')?.scrollTop ?? 0
   const previewPane = () => document.querySelector<HTMLElement>('.preview-pane')
-  const scrollPreviewLine = (direction: 1 | -1) => previewPane()?.scrollBy({ top: direction * 42, behavior: 'smooth' })
   const scrollPreviewPage = (direction: 1 | -1) => {
     const pane = previewPane()
     if (pane) pane.scrollBy({ top: direction * Math.max(200, (pane.clientHeight ?? 600) - 80), behavior: 'smooth' })
@@ -778,6 +789,20 @@ function DocumentApp() {
   const scrollPreviewEdge = (end: boolean) => {
     const pane = previewPane()
     if (pane) pane.scrollTo({ top: end ? pane.scrollHeight : 0, behavior: 'smooth' })
+  }
+  const scrollSurface = (pixels: number) => {
+    if (viewModeRef.current === 'edit') editorRef.current?.scrollBy(pixels)
+    else previewPane()?.scrollBy({ top: pixels, behavior: 'smooth' })
+  }
+  const scrollPage = (direction: 1 | -1) => {
+    if (viewModeRef.current === 'edit') {
+      const editor = document.querySelector<HTMLElement>('.cm-scroller')
+      editorRef.current?.scrollBy(direction * Math.max(200, (editor?.clientHeight ?? 600) - 80))
+    } else scrollPreviewPage(direction)
+  }
+  const scrollEdge = (end: boolean) => {
+    if (viewModeRef.current === 'edit') editorRef.current?.scrollToEdge(end)
+    else scrollPreviewEdge(end)
   }
   const jumpToHeading = (direction: 1 | -1) => {
     const ids = rendered.outline.map((item) => item.id)
@@ -787,7 +812,10 @@ function DocumentApp() {
       ids.findIndex((id) => id === activeHeading),
     )
     const target = direction < 0 ? Math.max(0, current - 1) : Math.min(ids.length - 1, current + 1)
-    document.getElementById(ids[target])?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (viewModeRef.current === 'edit') {
+      const outlineItem = rendered.outline.find((item) => item.id === ids[target])
+      if (outlineItem?.line) editorRef.current?.revealLine(outlineItem.line)
+    } else document.getElementById(ids[target])?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setActiveHeading(ids[target])
   }
   // The outline follows the visible surface: the preview scrolls to the heading
@@ -823,6 +851,17 @@ function DocumentApp() {
   }
 
   useEffect(() => {
+    const historyKeydown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      if (isTextEntryControl(event.target)) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (viewModeRef.current === 'edit') {
+        event.shiftKey ? editorRef.current?.redo() : editorRef.current?.undo()
+      } else {
+        event.shiftKey ? documentsRef.current.redo() : documentsRef.current.undo()
+      }
+    }
     const keydown = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey
       const target = event.target as HTMLElement
@@ -886,10 +925,27 @@ function DocumentApp() {
       }
       if (!modifier) return
       const key = event.key.toLowerCase()
+      if (isTextEntryControl(target) && key === 'z') return
+      if (key === 'z') {
+        if (viewMode === 'edit') {
+          // CodeMirror handles this first when its native keymap is active.
+          // Use the same history command as a fallback when the host WebView
+          // consumes the accelerator before it reaches the editor keymap.
+          if (!event.defaultPrevented) {
+            event.preventDefault()
+            event.shiftKey ? editorRef.current?.redo() : editorRef.current?.undo()
+          }
+        } else {
+          event.preventDefault()
+          event.shiftKey ? documents.redo() : documents.undo()
+        }
+        return
+      }
       if (isTextEntryControl(target) && isFormattingShortcut(event)) return
-      if (event.altKey && (key === '0' || key === '1' || key === '2' || key === '3')) {
+      const formatCommand = formattingCommandForShortcut(event)
+      if (formatCommand) {
         event.preventDefault()
-        format((key === '0' ? 'h0' : `h${key}`) as FormatCommand)
+        requestFormat(formatCommand)
         return
       }
       if (event.ctrlKey && event.metaKey && (key === '1' || key === '2' || key === '3')) {
@@ -929,9 +985,6 @@ function DocumentApp() {
       } else if (key === 'e') {
         event.preventDefault()
         switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
-      } else if (key === 'l' && event.shiftKey) {
-        event.preventDefault()
-        format('taskList')
       } else if (key === 'l') {
         event.preventDefault()
         setSidebarVisible((value) => !value)
@@ -962,33 +1015,6 @@ function DocumentApp() {
       } else if (key === '-') {
         event.preventDefault()
         setZoom(nextZoom(settings.zoom, -1))
-      } else if (key === 'z' && viewMode === 'preview') {
-        event.preventDefault()
-        event.shiftKey ? documents.redo() : documents.undo()
-      } else if (key === 'b') {
-        event.preventDefault()
-        format('bold')
-      } else if (key === 'i') {
-        event.preventDefault()
-        format('italic')
-      } else if (key === 'm' && event.shiftKey) {
-        event.preventDefault()
-        format('code')
-      } else if (key === 'x' && event.shiftKey) {
-        event.preventDefault()
-        format('strikethrough')
-      } else if (key === 'k') {
-        event.preventDefault()
-        format('link')
-      } else if (key === '7' && event.shiftKey) {
-        event.preventDefault()
-        format('bulletList')
-      } else if (key === '9' && event.shiftKey) {
-        event.preventDefault()
-        format('orderedList')
-      } else if (key === "'") {
-        event.preventDefault()
-        format('quote')
       } else if (key === ',') {
         event.preventDefault()
         openSettings()
@@ -1000,8 +1026,12 @@ function DocumentApp() {
         requestNavigation(1)
       }
     }
+    window.addEventListener('keydown', historyKeydown, true)
     window.addEventListener('keydown', keydown)
-    return () => window.removeEventListener('keydown', keydown)
+    return () => {
+      window.removeEventListener('keydown', historyKeydown, true)
+      window.removeEventListener('keydown', keydown)
+    }
   }, [documents, findOpen, defaultHandlerPrompt, searchCount, setZoom, settings.zoom, viewMode, activeHeading, rendered.outline])
 
   useEffect(() => {
@@ -1309,7 +1339,7 @@ function DocumentApp() {
               {viewMode === 'edit' ? (
                 <FormattingToolbar
                   locale={settings.locale}
-                  onFormat={format}
+                  onFormat={requestFormat}
                   onInsertLink={(label, destination) => editorRef.current?.insertLink(label, destination)}
                   state={formattingState}
                 />
@@ -1321,6 +1351,7 @@ function DocumentApp() {
                   key={`${documents.document.id}:${documents.document.revision ?? 'memory'}`}
                   ref={editorRef}
                   value={documents.document.contents}
+                  locale={settings.locale}
                   theme={resolvedTheme}
                   fontSize={settings.editorFontSize}
                   zoom={settings.zoom}

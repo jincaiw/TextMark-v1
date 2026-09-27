@@ -4,8 +4,8 @@ import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
-import { Copy, WrapText } from 'lucide-react'
-import { indentLess, indentMore } from '@codemirror/commands'
+import { Check, Copy, WrapText } from 'lucide-react'
+import { indentLess, indentMore, redo, undo } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
 import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
@@ -20,7 +20,8 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { caretToOffset } from '../lib/readingPosition'
 import { loadLocalAsset } from '../lib/platform'
 import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
-import type { ContentWidth, EditorFormattingState, EditorSessionState, FormatCommand, SearchMode } from '../types'
+import { t } from '../lib/i18n'
+import type { ContentWidth, EditorFormattingState, EditorSessionState, FormatCommand, Locale, SearchMode } from '../types'
 import { editorFormattingStateFromSource } from '../lib/editorFormattingState'
 
 export interface EditorPaneHandle {
@@ -31,6 +32,10 @@ export interface EditorPaneHandle {
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
   format: (command: FormatCommand) => void
+  undo: () => boolean
+  redo: () => boolean
+  scrollBy: (pixels: number) => void
+  scrollToEdge: (end: boolean) => void
   insertLink: (label: string, destination: string) => void
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
@@ -46,6 +51,7 @@ export interface ReplaceOptions {
 
 interface EditorPaneProps {
   value: string
+  locale: Locale
   theme: 'dark' | 'light'
   fontSize: number
   zoom: number
@@ -389,6 +395,13 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
       },
+      undo: () => (viewRef.current ? undo(viewRef.current) : false),
+      redo: () => (viewRef.current ? redo(viewRef.current) : false),
+      scrollBy: (pixels) => viewRef.current?.scrollDOM.scrollBy({ top: pixels, behavior: 'smooth' }),
+      scrollToEdge: (end) => {
+        const dom = viewRef.current?.scrollDOM
+        if (dom) dom.scrollTo({ top: end ? dom.scrollHeight : 0, behavior: 'smooth' })
+      },
       insertLink: (label, destination) => {
         const view = viewRef.current
         if (!view) return
@@ -521,8 +534,26 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             <button
               type="button"
               className="md-code-action"
-              aria-label={copiedCode ? 'Code copied' : 'Copy code'}
-              title={copiedCode ? 'Code copied' : 'Copy code'}
+              aria-label={activeFenceUnwrapped ? t(props.locale, 'wrapCode') : t(props.locale, 'unwrapCode')}
+              title={activeFenceUnwrapped ? t(props.locale, 'wrapCode') : t(props.locale, 'unwrapCode')}
+              aria-pressed={!activeFenceUnwrapped}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setUnwrappedFences((current) => {
+                  const next = new Set(current)
+                  if (next.has(activeFence.from)) next.delete(activeFence.from)
+                  else next.add(activeFence.from)
+                  return next
+                })
+              }}
+            >
+              <WrapText aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="md-code-action"
+              aria-label={t(props.locale, copiedCode ? 'copied' : 'copyCode')}
+              title={t(props.locale, copiedCode ? 'copied' : 'copyCode')}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 const view = viewRef.current
@@ -539,27 +570,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
                 })
               }}
             >
-              <Copy aria-hidden="true" />
-              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
-            </button>
-            <button
-              type="button"
-              className="md-code-action"
-              aria-label={activeFenceUnwrapped ? 'Wrap code' : 'Unwrap code'}
-              title={activeFenceUnwrapped ? 'Wrap code' : 'Unwrap code'}
-              aria-pressed={!activeFenceUnwrapped}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setUnwrappedFences((current) => {
-                  const next = new Set(current)
-                  if (next.has(activeFence.from)) next.delete(activeFence.from)
-                  else next.add(activeFence.from)
-                  return next
-                })
-              }}
-            >
-              <WrapText aria-hidden="true" />
-              <span>{activeFenceUnwrapped ? 'Unwrap' : 'Wrap'}</span>
+              {copiedCode ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             </button>
           </div>
         ) : null}

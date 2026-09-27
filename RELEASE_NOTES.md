@@ -1,3 +1,19 @@
+# TextMark v0.10.29
+
+TextMark 0.10.29 completes a focused desktop editing and toolbar polish pass: the document search control stays compact until activated, toolbar items can be reordered with accessible controls, menus dismiss on outside click, and Edit Mode formatting/history/navigation work against the active editor. Markdown previews also gain clearer frontmatter, table, list and task styling, icon-only code actions, and unnumbered TOC entries.
+
+TextMark 0.10.29 完成桌面编辑与工具栏体验优化：文稿搜索默认收为图标，点击后展开；自定义工具栏可通过按钮调整顺序；菜单支持点击外部关闭；编辑模式下格式、撤销/重做和导航作用于当前编辑器。Markdown 预览同步优化元数据、表格、列表与任务项样式，代码块操作改为图标按钮，目录不再自动编号。
+
+## Highlights / 主要更新
+
+- 工具栏：搜索框按需展开并正确管理焦点；自定义工具栏新增可访问的左右移动按钮，保持拖放与持久化顺序。
+- 菜单与编辑：工具栏菜单及格式菜单支持外部点击和 Escape 关闭；格式快捷键、撤销/重做和页面导航在编辑模式下作用于 CodeMirror。
+- Markdown 显示：元数据仅在有效 frontmatter 范围内高亮；表格行、任务复选框与列表标记在编辑模式下更清晰；目录使用无序列表，避免被渲染为编号列表。
+- 代码块：预览与编辑模式使用一致的图标式复制/换行操作，并提供复制成功状态。
+- 验证：单元测试、lint、格式检查、生产构建、包体预算、桌面 Shell E2E 和 HTML/PNG/PDF 导出回归通过。
+
+---
+
 # TextMark v0.10.28
 
 TextMark 0.10.28 improves standalone-file navigation and fixes Markdown highlight styling and the Edit Mode starting position. It also updates desktop layout regression checks for the current native tab bar, responsive toolbar, search, sidebar picker, and appearance controls.

@@ -2,10 +2,9 @@ import { Range } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 import { BlockWrapper, Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { markdownImageReferences } from './pastedImages'
+import { splitFrontmatter } from './frontmatter'
 
 const lineClass = (line: string) => {
-  if (/^(---|\+\+\+)$/.test(line)) return 'cm-md-frontmatter-boundary'
-  if (/^[A-Za-z][\w-]*:\s/.test(line)) return 'cm-md-frontmatter-value'
   const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?/)
   if (fence) return fence[2]?.toLowerCase() === 'mermaid' ? 'cm-md-mermaid-fence' : 'cm-md-code-fence'
   if (/^\s*(?:\$\$|\\\[|\\\])\s*$/.test(line)) return 'cm-md-math'
@@ -17,10 +16,63 @@ const lineClass = (line: string) => {
   return ''
 }
 
+const tableSeparator = (line: string) => {
+  const cells = line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+  return cells.length > 1 && cells.every((cell) => /^\s*:?-{3,}:?\s*$/.test(cell))
+}
+
+const tableRowCandidate = (line: string) => {
+  const trimmed = line.trim()
+  if (!trimmed || /^>/.test(trimmed) || /^(```|~~~)/.test(trimmed)) return false
+  const pipes = [...trimmed.matchAll(/(?<!\\)\|/g)].length
+  return pipes >= 1
+}
+
+/** Marks every source row belonging to a pipe table, including body rows.
+ * Lezer's default Markdown parser does not enable GFM table nodes, so the
+ * separator is used as the unambiguous anchor and adjacent pipe rows expand it. */
+export function markdownTableLines(source: string): Set<number> {
+  const lines = source.split('\n')
+  const result = new Set<number>()
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!tableSeparator(lines[index]) || !tableRowCandidate(lines[index])) continue
+    let first = index
+    let last = index
+    while (first > 0 && tableRowCandidate(lines[first - 1])) first -= 1
+    while (last + 1 < lines.length && tableRowCandidate(lines[last + 1])) last += 1
+    for (let row = first; row <= last; row += 1) result.add(row + 1)
+  }
+  return result
+}
+
 /** Public for lightweight fixture tests; the view plugin only processes the
  * viewport, keeping large Markdown files responsive. */
 export function markdownLineClass(line: string) {
   return lineClass(line)
+}
+
+/** Frontmatter styling is limited to a valid metadata block at document start.
+ * Ordinary `key: value` prose and horizontal rules must retain their body styles. */
+export function markdownFrontmatterLines(source: string): Map<number, string> {
+  const normalized = source.replace(/^\uFEFF/, '')
+  const parsed = splitFrontmatter(normalized)
+  if (parsed.raw === null) return new Map()
+  const lines = normalized.split(/\r?\n/)
+  const delimiter = lines[0]
+  const close = delimiter === '---' ? /^(?:---|\.\.\.)\s*$/ : /^\+\+\+\s*$/
+  const closingIndex = lines.findIndex((line, index) => index > 0 && close.test(line))
+  if (closingIndex < 0) return new Map()
+  const result = new Map<number, string>([
+    [1, 'cm-md-frontmatter-boundary'],
+    [closingIndex + 1, 'cm-md-frontmatter-boundary'],
+  ])
+  for (let index = 1; index < closingIndex; index += 1)
+    if (/^[A-Za-z][\w-]*:\s*/.test(lines[index])) result.set(index + 1, 'cm-md-frontmatter-value')
+  return result
 }
 
 export interface MarkdownSyntaxMarker {
@@ -40,14 +92,15 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   if (prefix) {
     const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? prefix[5]?.length ?? 0
     const marker = prefix[2] ?? prefix[4] ?? prefix[6] ?? ''
-    add(markerStart, markerStart + marker.length)
+    const markerClass = prefix[4] ? (/^\d/.test(marker) ? 'cm-md-list-ordered-marker' : 'cm-md-list-marker') : 'cm-md-syntax-marker'
+    add(markerStart, markerStart + marker.length, markerClass)
   }
   const task = line.match(/^(\s*)(?:[-+*]|\d+[.)])\s+(\[[ xX]\])/)
   if (task)
     add(
       task[1].length + line.slice(task[1].length).search(/\[/),
       task[1].length + line.slice(task[1].length).search(/\[/) + task[2].length,
-      'cm-md-task-marker',
+      task[2].toLowerCase() === '[x]' ? 'cm-md-task-marker cm-md-task-checked' : 'cm-md-task-marker',
     )
   const fence = line.match(/^(\s*)(`{3,}|~{3,})(?:\s*[^\s]*)?\s*$/)
   if (fence) add(fence[1].length, fence[1].length + fence[2].length, 'cm-md-fence-marker')
@@ -129,7 +182,12 @@ class ImagePreviewWidget extends WidgetType {
   }
 }
 
-function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOptions): DecorationSet {
+function buildDecorations(
+  view: EditorView,
+  options: EditorMarkdownDecorationOptions,
+  tableLines: Set<number>,
+  frontmatterLines: Map<number, string>,
+): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
   const tree = syntaxTree(view.state)
@@ -151,7 +209,9 @@ function buildDecorations(view: EditorView, options: EditorMarkdownDecorationOpt
           }),
         )
       } else {
-        const className = lineClass(line.text)
+        const className =
+          frontmatterLines.get(number) ??
+          (tableLines.has(number) ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : ''}` : lineClass(line.text))
         if (className) add(line.from, line.from, Decoration.line({ class: className }))
       }
       const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
@@ -211,13 +271,21 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
     class {
       decorations: DecorationSet
       blockWrappers: ReturnType<typeof buildCodeBlockWrappers>
+      tableLines: Set<number>
+      frontmatterLines: Map<number, string>
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, options)
+        this.tableLines = markdownTableLines(view.state.doc.toString())
+        this.frontmatterLines = markdownFrontmatterLines(view.state.doc.toString())
+        this.decorations = buildDecorations(view, options, this.tableLines, this.frontmatterLines)
         this.blockWrappers = buildCodeBlockWrappers(view)
       }
       update(update: ViewUpdate) {
         if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
-          this.decorations = buildDecorations(update.view, options)
+          if (update.docChanged) {
+            this.tableLines = markdownTableLines(update.state.doc.toString())
+            this.frontmatterLines = markdownFrontmatterLines(update.state.doc.toString())
+          }
+          this.decorations = buildDecorations(update.view, options, this.tableLines, this.frontmatterLines)
           this.blockWrappers = buildCodeBlockWrappers(update.view)
         }
       }

@@ -287,7 +287,14 @@ describe('Toolbar', () => {
     expect(trigger.getAttribute('aria-label')).toBe(t(locale, 'search'))
     expect(input.getAttribute('aria-label')).toBe(t(locale, 'search'))
     click(trigger)
+    expect(document.activeElement).toBe(input)
+    expect(element('.document-search').classList.contains('is-expanded')).toBe(true)
     expect(props.onSearchOpen).toHaveBeenCalledTimes(1)
+    const outside = document.createElement('button')
+    host.append(outside)
+    act(() => outside.focus())
+    expect(element('.document-search').classList.contains('is-expanded')).toBe(false)
+    expect(input.tabIndex).toBe(-1)
     act(() => input.focus())
     expect(document.activeElement).toBe(input)
     expect(props.onSearchOpen).toHaveBeenCalledTimes(2)
@@ -298,6 +305,7 @@ describe('Toolbar', () => {
     expect(props.onSearchQueryChange).toHaveBeenCalledExactlyOnceWith('needle')
     render({ ...props, searchQuery: 'needle' })
     expect(input.value).toBe('needle')
+    outside.remove()
   })
 
   it('将 system 作为默认打开目标，不回退到首个可用编辑器', () => {
@@ -383,6 +391,34 @@ describe('Toolbar', () => {
     expect(props.onToggleInspector).toHaveBeenCalledTimes(1)
     expect(props.onShare).toHaveBeenCalledTimes(1)
     expect(props.onViewModeChange).toHaveBeenCalledExactlyOnceWith(viewMode === 'edit' ? 'preview' : 'edit')
+  })
+
+  it('顶部下拉菜单在其他位置点击时收起且保留目标焦点', () => {
+    render(makeProps({ items: ['openWith'] }))
+    const menu = element<HTMLDetailsElement>('.open-with')
+    click(element('summary', menu))
+    expect(menu.open).toBe(true)
+
+    const outside = document.createElement('button')
+    host.append(outside)
+    outside.focus()
+    act(() => outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
+
+    expect(menu.open).toBe(false)
+    expect(document.activeElement).toBe(outside)
+  })
+
+  it('顶部下拉菜单按 Escape 收起并将焦点返回菜单按钮', () => {
+    render(makeProps({ items: ['openWith'] }))
+    const menu = element<HTMLDetailsElement>('.open-with')
+    const summary = element<HTMLElement>('summary', menu)
+    click(summary)
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    act(() => document.dispatchEvent(escape))
+
+    expect(escape.defaultPrevented).toBe(true)
+    expect(menu.open).toBe(false)
+    expect(document.activeElement).toBe(summary)
   })
 
   it('按测得的 4px gap 与左右 padding 计算边界，并在窄→宽后恢复全部尾部项', () => {

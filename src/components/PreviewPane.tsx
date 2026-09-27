@@ -11,6 +11,7 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
 import { buildSearchPattern } from '../lib/search'
+import { createCodeActionIcon } from '../lib/codeActionIcons'
 import { scrollPreviewToFragment } from '../lib/previewNavigation'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
 
@@ -318,13 +319,13 @@ export function PreviewPane(props: PreviewPaneProps) {
       wrap.title = t(props.locale, 'wrapCode')
       wrap.setAttribute('aria-label', t(props.locale, 'wrapCode'))
       wrap.setAttribute('aria-pressed', 'false')
-      wrap.textContent = '↩'
+      wrap.append(createCodeActionIcon('wrap'))
       const copy = document.createElement('button')
       copy.className = 'md-code-action md-code-copy'
       copy.type = 'button'
       copy.title = t(props.locale, 'copyCode')
       copy.setAttribute('aria-label', t(props.locale, 'copyCode'))
-      copy.textContent = t(props.locale, 'copy')
+      copy.append(createCodeActionIcon('copy'))
       actions.append(wrap, copy)
       header.append(label, actions)
       pre.replaceWith(card)
@@ -605,9 +606,18 @@ export function PreviewPane(props: PreviewPaneProps) {
           }
           const copy = target.closest<HTMLButtonElement>('.md-code-copy')
           if (copy) {
-            void navigator.clipboard.writeText(copy.closest('.md-code-card')?.querySelector('code')?.textContent ?? '')
-            copy.textContent = t(props.locale, 'copied')
-            copy.setAttribute('aria-label', t(props.locale, 'copied'))
+            void navigator.clipboard.writeText(copy.closest('.md-code-card')?.querySelector('code')?.textContent ?? '').then(() => {
+              if (!copy.isConnected) return
+              copy.replaceChildren(createCodeActionIcon('copied'))
+              copy.title = t(props.locale, 'copied')
+              copy.setAttribute('aria-label', copy.title)
+              window.setTimeout(() => {
+                if (!copy.isConnected) return
+                copy.replaceChildren(createCodeActionIcon('copy'))
+                copy.title = t(props.locale, 'copyCode')
+                copy.setAttribute('aria-label', copy.title)
+              }, 1400)
+            })
             return
           }
           const diagramAction = target.closest<HTMLButtonElement>('[data-diagram-action]')

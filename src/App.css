@@ -571,47 +571,74 @@ select:focus-visible {
   height: 10px;
 }
 .document-search {
-  width: clamp(180px, 22vw, 320px);
+  width: 34px;
   height: var(--control-h-sm);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  gap: 0;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  background: transparent;
   box-shadow: none;
-  cursor: text;
+  cursor: pointer;
   transition:
+    width 200ms ease,
+    gap 200ms ease,
+    padding 200ms ease,
     border-color 140ms ease,
     box-shadow 140ms ease;
+}
+.document-search.is-expanded,
+.document-search:focus-within {
+  width: clamp(180px, 22vw, 320px);
+  gap: var(--space-2);
+  padding: 0 10px;
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  cursor: text;
 }
 .document-search:focus-within {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .search-trigger {
-  flex: 0 0 16px;
-  width: 16px;
-  height: 24px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   padding: 0;
   border: 0;
   background: transparent;
+  color: var(--muted);
   cursor: pointer;
+}
+.search-trigger:hover {
+  color: var(--text);
 }
 .document-search svg {
   width: 16px;
   color: var(--muted);
 }
 .document-search input {
-  width: 100%;
+  width: 0;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
   font-size: var(--text-md);
+  opacity: 0;
+  transition:
+    flex-basis 200ms ease,
+    opacity 120ms ease;
+}
+.document-search.is-expanded input,
+.document-search:focus-within input {
+  width: 100%;
+  flex: 1 1 auto;
   opacity: 1;
 }
 .document-search input::placeholder {
@@ -2037,8 +2064,10 @@ select:focus-visible {
   box-shadow: none;
 }
 .editor-pane .code-fence-toolbar .md-code-action {
-  gap: 5px;
-  padding-inline: 6px;
+  width: 28px;
+  min-width: 28px;
+  gap: 0;
+  padding-inline: 0;
 }
 .editor-pane .cm-md-code-card {
   position: relative;
@@ -2073,6 +2102,10 @@ select:focus-visible {
 .editor-pane .cm-line.cm-md-code-line {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+.editor-pane .cm-line.cm-md-code-fence {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 .editor-pane .cm-md-code-card-wrapped .cm-line.cm-md-code-line:not(.cm-md-code-nowrap) {
   width: 100%;
@@ -2107,15 +2140,17 @@ select:focus-visible {
 .editor-pane .cm-scroller {
   overflow: auto;
   padding-inline: var(--document-page-padding-horizontal, 40px);
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--document-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif);
   line-height: var(--document-line-height, 1.52);
 }
 .editor-pane .cm-content {
   width: 100%;
-  max-width: 740px;
+  max-width: none;
   margin: 0 auto;
   padding: calc(32px + var(--document-tools-height, 0px)) 0 48px;
   caret-color: var(--accent);
+  font-family: inherit;
+  overflow-wrap: break-word;
 }
 .editor-pane.content-full .cm-content {
   max-width: none;
@@ -2127,7 +2162,6 @@ select:focus-visible {
   background: color-mix(in srgb, var(--accent) 25%, transparent) !important;
 }
 .editor-pane .cm-md-syntax-marker,
-.editor-pane .cm-md-task-marker,
 .editor-pane .cm-md-fence-marker,
 .editor-pane .cm-md-table-marker,
 .editor-pane .cm-md-inline-syntax {
@@ -2135,7 +2169,47 @@ select:focus-visible {
   opacity: 0;
 }
 .editor-pane .cm-md-task-marker {
-  color: color-mix(in srgb, var(--accent) 72%, var(--muted));
+  position: relative;
+  display: inline-block;
+  width: 1em;
+  color: transparent;
+  opacity: 1;
+  vertical-align: -0.08em;
+}
+.editor-pane .cm-md-task-marker::after {
+  content: '';
+  position: absolute;
+  inset: 0.08em 0.04em 0.04em;
+  border: 1.4px solid var(--document-secondary);
+  border-radius: 3px;
+  background: var(--surface);
+}
+.editor-pane .cm-md-task-checked::after {
+  content: '✓';
+  display: grid;
+  place-items: center;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+  font:
+    700 0.78em/1 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+.editor-pane .cm-md-list-marker {
+  position: relative;
+  color: transparent;
+}
+.editor-pane .cm-md-list-marker::after {
+  content: '•';
+  position: absolute;
+  inset: 0;
+  color: var(--document-text);
+  opacity: 0.72;
+}
+.editor-pane .cm-md-list-ordered-marker {
+  color: var(--muted);
+  opacity: 1;
 }
 .editor-pane .cm-md-image-preview {
   display: inline-flex;
@@ -2178,6 +2252,7 @@ select:focus-visible {
   line-height: 1.18;
   padding-top: 1.6em;
   font-weight: 600;
+  letter-spacing: -0.012em;
 }
 .editor-pane .cm-md-h1 {
   font-size: 1.802em;
@@ -2234,6 +2309,17 @@ select:focus-visible {
 .editor-pane .cm-md-table {
   color: var(--accent);
   background: color-mix(in srgb, var(--document-grid) 26%, transparent);
+}
+.editor-pane .cm-line.cm-md-table-row {
+  padding-inline: 10px;
+  border-inline: 1px solid color-mix(in srgb, var(--document-grid) 68%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--document-grid) 60%, transparent);
+  background: color-mix(in srgb, var(--document-fill) 82%, var(--document-grid));
+}
+.editor-pane .cm-line.cm-md-table-separator {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--document-grid) 30%, var(--document-fill));
+  font-size: 0.86em;
 }
 .editor-pane .cm-md-rule {
   color: transparent;
@@ -2796,9 +2882,10 @@ pre:hover .copy-code-button {
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--muted) 7%, transparent);
 }
-.table-of-contents ol {
+.table-of-contents ul {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 0;
+  list-style: none;
 }
 .table-of-contents .toc-level-2 {
   margin-left: 14px;
@@ -2807,15 +2894,19 @@ pre:hover .copy-code-button {
   margin-left: 28px;
 }
 .md-frontmatter {
-  margin: 0 0 1.2em;
-  padding: 0 0 1em;
-  border-bottom: 1px solid var(--document-grid);
+  min-width: 0;
+  margin: 0 0 1.45em;
+  padding: 0.7em 1em;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--document-grid) 76%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--document-fill) 72%, var(--surface));
 }
 .md-frontmatter table {
   display: table;
   width: 100%;
   margin: 0;
-  table-layout: fixed;
+  table-layout: auto;
   border: 0;
   border-radius: 0;
   overflow: visible;
@@ -2832,22 +2923,29 @@ pre:hover .copy-code-button {
   text-align: start;
 }
 .md-frontmatter th {
-  width: 26%;
-  padding-right: 1.4em;
+  width: 8em;
+  max-width: 32%;
+  padding-right: 1em;
   color: var(--document-secondary);
   font-weight: 500;
+  overflow-wrap: anywhere;
+  vertical-align: top;
 }
 .md-frontmatter td {
+  min-width: 0;
   white-space: pre-wrap;
+  vertical-align: top;
 }
 .md-fm-pill {
   display: inline-block;
-  margin: 0 0.4em 0.2em 0;
+  max-width: 100%;
+  margin: 0.08em 0.35em 0.16em 0;
   padding: 0.08em 0.7em;
   border-radius: 999px;
   background: color-mix(in srgb, var(--document-link) 12%, transparent);
   color: var(--document-link);
   font-size: 0.95em;
+  overflow-wrap: anywhere;
 }
 .md-fm-empty::before {
   content: '—';
@@ -3713,6 +3811,35 @@ mark.search-match.active {
   height: 13px;
   color: var(--muted);
 }
+.tc-order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.tc-order-button {
+  width: 22px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tc-order-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.tc-order-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tc-order-button svg {
+  width: 14px;
+  height: 14px;
+}
 .tc-current-item .tc-card-icon svg {
   width: 16px;
   height: 16px;
@@ -3995,11 +4122,11 @@ mark.search-match.active {
   background: color-mix(in srgb, var(--sidebar) 65%, transparent);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .tc-current-item {
-  width: 44px;
+  width: auto;
   justify-content: center;
   height: 40px;
-  gap: 0;
-  padding: 0;
+  gap: 2px;
+  padding: 0 3px;
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
@@ -4008,6 +4135,14 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .tc-current-item .tc-card-label,
 :root[data-runtime='tauri'][data-platform='macos'] .tc-current-item .tc-remove {
   display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-order-button {
+  width: 17px;
+  height: 28px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .tc-order-button svg {
+  width: 12px;
+  height: 12px;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .toolbar-customizer footer {
   margin-top: 9px;
@@ -4039,6 +4174,10 @@ mark.search-match.active {
     gap: 18px;
   }
   .document-search {
+    width: 34px;
+  }
+  .document-search.is-expanded,
+  .document-search:focus-within {
     width: clamp(150px, 18vw, 220px);
   }
   .open-with summary {
