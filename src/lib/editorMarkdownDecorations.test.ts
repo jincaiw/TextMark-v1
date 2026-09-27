@@ -3,7 +3,10 @@ import {
   editorImageReferences,
   markdownFrontmatterLines,
   markdownLineClass,
+  markdownMathLines,
+  markdownTableAlignmentMap,
   markdownSyntaxMarkers,
+  markdownTableCellRanges,
   markdownTableLines,
 } from './editorMarkdownDecorations'
 
@@ -29,6 +32,28 @@ describe('editor Markdown line semantics', () => {
   it('supports tables without outer pipes and ignores escaped inline pipes', () => {
     expect(markdownTableLines('A | B\n:--- | ---:\none | two\n\ntext with a \\| pipe')).toEqual(new Set([1, 2, 3]))
   })
+
+  it('returns source offsets for table cells without changing escaped pipes', () => {
+    expect(markdownTableCellRanges('| Name | Value |')).toEqual([
+      { from: 1, to: 7 },
+      { from: 8, to: 15 },
+    ])
+    expect(markdownTableCellRanges('left \\| literal | right')).toEqual([
+      { from: 0, to: 16 },
+      { from: 17, to: 23 },
+    ])
+    expect(markdownTableCellRanges('plain text')).toEqual([])
+    expect(markdownTableCellRanges('| A |  | C |')).toHaveLength(3)
+  })
+
+  it('maps left, center, and right separator alignment to each source row', () => {
+    expect(markdownTableAlignmentMap('| L | C | R |\n| :--- | :---: | ---: |\n| a | b | c |')).toEqual(
+      new Map([
+        [1, ['left', 'center', 'right']],
+        [3, ['left', 'center', 'right']],
+      ]),
+    )
+  })
 })
 
 describe('editor frontmatter styling', () => {
@@ -45,6 +70,16 @@ describe('editor frontmatter styling', () => {
 
   it('leaves ordinary key-value prose and horizontal rules alone', () => {
     expect(markdownFrontmatterLines('# Heading\n\nstatus: shipped\n\n---')).toEqual(new Map())
+  })
+})
+
+describe('editor display-math source regions', () => {
+  it('marks complete dollar and bracket-delimited blocks', () => {
+    expect(markdownMathLines('before\n$$\nx^2\n$$\nafter\n\\[\ny = 2\n\\]')).toEqual(new Set([2, 3, 4, 6, 7, 8]))
+  })
+
+  it('marks fenced math blocks without crossing into following prose', () => {
+    expect(markdownMathLines('```math\nx^2\n```\ntext')).toEqual(new Set([1, 2, 3]))
   })
 })
 

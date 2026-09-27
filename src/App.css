@@ -1344,7 +1344,7 @@ select:focus-visible {
   padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--document-fill);
+  background: var(--surface);
   color: var(--text);
   font-size: var(--text-sm);
 }
@@ -2083,9 +2083,9 @@ select:focus-visible {
   overflow-x: auto;
   overflow-y: hidden;
   margin-block: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
-  border-radius: 10px;
-  background: var(--document-fill);
+  border: 1px solid color-mix(in srgb, var(--border) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 68%, var(--document-fill));
 }
 .editor-pane .cm-md-code-card-wrapped {
   grid-template-columns: minmax(0, 1fr);
@@ -2163,23 +2163,33 @@ select:focus-visible {
 }
 .editor-pane .cm-md-syntax-marker,
 .editor-pane .cm-md-fence-marker,
-.editor-pane .cm-md-table-marker,
 .editor-pane .cm-md-inline-syntax {
   color: color-mix(in srgb, var(--muted) 62%, transparent);
   opacity: 0;
+}
+.editor-pane .cm-md-table-marker {
+  display: none;
 }
 .editor-pane .cm-md-task-marker {
   position: relative;
   display: inline-block;
   width: 1em;
+  height: 1em;
+  min-height: 1em;
+  box-sizing: border-box;
+  line-height: 1;
+  vertical-align: -0.12em;
+  margin-right: 0.08em;
   color: transparent;
   opacity: 1;
-  vertical-align: -0.08em;
 }
 .editor-pane .cm-md-task-marker::after {
   content: '';
   position: absolute;
-  inset: 0.08em 0.04em 0.04em;
+  inset: 0.07em auto auto 0.04em;
+  width: 0.84em;
+  height: 0.84em;
+  box-sizing: border-box;
   border: 1.4px solid var(--document-secondary);
   border-radius: 3px;
   background: var(--surface);
@@ -2286,8 +2296,24 @@ select:focus-visible {
   padding-top: 0;
 }
 .editor-pane .cm-md-frontmatter-boundary {
-  color: var(--accent);
-  font-weight: 650;
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+  font-weight: 400;
+}
+.editor-pane .cm-line:is(.cm-md-frontmatter-boundary, .cm-md-frontmatter-value) {
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 0 8px;
+  font-size: var(--document-font-size, 15px);
+  line-height: 1.52;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.editor-pane .cm-line:is(.cm-md-frontmatter-boundary, .cm-md-frontmatter-value) span {
+  color: inherit !important;
+  font-size: inherit !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  text-decoration: none !important;
 }
 .editor-pane .cm-md-frontmatter-value {
   color: var(--muted);
@@ -2302,24 +2328,87 @@ select:focus-visible {
   font-weight: 650;
 }
 .editor-pane .cm-md-math {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--muted);
+  background: transparent;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+.editor-pane .cm-line:is(.cm-md-math-block, .cm-md-math) {
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 2px 10px;
+  color: var(--document-text) !important;
+  background: color-mix(in srgb, var(--document-grid) 10%, transparent);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: var(--document-font-size, 15px);
+  line-height: 1.52;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.editor-pane .cm-line:is(.cm-md-math-block, .cm-md-math) span {
+  color: inherit !important;
+  font-size: inherit !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  text-decoration: none !important;
 }
 .editor-pane .cm-md-table {
   color: var(--accent);
   background: color-mix(in srgb, var(--document-grid) 26%, transparent);
 }
 .editor-pane .cm-line.cm-md-table-row {
-  padding-inline: 10px;
-  border-inline: 1px solid color-mix(in srgb, var(--document-grid) 68%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--document-grid) 60%, transparent);
-  background: color-mix(in srgb, var(--document-fill) 82%, var(--document-grid));
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: max-content;
+  min-height: 2.7em;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--document-grid) 78%, transparent);
+  border-bottom: 0;
+  background: var(--surface);
+  font-size: 0;
+  white-space: normal;
+}
+.editor-pane .cm-line.cm-md-table-last-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--document-grid) 78%, transparent);
+}
+.editor-pane .cm-md-table-cell {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 8ch;
+  padding: 0.55em 0.7em;
+  border-right: 1px solid color-mix(in srgb, var(--document-grid) 70%, transparent);
+  color: var(--document-text);
+  background: color-mix(in srgb, var(--document-fill) 24%, var(--surface));
+  font-size: var(--document-font-size, 15px);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+.editor-pane .cm-md-table-cell:last-child {
+  border-right: 0;
+}
+.editor-pane .cm-md-table-align-center {
+  justify-content: center;
+  text-align: center;
+}
+.editor-pane .cm-md-table-align-right {
+  justify-content: flex-end;
+  text-align: right;
 }
 .editor-pane .cm-line.cm-md-table-separator {
-  color: var(--muted);
-  background: color-mix(in srgb, var(--document-grid) 30%, var(--document-fill));
-  font-size: 0.86em;
+  display: flex;
+  width: 100%;
+  min-width: max-content;
+  height: 2px;
+  min-height: 2px;
+  margin-top: -1px;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--document-grid) 82%, transparent);
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
 }
 .editor-pane .cm-md-rule {
   color: transparent;
@@ -2334,8 +2423,8 @@ select:focus-visible {
 }
 .editor-pane .cm-md-quote {
   padding-left: 12px;
-  border-left: 3px solid var(--accent);
-  color: var(--muted);
+  border-left: 2px solid color-mix(in srgb, var(--document-grid) 76%, var(--muted));
+  color: var(--document-secondary);
 }
 .editor-pane .cm-md-list {
   color: var(--text);

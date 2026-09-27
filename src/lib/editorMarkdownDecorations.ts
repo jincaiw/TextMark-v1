@@ -32,6 +32,45 @@ const tableRowCandidate = (line: string) => {
   return pipes >= 1
 }
 
+/** Returns the source ranges for each pipe-table cell, excluding the pipe
+ * delimiters. Escaped pipes stay part of the cell so decorations never change
+ * the underlying Markdown text or its cursor positions. */
+export function markdownTableCellRanges(line: string): Array<{ from: number; to: number }> {
+  const pipes = [...line.matchAll(/(?<!\\)\|/g)].map((match) => match.index ?? 0)
+  if (!pipes.length) return []
+  const ranges: Array<{ from: number; to: number }> = []
+  let from = line.trimStart().startsWith('|') ? pipes[0] + 1 : 0
+  for (const pipe of pipes) {
+    if (pipe < from) continue
+    const to = pipe
+    ranges.push({ from, to })
+    from = pipe + 1
+  }
+  if (!line.trimEnd().endsWith('|')) ranges.push({ from, to: line.length })
+  return ranges
+}
+
+/** Maps each table source row to the alignment declared by its separator. */
+export function markdownTableAlignmentMap(source: string): Map<number, Array<'left' | 'center' | 'right'>> {
+  const lines = source.split(/\r?\n/)
+  const result = new Map<number, Array<'left' | 'center' | 'right'>>()
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!tableSeparator(lines[index])) continue
+    const alignment = markdownTableCellRanges(lines[index]).map((range) => {
+      const cell = lines[index].slice(range.from, range.to).trim()
+      const left = cell.startsWith(':')
+      const right = cell.endsWith(':')
+      return left && right ? 'center' : right ? 'right' : 'left'
+    })
+    let first = index - 1
+    while (first > 0 && tableRowCandidate(lines[first - 1])) first -= 1
+    let last = index + 1
+    while (last + 1 < lines.length && tableRowCandidate(lines[last + 1])) last += 1
+    for (let row = first; row <= last; row += 1) if (row !== index) result.set(row + 1, alignment)
+  }
+  return result
+}
+
 /** Marks every source row belonging to a pipe table, including body rows.
  * Lezer's default Markdown parser does not enable GFM table nodes, so the
  * separator is used as the unambiguous anchor and adjacent pipe rows expand it. */
@@ -45,6 +84,46 @@ export function markdownTableLines(source: string): Set<number> {
     while (first > 0 && tableRowCandidate(lines[first - 1])) first -= 1
     while (last + 1 < lines.length && tableRowCandidate(lines[last + 1])) last += 1
     for (let row = first; row <= last; row += 1) result.add(row + 1)
+  }
+  return result
+}
+
+/** Source lines inside display-math blocks should keep a consistent TeX style
+ * and must not be interpreted as Markdown headings or inline formatting. */
+export function markdownMathLines(source: string): Set<number> {
+  const lines = source.split(/\r?\n/)
+  const result = new Set<number>()
+  let delimiter: '$$' | '\\[' | null = null
+  let fencedMath = false
+  let fenceChar = ''
+  let fenceLength = 0
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?.*$/)
+    if (fencedMath) {
+      result.add(index + 1)
+      if (fence && fence[1][0] === fenceChar && fence[1].length >= fenceLength) fencedMath = false
+      continue
+    }
+    if (fence && /^(?:math|latex|tex)$/i.test(fence[2] ?? '')) {
+      fencedMath = true
+      fenceChar = fence[1][0]
+      fenceLength = fence[1].length
+      result.add(index + 1)
+      continue
+    }
+
+    const trimmed = line.trim()
+    if (!delimiter && (trimmed === '$$' || trimmed === '\\[')) {
+      delimiter = trimmed as '$$' | '\\['
+      result.add(index + 1)
+      continue
+    }
+    if (delimiter) {
+      result.add(index + 1)
+      if ((delimiter === '$$' && trimmed === '$$') || (delimiter === '\\[' && trimmed === '\\]')) delimiter = null
+    }
   }
   return result
 }
@@ -182,11 +261,30 @@ class ImagePreviewWidget extends WidgetType {
   }
 }
 
+class EmptyTableCellWidget extends WidgetType {
+  constructor(readonly alignment: 'left' | 'center' | 'right') {
+    super()
+  }
+
+  eq(other: EmptyTableCellWidget) {
+    return this.alignment === other.alignment
+  }
+
+  toDOM() {
+    const cell = document.createElement('span')
+    cell.className = `cm-md-table-cell cm-md-table-cell-empty cm-md-table-align-${this.alignment}`
+    cell.setAttribute('aria-hidden', 'true')
+    return cell
+  }
+}
+
 function buildDecorations(
   view: EditorView,
   options: EditorMarkdownDecorationOptions,
   tableLines: Set<number>,
+  tableAlignments: Map<number, Array<'left' | 'center' | 'right'>>,
   frontmatterLines: Map<number, string>,
+  mathLines: Set<number>,
 ): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
@@ -211,13 +309,28 @@ function buildDecorations(
       } else {
         const className =
           frontmatterLines.get(number) ??
-          (tableLines.has(number) ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : ''}` : lineClass(line.text))
+          (mathLines.has(number)
+            ? 'cm-md-math-block'
+            : tableLines.has(number)
+              ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : tableLines.has(number + 1) ? '' : ' cm-md-table-last-row'}`
+              : lineClass(line.text))
         if (className) add(line.from, line.from, Decoration.line({ class: className }))
       }
+      if (tableLines.has(number) && !tableSeparator(line.text)) {
+        for (const [column, cell] of markdownTableCellRanges(line.text).entries()) {
+          const alignment = tableAlignments.get(number)?.[column] ?? 'left'
+          if (cell.from === cell.to)
+            add(line.from + cell.from, line.from + cell.to, Decoration.widget({ widget: new EmptyTableCellWidget(alignment), side: 1 }))
+          else
+            add(line.from + cell.from, line.from + cell.to, Decoration.mark({ class: `cm-md-table-cell cm-md-table-align-${alignment}` }))
+        }
+      }
       const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number === number
-      if (!activeLine)
+      const isMetadataOrMath = frontmatterLines.has(number) || mathLines.has(number)
+      if (!activeLine && !isMetadataOrMath)
         for (const marker of markdownSyntaxMarkers(line.text))
           add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
+      if (isMetadataOrMath) continue
       inlinePattern.lastIndex = 0
       for (const match of line.text.matchAll(inlinePattern)) {
         const value = match[0]
@@ -272,20 +385,33 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       decorations: DecorationSet
       blockWrappers: ReturnType<typeof buildCodeBlockWrappers>
       tableLines: Set<number>
+      tableAlignments: Map<number, Array<'left' | 'center' | 'right'>>
       frontmatterLines: Map<number, string>
+      mathLines: Set<number>
       constructor(view: EditorView) {
         this.tableLines = markdownTableLines(view.state.doc.toString())
+        this.tableAlignments = markdownTableAlignmentMap(view.state.doc.toString())
         this.frontmatterLines = markdownFrontmatterLines(view.state.doc.toString())
-        this.decorations = buildDecorations(view, options, this.tableLines, this.frontmatterLines)
+        this.mathLines = markdownMathLines(view.state.doc.toString())
+        this.decorations = buildDecorations(view, options, this.tableLines, this.tableAlignments, this.frontmatterLines, this.mathLines)
         this.blockWrappers = buildCodeBlockWrappers(view)
       }
       update(update: ViewUpdate) {
         if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
           if (update.docChanged) {
             this.tableLines = markdownTableLines(update.state.doc.toString())
+            this.tableAlignments = markdownTableAlignmentMap(update.state.doc.toString())
             this.frontmatterLines = markdownFrontmatterLines(update.state.doc.toString())
+            this.mathLines = markdownMathLines(update.state.doc.toString())
           }
-          this.decorations = buildDecorations(update.view, options, this.tableLines, this.frontmatterLines)
+          this.decorations = buildDecorations(
+            update.view,
+            options,
+            this.tableLines,
+            this.tableAlignments,
+            this.frontmatterLines,
+            this.mathLines,
+          )
           this.blockWrappers = buildCodeBlockWrappers(update.view)
         }
       }

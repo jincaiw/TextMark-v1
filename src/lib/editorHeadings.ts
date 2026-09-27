@@ -2,6 +2,7 @@ import { syntaxTree } from '@codemirror/language'
 import type { EditorState } from '@codemirror/state'
 import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, ViewPlugin, type DecorationSet, type EditorView, type ViewUpdate } from '@codemirror/view'
+import { markdownFrontmatterLines, markdownMathLines } from './editorMarkdownDecorations'
 
 export interface HeadingLineInfo {
   level: number
@@ -18,8 +19,13 @@ const underlineOnly = /^[=\-]+\s*$/
  * lines, for heading syntax inside fenced/inline code, and for the setext
  * underline itself (the preview never renders the ==== / ---- line).
  */
-export function headingInfoForLine(state: EditorState, lineNumber: number): HeadingLineInfo | null {
+export function headingInfoForLine(
+  state: EditorState,
+  lineNumber: number,
+  excludedLines = new Set([...markdownFrontmatterLines(state.doc.toString()).keys(), ...markdownMathLines(state.doc.toString())]),
+): HeadingLineInfo | null {
   if (lineNumber < 1 || lineNumber > state.doc.lines) return null
+  if (excludedLines.has(lineNumber)) return null
   const line = state.doc.line(lineNumber)
   if (!line.text.trim() || underlineOnly.test(line.text)) return null
   let level = 0
@@ -45,11 +51,15 @@ export function headingInfoForLine(state: EditorState, lineNumber: number): Head
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
+  const excludedLines = new Set([
+    ...markdownFrontmatterLines(view.state.doc.toString()).keys(),
+    ...markdownMathLines(view.state.doc.toString()),
+  ])
   for (const { from, to } of view.visibleRanges) {
     const firstLine = view.state.doc.lineAt(from)
     const lastLine = view.state.doc.lineAt(to)
     for (let number = firstLine.number; number <= lastLine.number; number += 1) {
-      const info = headingInfoForLine(view.state, number)
+      const info = headingInfoForLine(view.state, number, excludedLines)
       if (!info) continue
       const line = view.state.doc.line(number)
       const className = info.afterBlank ? `cm-md-h${info.level} cm-md-heading-after-blank` : `cm-md-h${info.level}`

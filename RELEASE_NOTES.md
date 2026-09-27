@@ -1,3 +1,17 @@
+# TextMark v0.10.30
+
+TextMark 0.10.30 improves Edit Mode rendering for Markdown tables and keeps document structure metadata out of heading navigation. Table cells now render as a readable aligned grid, including empty cells, and Tab / Shift+Tab move between cells while skipping the separator row; Tab at the last cell appends a new row.
+
+TextMark 0.10.30 优化编辑模式下的 Markdown 表格显示，并避免把元数据和公式块误识别为标题导航。表格单元格以网格形式呈现并保留左右/居中对齐，空单元格也会占位；Tab / Shift+Tab 在单元格间移动并跳过分隔行，最后一格按 Tab 会追加新行。
+
+## Highlights / 主要更新
+
+- 编辑模式：为 Markdown 表格提供网格边界、单元格对齐和空单元格显示；支持 Tab / Shift+Tab 单元格导航和末尾追加行。
+- 结构高亮：Frontmatter 与数学块不再干扰标题大纲和 Markdown 行装饰识别。
+- 验证：前端 465 项测试、生产构建、Lint 和格式检查通过；测试文档哈希验证未发生修改。
+
+---
+
 # TextMark v0.10.29
 
 TextMark 0.10.29 completes a focused desktop editing and toolbar polish pass: the document search control stays compact until activated, toolbar items can be reordered with accessible controls, menus dismiss on outside click, and Edit Mode formatting/history/navigation work against the active editor. Markdown previews also gain clearer frontmatter, table, list and task styling, icon-only code actions, and unnumbered TOC entries.

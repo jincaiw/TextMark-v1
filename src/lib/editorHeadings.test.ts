@@ -36,6 +36,14 @@ describe('headingInfoForLine', () => {
     expect(headingInfoForLine(inline, 1)).toBeNull()
   })
 
+  it('does not render metadata or display-math source as headings', () => {
+    const state = stateFor('---\ntitle: Draft\n---\n\n$$\n\\begin{bmatrix}\n$$\n\n# Actual heading')
+    expect(headingInfoForLine(state, 2)).toBeNull()
+    expect(headingInfoForLine(state, 6)).toBeNull()
+    expect(headingInfoForLine(state, 7)).toBeNull()
+    expect(headingInfoForLine(state, 9)?.level).toBe(1)
+  })
+
   it('stylizes headings inside blockquotes', () => {
     const state = stateFor('> # Quote Heading')
     expect(headingInfoForLine(state, 1)?.level).toBe(1)

@@ -9,6 +9,7 @@ import { indentLess, indentMore, redo, undo } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
 import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
+import { markdownTableNavigationPlan } from '../lib/editorTableNavigation'
 import {
   codeFenceAutoCloseInsertion,
   editableCodeFenceAtLine,
@@ -329,6 +330,22 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     if (!isCodeFenceBodyLine(fence, line.number)) return false
     return direction === 'more' ? indentMore(view) : indentLess(view)
   }
+  const navigateTableCell = (view: EditorView, direction: 'next' | 'previous') => {
+    const selection = view.state.selection.main
+    const plan = markdownTableNavigationPlan(view.state.doc.toString(), selection.head, direction)
+    if (!plan.handled) return false
+    if (plan.change) {
+      view.dispatch({
+        changes: plan.change,
+        selection: { anchor: plan.selection ?? plan.change.from + plan.change.insert.length },
+        userEvent: 'input',
+        scrollIntoView: true,
+      })
+    } else if (plan.selection !== undefined) {
+      view.dispatch({ selection: { anchor: plan.selection }, scrollIntoView: true })
+    }
+    return true
+  }
 
   useImperativeHandle(
     forwardedRef,
@@ -588,8 +605,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             EditorView.scrollMargins.of((view) => ({ top: editorOverlayHeight(view) })),
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
-              { key: 'Tab', run: (view) => indentFenceBody(view, 'more') },
-              { key: 'Shift-Tab', run: (view) => indentFenceBody(view, 'less') },
+              { key: 'Tab', run: (view) => navigateTableCell(view, 'next') || indentFenceBody(view, 'more') },
+              { key: 'Shift-Tab', run: (view) => navigateTableCell(view, 'previous') || indentFenceBody(view, 'less') },
             ]),
           ]}
           onCreateEditor={(view) => {
