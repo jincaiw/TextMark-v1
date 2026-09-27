@@ -2383,7 +2383,7 @@ select:focus-visible {
   padding: 0 0.16em;
   border-radius: 0.22em;
   color: inherit;
-  background: color-mix(in srgb, var(--accent-color) 26%, transparent);
+  background: rgba(255, 216, 77, 0.55);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }

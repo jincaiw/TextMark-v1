@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
 import type { ExternalApplication, FileNode, OutlineItem, SidebarMode } from '../types'
 import { t } from '../lib/i18n'
@@ -94,6 +94,19 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  const fileTreeRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (props.mode !== 'files' || props.visible === false || !props.activePath) return
+    const tree = fileTreeRef.current
+    const active = tree?.querySelector<HTMLElement>('.tree-row.file.active')
+    if (!tree || !active) return
+    const treeBounds = tree.getBoundingClientRect()
+    const activeBounds = active.getBoundingClientRect()
+    // Keep the current document visible even in a folder with many siblings.
+    // Adjust only the file navigator, never the document's reading position.
+    if (activeBounds.top < treeBounds.top) tree.scrollTop += activeBounds.top - treeBounds.top
+    else if (activeBounds.bottom > treeBounds.bottom) tree.scrollTop += activeBounds.bottom - treeBounds.bottom
+  }, [props.activePath, props.files, props.mode, props.visible])
   const workspaceName = props.workspacePath?.split(/[\\/]/).pop()
   const [collapsedByDocument, setCollapsedByDocument] = useState<Record<string, Set<string>>>({})
   const collapsedHeadings = collapsedByDocument[props.documentKey] ?? EMPTY_HEADINGS
@@ -164,7 +177,7 @@ export function Sidebar(props: SidebarProps) {
           )}
         </nav>
       ) : (
-        <div className="native-file-tree">
+        <div className="native-file-tree" ref={fileTreeRef}>
           {props.files.length ? (
             props.files.map((node) => (
               <TreeNode

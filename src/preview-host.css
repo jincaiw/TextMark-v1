@@ -78,6 +78,14 @@ body {
 .markdown-body strong {
   font-weight: 650;
 }
+.markdown-body mark {
+  padding: 0 0.16em;
+  border-radius: 0.22em;
+  color: inherit;
+  background: rgba(255, 216, 77, 0.55);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
 .markdown-body s,
 .markdown-body del {
   color: var(--document-secondary);

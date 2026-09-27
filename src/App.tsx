@@ -370,6 +370,10 @@ function DocumentApp() {
     const pane = document.querySelector<HTMLElement>('.preview-pane')
     const anchors = previewAnchors()
     if (!pane || !anchors.length) return null
+    // Frontmatter and a generated [TOC] can fill the first viewport. In that
+    // region the nearest heading is far below the reading position; restoring
+    // it would skip the document start when entering Edit Mode.
+    if (pane.scrollTop < anchors[0].top) return 1
     return lineForAnchor(
       anchors.map((anchor) => anchor.line),
       anchorForOffset(
@@ -437,6 +441,11 @@ function DocumentApp() {
         const pane = document.querySelector<HTMLElement>('.preview-pane')
         const anchors = previewAnchors()
         if (pane && anchors.length) {
+          if (pendingPreviewLine < anchors[0].line) {
+            pane.scrollTop = 0
+            setPendingPreviewLine(null)
+            return
+          }
           const offset = offsetForLine(
             { lines: anchors.map((anchor) => anchor.line), offsets: anchors.map((anchor) => anchor.top) },
             pendingPreviewLine,

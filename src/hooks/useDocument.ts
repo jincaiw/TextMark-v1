@@ -232,6 +232,17 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     [applyDocument, openDocumentsInTabs],
   )
 
+  // A document opened on its own still has a meaningful project navigator:
+  // show its containing folder, as the native reference app does. Explicitly
+  // opened workspaces keep their chosen root.
+  useEffect(() => {
+    if (!isTauri() || workspacePath || !active?.path) return
+    const folder = parentDirectory(active.path)
+    if (!folder) return
+    setWorkspacePath(folder)
+    void scanFolder(folder).then(setFiles).catch(showError)
+  }, [active?.path, showError, workspacePath])
+
   useEffect(() => {
     if (!isTauri()) return
     const watched = [active?.path, workspacePath].filter((path): path is string => Boolean(path))
