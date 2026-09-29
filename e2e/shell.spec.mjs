@@ -45,8 +45,25 @@ describe('TextMark desktop shell', () => {
     await target.waitForDisplayed()
     const status = await $('.editor-status')
     const caretBeforeNavigation = await status.getAttribute('aria-label')
+    const scrollTopBeforeNavigation = await browser.execute(() => document.querySelector('.cm-scroller')?.scrollTop ?? 0)
     await target.click()
     expect(await status.getAttribute('aria-label')).toBe(caretBeforeNavigation)
+    await browser.waitUntil(
+      async () => (await browser.execute(() => document.querySelector('.cm-scroller')?.scrollTop ?? 0)) > scrollTopBeforeNavigation + 10,
+      { timeout: 2000, timeoutMsg: 'outline navigation should scroll the editor to the target heading' },
+    )
+    await browser.waitUntil(
+      () =>
+        browser.execute(() => {
+          const scroller = document.querySelector('.cm-scroller')
+          const line = [...document.querySelectorAll('.cm-line')].find((entry) => entry.textContent?.includes('Navigation Target'))
+          if (!scroller || !line) return false
+          const viewport = scroller.getBoundingClientRect()
+          const targetLine = line.getBoundingClientRect()
+          return targetLine.bottom > viewport.top && targetLine.top < viewport.bottom
+        }),
+      { timeout: 5000, timeoutMsg: 'the target heading should be materialized in the visible editor viewport' },
+    )
     await $("button[aria-label='停止编辑并返回预览']").click()
   })
 
@@ -356,7 +373,10 @@ describe('TextMark toolbar click matrix', () => {
     expect(await input.getAttribute('tabindex')).toBe('-1')
     await $('.document-search .search-trigger').click()
     await expect(await $('.document-search')).toHaveClassContaining('is-expanded')
-    await expect(await input).toBeFocused()
+    await browser.waitUntil(() => input.isFocused(), {
+      timeout: 1000,
+      timeoutMsg: 'the expanding document search input should receive focus after its find bar opens',
+    })
     await expect(await $('.find-bar')).toBeDisplayed()
     const findInput = await $('.find-bar input')
     await findInput.setValue('TextMark')

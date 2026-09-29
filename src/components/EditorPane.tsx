@@ -425,16 +425,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         view.dispatch({ effects: EditorView.scrollIntoView(position, { y: 'start' }) })
         // WebKit can accept the selection transaction without applying the
         // CodeMirror scroll effect when the target line is outside its current
-        // virtualized viewport. Reconcile the scroll position against the
-        // measured caret rectangle after the new viewport has been laid out.
+        // virtualized viewport. `coordsAtPos` returns null for such off-screen
+        // positions, so reconcile against CodeMirror's document-relative line
+        // block geometry after the new viewport has been laid out.
         requestAnimationFrame(() => {
           if (viewRef.current !== view) return
-          const caret = view.coordsAtPos(position)
-          if (!caret) return
+          const block = view.lineBlockAt(position)
           const scroller = view.scrollDOM
           const visibleTop = scroller.getBoundingClientRect().top + scroller.clientTop + editorOverlayHeight(view) + 12
-          const delta = caret.top - visibleTop
-          if (Math.abs(delta) > 1) scroller.scrollBy({ top: delta, behavior: 'smooth' })
+          const delta = view.documentTop + block.top - visibleTop
+          if (Math.abs(delta) > 1) scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: 'auto' })
         })
       },
       format: (command) => {

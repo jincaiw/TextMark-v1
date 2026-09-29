@@ -28,6 +28,10 @@ const usesExternalFixture = Boolean(syntaxFixturePath || cleanupFixturePath || s
 const cleanupSpec = Boolean(cleanupFixturePath)
 const secondarySpec = Boolean(secondaryFixturePath)
 const recoverySpec = Boolean(recoveryFixturePaths?.length)
+const navigationFiller = Array.from(
+  { length: 40 },
+  (_, index) => `Navigation scroll fixture paragraph ${index + 1}: This content keeps the destination beyond the initial editor viewport.`,
+).join('\n\n')
 const appArgs = recoveryFixturePaths?.length ? [recoveryFixturePaths[0]] : [fixturePath]
 if (recoverySpec) process.env.TEXTMARK_SESSION_RECOVERY_SECOND_FIXTURE = recoveryFixturePaths?.[1] ?? ''
 rmSync(generatedFixturePath, { force: true })
@@ -64,6 +68,8 @@ This state must survive incremental preview updates.
 | --- | --- |
 | Preview | Ready |
 | Editor | Ready |
+
+${navigationFiller}
 
 ## Navigation Target
 `,
