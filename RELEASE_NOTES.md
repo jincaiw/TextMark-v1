@@ -977,3 +977,10 @@ This release does not use Apple Developer ID notarization or Windows Authenticod
 Updater artifacts remain independently signed and are rejected by TextMark if their updater signature is invalid.
 
 应用内更新产物使用独立签名；签名无效时 TextMark 会拒绝安装更新。
+# TextMark v0.10.36
+
+TextMark 0.10.36 improves the WYSIWYG editing canvas: Markdown formatting delimiters and code fences stay out of the way while editing, and reappear when the caret enters their source. Code blocks, headings, quotes, alerts, and paragraph spacing now follow the rendered document more closely.
+
+TextMark 0.10.36 优化了所见即所得编辑区：光标离开时收起 Markdown 格式符号和代码围栏，进入源码位置时再显示；同时改进代码块、标题、引用、提示块和段落间距，使编辑视图更贴近最终文稿。
+
+---

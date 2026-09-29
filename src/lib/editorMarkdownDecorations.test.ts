@@ -69,7 +69,7 @@ describe('editor code block presentation', () => {
       parent: document.body,
       state: EditorState.create({
         doc: source,
-        selection: { anchor: 0 },
+        selection: { anchor: source.length },
         extensions: [markdown(), createEditorMarkdownDecorations()],
       }),
     })
@@ -336,8 +336,38 @@ describe('editor code block presentation', () => {
     }
   })
 
+  it('collapses fenced code delimiters outside editing and restores the active fence line', () => {
+    const source = 'Intro\n\n```typescript\nconst value = 1\n```\n\nAfter'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: 0 },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const openingFence = [...view.dom.querySelectorAll<HTMLElement>('.cm-md-code-fence')].find((line) =>
+        line.textContent?.includes('typescript'),
+      )
+      const closingFence = [...view.dom.querySelectorAll<HTMLElement>('.cm-md-code-fence')].find(
+        (line) => line.textContent?.includes('```') && !line.textContent?.includes('typescript'),
+      )
+      expect(openingFence?.classList.contains('cm-md-code-fence-editing')).toBe(false)
+      expect(closingFence?.classList.contains('cm-md-code-fence-editing')).toBe(false)
+
+      view.dispatch({ selection: { anchor: source.indexOf('typescript') + 2 } })
+      expect(openingFence?.classList.contains('cm-md-code-fence-editing')).toBe(true)
+      expect(closingFence?.classList.contains('cm-md-code-fence-editing')).toBe(false)
+    } finally {
+      view.destroy()
+    }
+  })
+
   it('renders nested quotes, code, and alerts as one preview and restores their source on entry', () => {
     const source = [
+      'Intro text.',
+      '',
       '> 外层引用。',
       '>',
       '> > 内层引用 **加粗** 与 `代码`。',
@@ -353,7 +383,7 @@ describe('editor code block presentation', () => {
       parent: document.body,
       state: EditorState.create({
         doc: source,
-        selection: { anchor: source.length },
+        selection: { anchor: 0 },
         extensions: [markdown(), createEditorMarkdownDecorations()],
       }),
     })
@@ -380,6 +410,32 @@ describe('editor code block presentation', () => {
       expect([...view.dom.querySelectorAll('.cm-md-quote-preview')].some((candidate) => candidate.textContent?.includes('内层引用'))).toBe(
         true,
       )
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('collapses redundant blank lines in rendered quote previews', () => {
+    const source = 'Intro text.\n\n> first paragraph\n> \n> \n> second paragraph\n> \n> ```text\n> one\n> \n> \n> two\n> ```'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: 0 },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const preview = view.dom.querySelector('.cm-md-quote-preview')
+      expect(preview?.querySelectorAll('p')).toHaveLength(2)
+      expect(preview?.querySelectorAll('.md-source-blank-line').length ?? 0).toBeLessThanOrEqual(1)
+      expect((preview?.querySelector('p') as HTMLElement | null)?.style.margin).toBe('0px 0px 0.5em')
+      expect(
+        [...(preview?.querySelectorAll<HTMLElement>('.md-source-blank-line') ?? [])].every(
+          (blankLine) => blankLine.style.display === 'none',
+        ),
+      ).toBe(true)
+      expect(preview?.querySelector('pre code')?.textContent).toContain('one\n\n\ntwo')
     } finally {
       view.destroy()
     }
@@ -428,7 +484,7 @@ describe('editor display-math source regions', () => {
   })
 
   it('renders inline and display math until the caret enters the source', () => {
-    const source = 'Inline $x^2$ end\n\n$$\n\\int_0^1 x^2 dx\n$$'
+    const source = 'Inline $x^2$ end; $E = mc^2$、$a^2 + b^2 = c^2$、$\\alpha + \\beta = \\gamma$\n\n$$\n\\int_0^1 x^2 dx\n$$'
     const view = new EditorView({
       parent: document.body,
       state: EditorState.create({
@@ -438,13 +494,14 @@ describe('editor display-math source regions', () => {
       }),
     })
     try {
-      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(2)
+      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(5)
+      expect(view.dom.querySelectorAll('.cm-md-inline-semantic-sup, .cm-md-inline-semantic-sub')).toHaveLength(0)
       expect(view.dom.querySelector('.cm-md-math-preview-display .katex-display')).not.toBeNull()
       view.dispatch({ selection: { anchor: source.indexOf('x^2') + 1 } })
-      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(4)
       view.dispatch({ selection: { anchor: source.indexOf('\\int') + 2 } })
       expect(view.state.selection.main.head).toBe(source.indexOf('\\int') + 2)
-      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-md-math-preview')).toHaveLength(4)
       expect(view.dom.textContent).toContain('$$')
     } finally {
       view.destroy()
@@ -521,6 +578,58 @@ describe('inactive Markdown syntax markers', () => {
     ])
   })
 
+  it('hides underscore bold and triple emphasis delimiters while preserving their content', () => {
+    expect(markdownSyntaxMarkers('__bold__')).toEqual([
+      { from: 0, to: 2, className: 'cm-md-inline-syntax' },
+      { from: 6, to: 8, className: 'cm-md-inline-syntax' },
+    ])
+    expect(markdownSyntaxMarkers('***bold italic***')).toEqual([
+      { from: 0, to: 3, className: 'cm-md-inline-syntax' },
+      { from: 14, to: 17, className: 'cm-md-inline-syntax' },
+    ])
+    expect(markdownSyntaxMarkers('___bold italic___')).toEqual([
+      { from: 0, to: 3, className: 'cm-md-inline-syntax' },
+      { from: 14, to: 17, className: 'cm-md-inline-syntax' },
+    ])
+  })
+
+  it('does not interpret formatting or links inside inline code and math as Markdown wrappers', () => {
+    expect(markdownSyntaxMarkers('`**code** [label](url)`')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-inline-syntax' },
+      { from: 22, to: 23, className: 'cm-md-inline-syntax' },
+    ])
+    expect(markdownSyntaxMarkers('$a*b*c$ and \\(x^2\\)')).toEqual([])
+  })
+
+  it('hides emphasis around inline code while leaving code delimiters visible as a rendered span', () => {
+    expect(markdownSyntaxMarkers('**bold `code`**')).toEqual([
+      { from: 0, to: 2, className: 'cm-md-inline-syntax' },
+      { from: 7, to: 8, className: 'cm-md-inline-syntax' },
+      { from: 12, to: 13, className: 'cm-md-inline-syntax' },
+      { from: 13, to: 15, className: 'cm-md-inline-syntax' },
+    ])
+  })
+
+  it('hides strikethrough and highlight delimiters on inactive lines', () => {
+    const source = '~~deleted~~ and ==highlight==\ncaret below'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('caret') },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const markers = [...view.dom.querySelectorAll('.cm-md-inline-syntax')].filter((element) => /[=~]/.test(element.textContent ?? ''))
+      expect(markers).toHaveLength(4)
+      expect(markers.every((marker) => !marker.classList.contains('cm-md-source-revealed'))).toBe(true)
+      expect(view.dom.querySelector('.cm-md-strikethrough')?.textContent).toBe('deleted')
+    } finally {
+      view.destroy()
+    }
+  })
+
   it('does not hide escaped inline formatting delimiters', () => {
     expect(markdownSyntaxMarkers('\\~~literal~~ and \\*literal*')).toEqual([])
   })
@@ -591,6 +700,48 @@ describe('inactive Markdown syntax markers', () => {
       expect(label).not.toBeNull()
       expect(label?.closest('.cm-md-link')).toBeNull()
       expect(view.dom.querySelector('.cm-md-quote-alert-note')).not.toBeNull()
+    } finally {
+      view.destroy()
+    }
+  })
+})
+
+describe('editing-mode whitespace', () => {
+  it('collapses repeated blank source lines but restores the active line', () => {
+    const source = '> first\n\n\n> second\n```text\none\n\n\ntwo\n```'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('second') },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const blankLines = [...view.dom.querySelectorAll('.cm-line')].filter((line) => !line.textContent?.trim())
+      expect(blankLines).toHaveLength(4)
+      expect(blankLines.filter((line) => line.classList.contains('cm-md-blank-line-collapsed'))).toHaveLength(1)
+      view.dispatch({ selection: { anchor: source.indexOf('\n\n') + 2 } })
+      expect(view.dom.querySelectorAll('.cm-md-blank-line-collapsed')).toHaveLength(0)
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('collapses repeated empty blockquote lines while preserving one paragraph break', () => {
+    const source = '> first paragraph\n> \n> \n> second paragraph'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('second') },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-collapsed')).toHaveLength(1)
+      view.dispatch({ selection: { anchor: source.indexOf('> \n> \n') + 4 } })
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-collapsed')).toHaveLength(0)
     } finally {
       view.destroy()
     }

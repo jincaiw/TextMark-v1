@@ -564,6 +564,8 @@ export interface MarkdownSyntaxMarker {
   className: string
 }
 
+const inlineMathPattern = /(?<!\\)\$\$([^$\n]+?)\$\$|(?<!\\)\$(?!\$)([^$\n]+?)\$(?!\$)|\\\((.+?)\\\)|\\\[([^\]]+?)\\\]/g
+
 /** Returns only structural Markdown punctuation, so inactive source can be
  * visually quieter without hiding the content itself. Offsets are line-local. */
 export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
@@ -576,6 +578,22 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
     for (let index = offset - 1; index >= 0 && line[index] === '\\'; index -= 1) backslashes += 1
     return backslashes % 2 === 1
   }
+  const isFenceLine = /^\s{0,3}(?:`{3,}|~{3,})/.test(line)
+  const inlineCodeRanges = (isFenceLine ? [] : [...line.matchAll(/(`+)([\s\S]*?)\1(?!`)/g)]).map((match) => {
+    const from = match.index ?? 0
+    return { from, to: from + match[0].length, delimiterLength: match[1].length }
+  })
+  const inlineMathRanges = [...line.matchAll(inlineMathPattern)]
+    .filter((match) => {
+      const from = match.index ?? 0
+      return !inlineCodeRanges.some((range) => range.from < from + match[0].length && range.to > from)
+    })
+    .map((match) => {
+      const from = match.index ?? 0
+      return { from, to: from + match[0].length }
+    })
+  const isFullyInsideRange = (from: number, to: number, ranges: Array<{ from: number; to: number }>) =>
+    ranges.some((range) => range.from <= from && range.to >= to)
   const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)/)
   if (prefix) {
     const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? 0
@@ -604,6 +622,10 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
     )
   const fence = line.match(/^(\s*)(`{3,}|~{3,})(?:\s*[^\s]*)?\s*$/)
   if (fence) add(fence[1].length, fence[1].length + fence[2].length, 'cm-md-fence-marker')
+  for (const range of inlineCodeRanges) {
+    add(range.from, range.from + range.delimiterLength, 'cm-md-inline-syntax')
+    add(range.to - range.delimiterLength, range.to, 'cm-md-inline-syntax')
+  }
   const trailingBackslashes = line.match(/(\\+)[ \t]*$/)
   if (trailingBackslashes && trailingBackslashes[1].length % 2 === 1) {
     const offset = (trailingBackslashes.index ?? 0) + trailingBackslashes[1].length - 1
@@ -615,17 +637,26 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   // Keep Markdown syntax visible on the active line (the caller skips markers
   // there), and let inactive lines read like rendered content. These ranges
   // are intentionally limited to simple, single-line inline constructs.
-  for (const match of line.matchAll(/\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|`[^`\n]+`|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g)) {
-    if (isEscaped(match.index ?? 0)) continue
+  for (const match of line.matchAll(
+    /\*\*\*[^*\n]+\*\*\*|___[^_\n]+___|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|==[^=\n]+==|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g,
+  )) {
     const value = match[0]
     const start = match.index ?? 0
-    const delimiter = value.startsWith('**') || value.startsWith('~~') || value.startsWith('==') ? 2 : 1
+    if (isEscaped(start)) continue
+    // Inline code and math are opaque source regions; formatting-looking
+    // punctuation inside them is literal or belongs to the formula parser.
+    if (
+      isFullyInsideRange(start, start + value.length, inlineCodeRanges) ||
+      isFullyInsideRange(start, start + value.length, inlineMathRanges)
+    )
+      continue
+    const delimiter = value.startsWith('***') || value.startsWith('___') ? 3 : /^(?:\*\*|__|~~|==)/.test(value) ? 2 : 1
     add(start, start + delimiter, 'cm-md-inline-syntax')
     add(start + value.length - delimiter, start + value.length, 'cm-md-inline-syntax')
   }
   for (const match of line.matchAll(/\[([^\]\n]+)\]\(([^)\n]+)\)/g)) {
     const start = match.index ?? 0
-    if (isEscaped(start)) continue
+    if (isEscaped(start) || isFullyInsideRange(start, start + match[0].length, inlineCodeRanges)) continue
     const labelEnd = start + match[0].indexOf(']')
     add(start, start + 1, 'cm-md-inline-syntax')
     add(labelEnd, start + match[0].length, 'cm-md-inline-syntax')
@@ -955,9 +986,38 @@ class QuotePreviewWidget extends WidgetType {
   toDOM() {
     const element = document.createElement('div')
     element.className = 'cm-md-quote-preview markdown-body'
-    element.innerHTML = renderMarkdown(this.source).html
+    element.innerHTML = renderMarkdown(collapseRepeatedQuoteBlankLines(this.source)).html
+    element.querySelectorAll<HTMLElement>('.md-source-blank-line').forEach((blankLine) => {
+      blankLine.style.display = 'none'
+    })
+    element.querySelectorAll<HTMLElement>('p').forEach((paragraph) => {
+      paragraph.style.margin = '0 0 0.5em'
+    })
+    const lastChild = element.lastElementChild
+    if (lastChild instanceof HTMLElement) lastChild.style.marginBottom = '0'
     return element
   }
+}
+
+function collapseRepeatedQuoteBlankLines(source: string): string {
+  let fence: { marker: '`' | '~'; length: number } | null = null
+  let previousWasBlankQuote = false
+  const lines: string[] = []
+  for (const line of source.split('\n')) {
+    const prefix = markdownQuotePrefix(line)
+    const content = line.slice(prefix.length)
+    const fenceMatch = content.match(/^\s*(`{3,}|~{3,})/)
+    const isFenceBoundary = Boolean(fenceMatch && (!fence || (fence.marker === fenceMatch[1][0] && fence.length <= fenceMatch[1].length)))
+    const inFenceBeforeLine = Boolean(fence)
+    if (prefix && !content.trim() && previousWasBlankQuote && !inFenceBeforeLine) continue
+    lines.push(line)
+    previousWasBlankQuote = Boolean(prefix && !content.trim() && !inFenceBeforeLine)
+    if (isFenceBoundary && fenceMatch) {
+      if (fence) fence = null
+      else fence = { marker: fenceMatch[1][0] as '`' | '~', length: fenceMatch[1].length }
+    }
+  }
+  return lines.join('\n')
 }
 
 let mermaidRenderSequence = 0
@@ -1289,11 +1349,16 @@ function buildDecorations(
             Decoration.mark({ class: markerClassForSelection(fenceStart, fenceStart + fence[2].length, 'cm-md-fence-marker') }),
           )
         }
+        const fenceLineEditing =
+          isFence &&
+          (selection.empty
+            ? selection.head >= line.from && selection.head <= line.to
+            : selection.from <= line.to && selection.to >= line.from)
         add(
           line.from,
           line.from,
           Decoration.line({
-            class: isFence ? 'cm-md-code-fence' : 'cm-md-code-line',
+            class: isFence ? `cm-md-code-fence${fenceLineEditing ? ' cm-md-code-fence-editing' : ''}` : 'cm-md-code-line',
             attributes: codeNode.name === 'FencedCode' ? { 'data-code-fence-from': String(codeNode.from) } : {},
           }),
         )
@@ -1303,7 +1368,20 @@ function buildDecorations(
           (selection.empty
             ? selection.head >= line.from && selection.head <= line.to
             : selection.from <= line.to && selection.to >= line.from)
-        const fallbackLineClass = setextHeadingLines.get(number) ?? lineClass(line.text)
+        const quotePrefix = markdownQuotePrefix(line.text)
+        const quoteBlank = quotePrefix.length > 0 && !line.text.slice(quotePrefix.length).trim()
+        const previousLine = number > 1 ? view.state.doc.line(number - 1).text : ''
+        const previousQuotePrefix = markdownQuotePrefix(previousLine)
+        const previousQuoteBlank = previousQuotePrefix.length > 0 && !previousLine.slice(previousQuotePrefix.length).trim()
+        const blankRunHasEarlierLine = number > 1 && ((!line.text.trim() && !previousLine.trim()) || (quoteBlank && previousQuoteBlank))
+        const blankLineEditing = selection.empty
+          ? selection.head >= line.from && selection.head <= line.to
+          : selection.from <= line.to && selection.to >= line.from
+        const fallbackLineClass =
+          setextHeadingLines.get(number) ??
+          ((!line.text.trim() || quoteBlank) && blankRunHasEarlierLine && !blankLineEditing
+            ? 'cm-md-blank-line-collapsed'
+            : lineClass(line.text))
         const className =
           (setextMarkerLines.has(number) ? `cm-md-setext-marker${markerLineEditing ? ' cm-md-source-revealed' : ''}` : null) ??
           frontmatterLines.get(number) ??
@@ -1360,7 +1438,7 @@ function buildDecorations(
             marker.className === 'cm-md-heading-marker' ||
             (marker.className === 'cm-md-syntax-marker' && /^\s{0,3}#{1,6}(?:\s|$)/.test(line.text)) ||
             marker.className.startsWith('cm-md-task-marker') ||
-            (marker.className === 'cm-md-inline-syntax' && line.text.slice(marker.from, marker.to).includes('='))
+            (marker.className === 'cm-md-inline-syntax' && /[=~]/.test(line.text.slice(marker.from, marker.to)))
           ) {
             const from = line.from + marker.from
             const to = line.from + marker.to
@@ -1420,12 +1498,17 @@ function buildDecorations(
       }
       // Render the inline semantic extensions just like preview while keeping
       // the original delimiters editable whenever the selection enters them.
+      const inlineMathRanges = [...line.text.matchAll(inlineMathPattern)].map((match) => {
+        const from = match.index ?? 0
+        return { from, to: from + match[0].length }
+      })
       for (const match of line.text.matchAll(/\+\+([^+\n]+)\+\+|(?<=[\p{L}\p{N}])\^([^\s^\n]+)\^|(?<=[\p{L}\p{N}])(?<!~)~(\d+)~(?!~)/gu)) {
         const value = match[0]
         const offset = match.index ?? 0
         const from = line.from + offset
         const to = from + value.length
         if (offset > 0 && line.text[offset - 1] === '\\') continue
+        if (inlineMathRanges.some((range) => range.from < offset + value.length && range.to > offset)) continue
         if (inlineHtmlRanges.some((range) => range.from < to && range.to > from)) continue
         let node = tree.resolveInner(from, 1)
         let insideCode = false
@@ -1499,8 +1582,7 @@ function buildDecorations(
         if (!insideCode) add(from, to, Decoration.mark({ class: 'cm-md-strikethrough' }))
       }
       if (!isMetadataOrMath && !isCodeLine) {
-        const inlineMath = /(?<!\\)\$\$([^$\n]+?)\$\$|(?<!\\)\$(?!\$)([^$\n]+?)\$(?!\$)|\\\((.+?)\\\)|\\\[([^\]]+?)\\\]/g
-        for (const match of line.text.matchAll(inlineMath)) {
+        for (const match of line.text.matchAll(inlineMathPattern)) {
           const value = match[0]
           const offset = match.index ?? 0
           const from = line.from + offset
