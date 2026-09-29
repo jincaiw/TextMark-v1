@@ -565,8 +565,6 @@ describe('localized desktop components', () => {
       onZoomChange: vi.fn(),
       onOpenRelative: vi.fn(),
       onRenameImage: vi.fn(),
-      onToggleTask: vi.fn(),
-      onEditTable: vi.fn(),
     }
     await act(async () => root.render(<PreviewPane {...props} searchQuery="" />))
     const details = host.querySelector('details')!
@@ -574,6 +572,54 @@ describe('localized desktop components', () => {
     await act(async () => root.render(<PreviewPane {...props} searchQuery="TextMark" />))
     expect(host.querySelector('details')?.open).toBe(true)
     expect(host.querySelectorAll('mark.search-match')).toHaveLength(1)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  it('keeps task checkboxes and Markdown tables read-only in preview mode', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const rendered: RenderedMarkdown = {
+      html: '<ul><li class="task-list-item"><input class="task-list-item-checkbox" type="checkbox">Task</li></ul><table><tbody><tr><td>Cell</td></tr></tbody></table>',
+      outline: [],
+      hasMermaid: false,
+      hasMath: false,
+      frontmatter: [],
+      sourceMap: [],
+      tables: [],
+      tasks: [],
+      optionalRenderers: [],
+      direction: 'auto',
+    }
+    const props = {
+      rendered,
+      documentKey: 'readonly-preview',
+      initialScrollTop: 0,
+      baseDirectory: null,
+      workspacePath: null,
+      zoom: 100,
+      contentWidth: 'normal' as const,
+      searchQuery: '',
+      searchIndex: 0,
+      matchCase: false,
+      searchMode: 'contains' as const,
+      locale: 'en' as const,
+      onSearchCount: vi.fn(),
+      onActiveHeading: vi.fn(),
+      onZoomChange: vi.fn(),
+      onOpenRelative: vi.fn(),
+      onRenameImage: vi.fn(),
+    }
+    await act(async () => root.render(<PreviewPane {...props} />))
+    const checkbox = host.querySelector<HTMLInputElement>('.task-list-item-checkbox')!
+    const cell = host.querySelector<HTMLTableCellElement>('td')!
+    expect(checkbox.disabled).toBe(true)
+    expect(checkbox.tabIndex).toBe(-1)
+    await act(async () => cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+    expect(cell.getAttribute('contenteditable')).toBeNull()
+    await act(async () => cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    expect(host.querySelector('.table-context-menu')).toBeNull()
     await act(async () => root.unmount())
     host.remove()
   })
@@ -612,8 +658,6 @@ describe('localized desktop components', () => {
       onZoomChange: vi.fn(),
       onOpenRelative: vi.fn(),
       onRenameImage: vi.fn(),
-      onToggleTask: vi.fn(),
-      onEditTable: vi.fn(),
     }
     await act(async () => root.render(<PreviewPane {...props} />))
     expect(host.querySelector('.md-code-language')?.textContent).toBe('typescript')
@@ -670,8 +714,6 @@ describe('localized desktop components', () => {
       onZoomChange: vi.fn(),
       onOpenRelative: vi.fn(),
       onRenameImage: vi.fn(),
-      onToggleTask: vi.fn(),
-      onEditTable: vi.fn(),
     }
     await act(async () => root.render(<PreviewPane {...props} />))
     const pane = host.querySelector<HTMLElement>('.preview-pane')!

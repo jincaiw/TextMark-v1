@@ -6,6 +6,7 @@
 - 已发布 v0.10.31 的 GitHub Release run `36319119058` 全部成功：质量门、macOS Universal/Quick Look、Windows x64/ARM64 安装器和 Explorer 预览、Linux x64/ARM64 DEB/AppImage/RPM/KDE 预览及最终发布均通过。其 macOS 包按 ad-hoc 身份构建，符合上述策略。
 - v0.10.32 已提交为 `ad115cb` 并于 2026-09-29 正式发布。GitHub Release run `36506128410` 全部通过，公开 Release 状态为非草稿、非预发布，共发布 36 项资产；安装器矩阵、Quick Look、updater metadata 和完整资产清单检查均成功。
 - **当前验收状态：通过并已发布。** 按要求没有进行 Windows/Linux 用户真机测试；发布流水线的 Windows/Linux 托管 CI runner 已完成包构建与安装/预览/卸载自动化烟测。macOS ad-hoc 包和 Quick Look 注册检查通过；不要求 Developer ID、公证或 Gatekeeper 验收，用户可在“系统设置 → 隐私与安全性”手动允许打开。之前章节中的旧门槛结论均为历史记录，由本节和后续标准调整补记覆盖。
+- **2026-09-29 上游对照更新：** Markdown Preview 于 2026-09-28 发布 v0.0.63；本报告中基于 v0.0.62 的对照段落是历史记录。v0.0.63 差异及当前未发布工作树的处理状态见 [UPSTREAM_PARITY_v0.10.32_vs_0.0.63.md](../../docs/UPSTREAM_PARITY_v0.10.32_vs_0.0.63.md)。该工作树后续改动不属于已发布的 v0.10.32。
 
 ## 结论
 

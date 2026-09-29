@@ -475,6 +475,24 @@ describe('inactive Markdown syntax markers', () => {
     }
   })
 
+  it('keeps heading prefixes visible while an input method is composing', () => {
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: '## 中文标题',
+        selection: { anchor: 6 },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      Object.defineProperty(view, 'composing', { configurable: true, get: () => true })
+      view.dispatch({ selection: { anchor: 5 } })
+      expect(view.dom.querySelector('.cm-md-heading-marker')?.classList.contains('cm-md-source-revealed')).toBe(true)
+    } finally {
+      view.destroy()
+    }
+  })
+
   it('marks structural punctuation without marking content', () => {
     expect(markdownSyntaxMarkers('  ## Heading')).toEqual([{ from: 0, to: 5, className: 'cm-md-heading-marker' }])
     expect(markdownSyntaxMarkers('Hard break\\')).toEqual([{ from: 10, to: 11, className: 'cm-md-hardbreak-marker' }])

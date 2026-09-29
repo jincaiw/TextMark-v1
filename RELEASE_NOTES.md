@@ -1,3 +1,19 @@
+# TextMark v0.10.33
+
+TextMark 0.10.33 brings the Edit Mode outline closer to Markdown Preview: selecting a heading scrolls the editor while preserving the caret and WYSIWYG rendering. It also adds a bilingual What's New dialog, keeps preview/export task lists read-only, aligns project-search path labels, and improves CJK heading stability during IME composition.
+
+TextMark 0.10.33 继续对齐 Markdown Preview 编辑模式：点击目录滚动到对应标题，同时保留编辑光标和所见即所得显示。新增中英双语更新说明；预览及导出中的任务清单只读；文稿搜索路径显示更紧凑；中文输入法组合输入时标题标记保持稳定。
+
+## Highlights / 主要更新
+
+- 编辑模式：目录跳转仅滚动视口，不再移动编辑光标；所见即所得标题、代码和格式状态保持稳定。
+- 阅读与导出：任务复选框及表格保持只读；任务复选框不能改写原文或误入键盘焦点顺序。
+- 搜索：普通文件名搜索只显示父目录；路径搜索单行展示层级并在中间省略，悬停可查看完整路径。
+- 更新提示：更新后显示双语 What's New；可从“帮助”菜单再次打开。
+- 验证：前端 506 项、Rust 27 项、macOS 桌面 E2E 26 项及导出、安全、包体、格式和构建检查通过。Windows/Linux 由发布 CI 构建/烟测，不进行无真机验证；macOS ad-hoc 签名，不要求 Developer ID 或公证。
+
+---
+
 # TextMark v0.10.32
 
 TextMark 0.10.32 continues the Edit Mode WYSIWYG improvements with more reliable inline formatting, tables, lists, and line-break preferences. Save and export now preserve read-only files instead of silently replacing them, and macOS release packages use the ad-hoc signing flow with first-launch approval through System Settings.

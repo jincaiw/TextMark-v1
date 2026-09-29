@@ -923,17 +923,44 @@ select:focus-visible {
   color: var(--secondary);
 }
 .project-search-file-name {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .project-search-file-path {
+  display: block;
+  min-width: 0;
+  max-width: 46%;
   margin-left: auto;
   overflow: hidden;
   color: var(--secondary);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.project-search-file-path > span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+}
+.project-search-path-prefix,
+.project-search-path-tail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-search-path-prefix {
+  flex: 0 1 auto;
+  direction: ltr;
+}
+.project-search-path-ellipsis {
+  flex: none;
+}
+.project-search-path-tail {
+  flex: 0 1 auto;
 }
 .project-search-current {
   flex: none;
@@ -3273,7 +3300,7 @@ pre:hover .copy-code-button {
   margin: 0 0.55em 0 -1.4em;
   accent-color: var(--accent);
   vertical-align: -2px;
-  cursor: pointer;
+  cursor: default;
 }
 .markdown-body li.task-list-item:has(input.task-list-item-checkbox:checked) {
   color: var(--document-secondary);
@@ -4015,6 +4042,54 @@ mark.search-match.active {
 .conflict-dialog button.destructive {
   border-color: var(--danger);
   background: var(--danger);
+  color: white;
+}
+.whats-new-dialog {
+  width: min(520px, calc(100vw - 36px));
+}
+.whats-new-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.whats-new-dialog header h2 {
+  margin: 0 0 6px;
+}
+.whats-new-dialog header p {
+  margin: 0;
+}
+.whats-new-dialog header button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.whats-new-dialog ul {
+  display: grid;
+  gap: 18px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+.whats-new-dialog li {
+  display: grid;
+  gap: 5px;
+  line-height: 1.5;
+}
+.whats-new-dialog li span {
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+.whats-new-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.whats-new-dialog button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
   color: white;
 }
 .export-dialog {

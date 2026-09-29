@@ -30,7 +30,8 @@ export interface EditorPaneHandle {
   focus: () => void
   find: (query: string, matchCase: boolean, backwards?: boolean) => boolean
   replace: (query: string, replacement: string, options: ReplaceOptions) => number
-  revealLine: (line: number) => void
+  /** Scrolls to a source line without moving the editor caret. */
+  scrollToLine: (line: number) => void
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
   format: (command: FormatCommand) => void
@@ -416,13 +417,12 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         if (!view) return null
         return editorTopLine(view)
       },
-      revealLine: (line) => {
+      scrollToLine: (line) => {
         const view = viewRef.current
         if (!view || line < 1) return
         const target = Math.min(Math.max(1, Math.round(line)), view.state.doc.lines)
         const position = view.state.doc.line(target).from
-        view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) })
-        view.focus()
+        view.dispatch({ effects: EditorView.scrollIntoView(position, { y: 'start' }) })
         // WebKit can accept the selection transaction without applying the
         // CodeMirror scroll effect when the target line is outside its current
         // virtualized viewport. Reconcile the scroll position against the

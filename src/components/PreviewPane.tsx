@@ -13,7 +13,7 @@ import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchroniz
 import { buildSearchPattern } from '../lib/search'
 import { createCodeActionIcon } from '../lib/codeActionIcons'
 import { scrollPreviewToFragment } from '../lib/previewNavigation'
-import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
+import type { ContentWidth, Locale, RenderedMarkdown, SearchMode } from '../types'
 
 interface PreviewPaneProps {
   rendered: RenderedMarkdown
@@ -39,8 +39,6 @@ interface PreviewPaneProps {
   onZoomChange: (zoom: number) => void
   onOpenRelative: (path: string) => void
   onRenameImage: (path: string) => void
-  onToggleTask: (index: number, checked: boolean) => void
-  onEditTable: (table: number, row: number, column: number, request: TableEditRequest) => void
 }
 
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value)
@@ -112,7 +110,6 @@ export function PreviewPane(props: PreviewPaneProps) {
   const containerRef = useRef<HTMLElement>(null)
   const gestureZoomRef = useRef<number | null>(null)
   const [diagram, setDiagram] = useState<string | null>(null)
-  const [tableMenu, setTableMenu] = useState<{ x: number; y: number; table: number; row: number; column: number } | null>(null)
   const [tableSelection, setTableSelection] = useState<{
     table: number
     startRow: number
@@ -293,6 +290,10 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
     synchronizeTableSourceCoordinates(root, props.rendered.tables)
     synchronizeTableHeaderAccessibility(root, (index) => t(props.locale, 'unnamedColumn', { index }))
+    root.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach((checkbox) => {
+      checkbox.disabled = true
+      checkbox.tabIndex = -1
+    })
     let cancelled = false
     const diagramControllers: ReturnType<typeof attachDiagramInteractions>[] = []
 
@@ -527,41 +528,7 @@ export function PreviewPane(props: PreviewPaneProps) {
         }}
         onDoubleClick={(event) => {
           const image = (event.target as HTMLElement).closest<HTMLImageElement>('img[data-local-src]')
-          if (image?.dataset.localSrc) {
-            props.onRenameImage(image.dataset.localSrc)
-            return
-          }
-          const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>('td, th')
-          if (cell) {
-            event.preventDefault()
-            cell.contentEditable = 'plaintext-only'
-            cell.classList.add('editing')
-            cell.focus()
-            const selection = window.getSelection()
-            selection?.selectAllChildren(cell)
-          }
-        }}
-        onContextMenu={(event) => {
-          const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>('td, th')
-          const table = cell?.closest('table')
-          if (!cell || !table || !containerRef.current) return
-          event.preventDefault()
-          const tables = editableMarkdownTables(containerRef.current)
-          const rows = Array.from(table.querySelectorAll('tr'))
-          const cells = Array.from(cell.parentElement?.querySelectorAll('th, td') ?? [])
-          setTableMenu({
-            x: event.clientX,
-            y: event.clientY,
-            table: tables.indexOf(table),
-            row: rows.indexOf(cell.parentElement as HTMLTableRowElement),
-            column: cells.indexOf(cell),
-          })
-        }}
-        onChange={(event) => {
-          const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>('input.task-list-item-checkbox')
-          if (!checkbox) return
-          const boxes = Array.from(containerRef.current?.querySelectorAll('input.task-list-item-checkbox') ?? [])
-          props.onToggleTask(boxes.indexOf(checkbox), checkbox.checked)
+          if (image?.dataset.localSrc) props.onRenameImage(image.dataset.localSrc)
         }}
         onInput={(event) => {
           const header = (event.target as HTMLElement).closest<HTMLTableCellElement>('th[data-table-column]')
@@ -576,24 +543,7 @@ export function PreviewPane(props: PreviewPaneProps) {
             header.setAttribute('aria-label', placeholder)
           }
         }}
-        onBlur={(event) => {
-          const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>('td[contenteditable], th[contenteditable]')
-          if (!cell || !containerRef.current) return
-          const table = cell.closest('table')
-          const row = cell.closest('tr')
-          if (!table || !row) return
-          const tables = editableMarkdownTables(containerRef.current)
-          const rows = Array.from(table.querySelectorAll('tr'))
-          const cells = Array.from(row.querySelectorAll('th, td'))
-          cell.contentEditable = 'false'
-          cell.classList.remove('editing')
-          props.onEditTable(tables.indexOf(table), rows.indexOf(row), cells.indexOf(cell), {
-            edit: 'setCell',
-            value: cell.textContent ?? '',
-          })
-        }}
         onClick={(event) => {
-          setTableMenu(null)
           const target = event.target as HTMLElement
           const wrap = target.closest<HTMLButtonElement>('.md-code-toggle-wrap')
           if (wrap) {
@@ -660,51 +610,6 @@ export function PreviewPane(props: PreviewPaneProps) {
         }}
       />
       <div className="sr-only" aria-live="polite" />
-      {tableMenu ? (
-        <div
-          className="table-context-menu"
-          style={{ left: tableMenu.x, top: tableMenu.y }}
-          role="menu"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {(
-            [
-              'addRowBefore',
-              'addRowAfter',
-              'duplicateRow',
-              'deleteRow',
-              'addColumnBefore',
-              'addColumnAfter',
-              'duplicateColumn',
-              'deleteColumn',
-            ] as TableEdit[]
-          ).map((edit) => {
-            const labels: Record<Exclude<TableEdit, 'setCell'>, Parameters<typeof t>[1]> = {
-              addRowBefore: 'addRowAbove',
-              addRowAfter: 'addRowBelow',
-              duplicateRow: 'duplicateRow',
-              deleteRow: 'deleteRow',
-              addColumnBefore: 'addColumnBefore',
-              addColumnAfter: 'addColumnAfter',
-              duplicateColumn: 'duplicateColumn',
-              deleteColumn: 'deleteColumn',
-            }
-            if (edit === 'deleteRow' && tableMenu.row === 0) return null
-            return (
-              <button
-                key={edit}
-                role="menuitem"
-                onClick={() => {
-                  props.onEditTable(tableMenu.table, tableMenu.row, tableMenu.column, { edit })
-                  setTableMenu(null)
-                }}
-              >
-                {t(props.locale, labels[edit as Exclude<TableEdit, 'setCell'>])}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
       {diagram ? <DiagramLightbox html={diagram} locale={props.locale} onClose={() => setDiagram(null)} /> : null}
     </section>
   )

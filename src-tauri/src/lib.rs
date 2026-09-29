@@ -1141,6 +1141,12 @@ fn build_menu(
         .build()?;
 
     let help_item = item("help", "TextMark 帮助", "TextMark Help", None)?;
+    let whats_new = item(
+        "whats-new",
+        "TextMark 更新内容",
+        "What's New in TextMark",
+        None,
+    )?;
     let project_home = item("project-home", "GitHub 项目主页", "GitHub Project", None)?;
     let releases = item(
         "github-releases",
@@ -1158,7 +1164,9 @@ fn build_menu(
         None,
     )?;
     #[cfg(target_os = "macos")]
-    let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" }).item(&help_item);
+    let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
+        .item(&help_item)
+        .item(&whats_new);
     #[cfg(not(target_os = "macos"))]
     let about = item("about", "关于 TextMark", "About TextMark", None)?;
     #[cfg(not(target_os = "macos"))]
@@ -1170,6 +1178,7 @@ fn build_menu(
             &releases,
             &report_issue,
             &check_updates,
+            &whats_new,
             &install_cli,
             &crash_reports,
         ])
@@ -1193,6 +1202,7 @@ fn build_menu(
             &releases,
             &report_issue,
             &check_updates,
+            &whats_new,
             &install_cli,
             &crash_reports,
         ])

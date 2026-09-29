@@ -93,9 +93,9 @@ function makeRenderer(strictLineBreaks = false) {
   md.use(footnote)
   // The plugin's optional label wrapper reinjects raw source text. In a task
   // such as `- [ ] literal <script>`, that can turn escaped inline code back
-  // into a real tag before DOMPurify sees it. The checkbox remains interactive
-  // through PreviewPane, so omit the unsafe duplicate label markup.
-  md.use(taskLists, { enabled: true, label: false })
+  // into a real tag before DOMPurify sees it. Reading and exported HTML are
+  // non-editable surfaces; tasks are interactive only in editor decorations.
+  md.use(taskLists, { enabled: false, label: false })
 
   const defaultFence = md.renderer.rules.fence
   const fenceRule: RendererRule = (tokens, index, options, env, self) => {

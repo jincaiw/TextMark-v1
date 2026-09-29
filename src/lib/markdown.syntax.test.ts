@@ -94,6 +94,7 @@ describe('supported Markdown syntax surface', () => {
     expect(html.match(/<ol>/g)?.length).toBeGreaterThanOrEqual(2)
     expect(html.match(/<ul>/g)?.length).toBeGreaterThanOrEqual(2)
     expect(html.match(/task-list-item-checkbox/g)).toHaveLength(2)
+    expect(html.match(/<input[^>]*class="task-list-item-checkbox"[^>]*disabled=""/g)).toHaveLength(2)
     expect(html).toContain('href="https://example.com/guide"')
     expect(html).toContain('href="https://example.org"')
     expect(html).toContain('href="https://example.net"')

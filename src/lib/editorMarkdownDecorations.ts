@@ -1181,7 +1181,11 @@ function buildDecorations(
   // delimiters while the user is editing/selecting the delimiter itself.
   const markerClassForSelection = (from: number, to: number, className: string) => {
     const touchesMarker = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
-    return touchesMarker ? `${className} cm-md-source-revealed` : className
+    // Keep heading syntax visible while an IME owns the composition range. Some
+    // input methods temporarily move that range across the prefix; hiding it
+    // then changes the measured line width and makes the heading flicker.
+    const composingHeading = view.composing && className.includes('cm-md-heading-marker')
+    return touchesMarker || composingHeading ? `${className} cm-md-source-revealed` : className
   }
   const syntaxMarkerClasses: Record<string, string> = {
     QuoteMark: 'cm-md-syntax-marker',

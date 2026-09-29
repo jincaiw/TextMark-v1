@@ -204,32 +204,65 @@ export function ProjectDocumentSearch(props: ProjectDocumentSearchProps) {
         {query.trim() || !entries.length ? (
           <div className="project-search-results" role="listbox" aria-label={labels.title}>
             {results.length ? (
-              results.map((result, index) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={index === selected}
-                  className={index === selected ? 'selected' : ''}
-                  key={result.entry.path}
-                  ref={(element) => {
-                    if (element) resultRefs.current.set(index, element)
-                    else resultRefs.current.delete(index)
-                  }}
-                  onMouseEnter={() => setSelected(index)}
-                  onClick={() => open(result.entry, 'current')}
-                >
-                  <FileText aria-hidden="true" />
-                  <span className="project-search-file-name">
-                    {query.includes('/') ? result.entry.name : highlightedText(result.entry.name, result.positions)}
-                  </span>
-                  <span className="project-search-file-path">
-                    {query.includes('/') ? highlightedText(result.entry.relativePath, result.positions) : result.entry.relativePath}
-                  </span>
-                  {result.entry.path === props.activePath ? (
-                    <span className="project-search-current">{props.locale === 'zh-CN' ? '当前' : 'Current'}</span>
-                  ) : null}
-                </button>
-              ))
+              results.map((result, index) => {
+                const relativePath = result.entry.relativePath
+                const showFullPath = query.includes('/')
+                const lastSlash = relativePath.lastIndexOf('/')
+                const displayPath = showFullPath ? relativePath : lastSlash >= 0 ? relativePath.slice(0, lastSlash) : ''
+                const firstSlash = displayPath.indexOf('/')
+                const displayLastSlash = displayPath.lastIndexOf('/')
+                const hasMiddlePath = firstSlash >= 0 && displayLastSlash > firstSlash
+                const prefix = hasMiddlePath ? displayPath.slice(0, firstSlash + 1) : ''
+                const tail = hasMiddlePath ? displayPath.slice(displayLastSlash + 1) : ''
+                const prefixPositions = result.positions.filter((position) => position < prefix.length)
+                const tailPositions = result.positions
+                  .filter((position) => position >= displayLastSlash + 1)
+                  .map((position) => position - displayLastSlash - 1)
+                return (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={index === selected}
+                    className={index === selected ? 'selected' : ''}
+                    key={result.entry.path}
+                    ref={(element) => {
+                      if (element) resultRefs.current.set(index, element)
+                      else resultRefs.current.delete(index)
+                    }}
+                    onMouseEnter={() => setSelected(index)}
+                    onClick={() => open(result.entry, 'current')}
+                  >
+                    <FileText aria-hidden="true" />
+                    <span className="project-search-file-name">
+                      {query.includes('/') ? result.entry.name : highlightedText(result.entry.name, result.positions)}
+                    </span>
+                    <span className="project-search-file-path">
+                      <span title={result.entry.path}>
+                        {hasMiddlePath ? (
+                          <>
+                            <span className="project-search-path-prefix">
+                              {query.includes('/') ? highlightedText(prefix, prefixPositions) : prefix}
+                            </span>
+                            <span className="project-search-path-ellipsis" aria-hidden="true">
+                              …/
+                            </span>
+                            <span className="project-search-path-tail">
+                              {query.includes('/') ? highlightedText(tail, tailPositions) : tail}
+                            </span>
+                          </>
+                        ) : showFullPath ? (
+                          highlightedText(displayPath, result.positions)
+                        ) : (
+                          displayPath
+                        )}
+                      </span>
+                    </span>
+                    {result.entry.path === props.activePath ? (
+                      <span className="project-search-current">{props.locale === 'zh-CN' ? '当前' : 'Current'}</span>
+                    ) : null}
+                  </button>
+                )
+              })
             ) : (
               <p className="project-search-empty">{entries.length ? labels.empty : labels.noProject}</p>
             )}

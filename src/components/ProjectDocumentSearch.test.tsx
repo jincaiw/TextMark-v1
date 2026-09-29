@@ -78,6 +78,8 @@ describe('ProjectDocumentSearch', () => {
     expect(host.textContent).toContain('Design.md')
     expect(host.textContent).not.toContain('Draft.md')
     expect(host.textContent).not.toContain('cover.png')
+    expect(host.querySelector('.project-search-file-path > span')?.textContent).toBe('notes')
+    expect(host.querySelector<HTMLElement>('.project-search-file-path > span')?.title).toBe('/project/notes/Design.md')
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true })))
     expect(onOpenInTab).toHaveBeenCalledWith('/project/notes/Design.md')
     expect(onClose).toHaveBeenCalledOnce()
@@ -133,5 +135,35 @@ describe('ProjectDocumentSearch', () => {
     expect(host.textContent).toContain('Design.md')
     expect(host.querySelectorAll('.project-search-file-name strong')).toHaveLength(0)
     expect(host.querySelectorAll('.project-search-file-path strong')).toHaveLength(10)
+  })
+
+  it('middle-truncates deep result paths and keeps the full path available as a tooltip', async () => {
+    const nestedFiles: FileNode[] = [
+      {
+        name: 'notes',
+        path: '/project/notes',
+        isDirectory: true,
+        children: [
+          {
+            name: 'archive',
+            path: '/project/notes/archive',
+            isDirectory: true,
+            children: [
+              {
+                name: 'deep',
+                path: '/project/notes/archive/deep',
+                isDirectory: true,
+                children: [{ name: 'Design.md', path: '/project/notes/archive/deep/Design.md', isDirectory: false, children: [] }],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    await render(nestedFiles)
+    await setQuery('notes/dsgn')
+    const path = host.querySelector<HTMLElement>('.project-search-file-path > span')!
+    expect(path.title).toBe('/project/notes/archive/deep/Design.md')
+    expect(path.textContent).toBe('notes/…/Design.md')
   })
 })

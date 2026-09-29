@@ -37,6 +37,19 @@ describe('TextMark desktop shell', () => {
     await expect(activeFile).toHaveText('textmark-v030-e2e.md')
   })
 
+  it('outline navigation scrolls without changing the editor caret', async () => {
+    await $("button[aria-label='编辑']").click()
+    await $('.cm-content').waitForDisplayed()
+    await $(".sidebar-mode-picker button[aria-label='大纲']").click()
+    const target = await $("//nav[contains(@class,'native-outline')]//button[normalize-space()='Navigation Target']")
+    await target.waitForDisplayed()
+    const status = await $('.editor-status')
+    const caretBeforeNavigation = await status.getAttribute('aria-label')
+    await target.click()
+    expect(await status.getAttribute('aria-label')).toBe(caretBeforeNavigation)
+    await $("button[aria-label='停止编辑并返回预览']").click()
+  })
+
   it('keeps a stable native window geometry contract', async () => {
     await browser.setWindowSize(1280, 800)
     const size = await browser.getWindowSize()
@@ -148,8 +161,8 @@ describe('TextMark desktop shell', () => {
     await $(".inspector-panel button[aria-label='关闭']").click()
 
     const task = await $('input.task-list-item-checkbox')
-    await task.click()
-    await expect(task).toBeSelected()
+    expect(await task.isEnabled()).toBe(false)
+    expect(await browser.execute(() => document.querySelector('input.task-list-item-checkbox')?.tabIndex)).toBe(-1)
 
     await browser.execute(() => {
       const target = document.querySelector('.markdown-body tbody tr:first-child td:first-child')
@@ -157,10 +170,10 @@ describe('TextMark desktop shell', () => {
       target.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: bounds.left + 4, clientY: bounds.top + 4 }),
       )
+      target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
     })
-    await expect(await $('.table-context-menu')).toBeDisplayed()
-    await $("//div[contains(@class,'table-context-menu')]/button[normalize-space()='复制行']").click()
-    expect(await browser.getTitle()).toContain('已编辑')
+    expect(await browser.$('.table-context-menu').isExisting()).toBe(false)
+    expect(await browser.execute(() => document.querySelector('.markdown-body td')?.getAttribute('contenteditable'))).toBe(null)
   })
 
   it('persists a pasted clipboard image and inserts a relative Markdown reference', async () => {

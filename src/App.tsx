@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { getVersion } from '@tauri-apps/api/app'
 import { openPath as openExternalPath, openUrl } from '@tauri-apps/plugin-opener'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -17,6 +18,7 @@ import { PreviewPane } from './components/PreviewPane'
 import { PanelResizer } from './components/PanelResizer'
 import { SettingsDialog } from './components/SettingsDialog'
 import { UnsavedCloseDialog } from './components/UnsavedCloseDialog'
+import { WhatsNewDialog } from './components/WhatsNewDialog'
 import { SettingsWindow } from './components/SettingsWindow'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
@@ -55,8 +57,6 @@ import {
   shouldUseDedicatedSettingsWindow,
 } from './lib/platform'
 import { partitionDroppedPaths } from './lib/documentPresentation'
-import { editMarkdownTable } from './lib/table'
-import { setTaskChecked } from './lib/task'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
@@ -77,6 +77,11 @@ import type {
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
 function DocumentApp() {
+  const hadPreviousInstall = useRef(
+    Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).some((key) =>
+      /^textmark\.settings\.v\d+$/.test(key ?? ''),
+    ),
+  )
   const {
     settings,
     setLocale,
@@ -94,6 +99,17 @@ function DocumentApp() {
     openDocumentsInTabs: settings.openDocumentsInTabs,
   })
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
+  useEffect(() => {
+    if (!isTauri() || getCurrentWindow().label !== 'main') return
+    void getVersion()
+      .then((version) => {
+        const key = 'textmark.lastSeenWhatsNewVersion'
+        const previousVersion = localStorage.getItem(key)
+        localStorage.setItem(key, version)
+        if ((previousVersion && previousVersion !== version) || (!previousVersion && hadPreviousInstall.current)) setWhatsNewOpen(true)
+      })
+      .catch(() => undefined)
+  }, [])
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
   const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('textmark.sidebarVisible') !== 'false')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
@@ -114,6 +130,7 @@ function DocumentApp() {
   const [toolbarVisible, setToolbarVisible] = useState(() => readToolbarVisibility(localStorage, toolbarVisibilityKey))
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false)
   const [settingsPane, setSettingsPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const alwaysOnTop = settings.alwaysOnTop
@@ -737,6 +754,7 @@ function DocumentApp() {
     else if (command === 'zoom-reset') setZoom(100)
     else if (command === 'preferences') openSettings()
     else if (command === 'about') openSettings('about')
+    else if (command === 'whats-new') setWhatsNewOpen(true)
     else if (command === 'check-updates') {
       openSettings()
       void updater.checkNow()
@@ -763,12 +781,6 @@ function DocumentApp() {
       void subscription.then((dispose) => dispose())
     }
   }, [])
-  const toggleTask = (targetIndex: number, checked: boolean) => {
-    const line = rendered.tasks[targetIndex]?.line
-    if (!line) return
-    const next = setTaskChecked(documents.document.contents, line, checked)
-    if (next !== null) documents.applyEdit(next)
-  }
   const format = (command: FormatCommand) => {
     setPendingFormat(command)
     switchViewMode('edit')
@@ -827,7 +839,7 @@ function DocumentApp() {
     const target = direction < 0 ? Math.max(0, current - 1) : Math.min(ids.length - 1, current + 1)
     if (viewModeRef.current === 'edit') {
       const outlineItem = rendered.outline.find((item) => item.id === ids[target])
-      if (outlineItem?.line) editorRef.current?.revealLine(outlineItem.line)
+      if (outlineItem?.line) editorRef.current?.scrollToLine(outlineItem.line)
     } else document.getElementById(ids[target])?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setActiveHeading(ids[target])
   }
@@ -837,7 +849,7 @@ function DocumentApp() {
     setActiveHeading(id)
     const item = rendered.outline.find((entry) => entry.id === id)
     if (viewMode === 'edit') {
-      if (item?.line) editorRef.current?.revealLine(item.line)
+      if (item?.line) editorRef.current?.scrollToLine(item.line)
       return
     }
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1416,10 +1428,6 @@ function DocumentApp() {
                 onZoomChange={setZoom}
                 onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())}
                 onRenameImage={(path) => void documents.renamePastedImage(path)}
-                onToggleTask={toggleTask}
-                onEditTable={(table, row, column, request) =>
-                  documents.applyEdit(editMarkdownTable(documents.document.contents, table, row, column, request))
-                }
               />
             )}
             {viewMode === 'edit' ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
@@ -1452,6 +1460,7 @@ function DocumentApp() {
           {notice ?? documents.notice}
         </div>
       ) : null}
+      {whatsNewOpen ? <WhatsNewDialog locale={settings.locale} onClose={() => setWhatsNewOpen(false)} /> : null}
       <ConflictDialog change={documents.externalChange} locale={settings.locale} onResolve={documents.resolveExternal} />
       {documents.pendingDraft ? (
         <DraftRecoveryDialog
