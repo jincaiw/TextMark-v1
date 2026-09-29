@@ -1,3 +1,17 @@
+# TextMark v0.10.34
+
+TextMark 0.10.34 improves navigation and search in Edit Mode. Outline links now scroll reliably to headings in long virtualized documents without moving the caret. Toolbar search keeps its query in the toolbar, focuses the field reliably, and keeps it available when toolbar items overflow.
+
+TextMark 0.10.34 优化编辑模式的目录跳转和查找体验：长文档中的目录项可可靠滚动到目标标题且不移动光标；工具栏搜索保留单一搜索框，稳定获取焦点，并在工具栏空间不足时继续可用。
+
+## Highlights / 主要更新
+
+- Edit Mode: outline navigation scrolls to offscreen headings in long documents while preserving the caret.
+- Search: toolbar search no longer duplicates the query field; focus and overflow behavior are reliable, while shortcut search retains its full find/replace controls.
+- Verification: 507 frontend tests, 26 macOS desktop E2E checks, lint, format, E2E build, and Rust compile checks passed. No physical Windows/Linux testing is claimed; CI package gates will run with the release. macOS ad-hoc signing is accepted; Developer ID and notarization are not release gates.
+
+---
+
 # TextMark v0.10.33
 
 TextMark 0.10.33 brings the Edit Mode outline closer to Markdown Preview: selecting a heading scrolls the editor while preserving the caret and WYSIWYG rendering. It also adds a bilingual What's New dialog, keeps preview/export task lists read-only, aligns project-search path labels, and improves CJK heading stability during IME composition.
