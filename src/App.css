@@ -1433,6 +1433,12 @@ select:focus-visible {
 .find-query-row {
   flex: 1 1 540px;
 }
+.find-bar.toolbar-search-active .find-query-row {
+  flex: 0 1 auto;
+}
+.find-bar.toolbar-search-active .find-count:empty {
+  display: none;
+}
 .find-replace-row {
   flex: 0 1 auto;
 }

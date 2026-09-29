@@ -116,6 +116,37 @@ describe('localized desktop components', () => {
     expect(host.querySelector('.find-replace-row')).not.toBeNull()
     await act(async () => root.unmount())
   })
+  it('can render find actions without a duplicate query field when search lives in the toolbar', async () => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <FindBar
+          locale="zh-CN"
+          query="Text"
+          current={0}
+          count={2}
+          matchCase={false}
+          mode="contains"
+          hideQuery
+          onQueryChange={vi.fn()}
+          onPrevious={vi.fn()}
+          onNext={vi.fn()}
+          onMatchCaseChange={vi.fn()}
+          onModeChange={vi.fn()}
+          replacement=""
+          onReplacementChange={vi.fn()}
+          onReplace={vi.fn()}
+          onReplaceAll={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      ),
+    )
+    expect(host.querySelector('.find-query')).toBeNull()
+    expect(host.querySelector('[title="下一个匹配项"]')).not.toBeNull()
+    expect(host.textContent).toContain('第 1 项，共 2 项')
+    await act(async () => root.unmount())
+  })
   it('offers explicit restore and discard choices for a local draft', () => {
     const html = renderToStaticMarkup(
       <DraftRecoveryDialog

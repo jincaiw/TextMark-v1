@@ -50,6 +50,7 @@ interface ToolbarProps {
   onThemePresetChange: (preset: ThemePreset) => void
   onCustomizeAppearance: () => void
   searchQuery: string
+  toolbarSearchActive: boolean
   locale: Locale
   items: ToolbarItem[]
   displayMode: ToolbarDisplayMode
@@ -139,6 +140,9 @@ export function Toolbar(props: ToolbarProps) {
       document.removeEventListener('keydown', closeMenusOnEscape)
     }
   }, [])
+  useEffect(() => {
+    if (!props.toolbarSearchActive && document.activeElement !== searchInputRef.current) setSearchExpanded(false)
+  }, [props.toolbarSearchActive])
   const windowAction = (action: 'close' | 'minimize' | 'toggleMaximize') => {
     if (!isTauri()) return
     const window = getCurrentWindow()
@@ -255,7 +259,7 @@ export function Toolbar(props: ToolbarProps) {
       // at a time; explicit indexes keep rendering and the More menu in sync.
       while (rowWidth() + moreWidth > available + 0.5) {
         let index = slots.length - 1
-        while (index >= 0 && hidden.has(index)) index -= 1
+        while (index >= 0 && (hidden.has(index) || (props.toolbarSearchActive && toolbarItems[index] === 'search'))) index -= 1
         if (index < 0) break
         hidden.add(index)
       }
@@ -274,6 +278,7 @@ export function Toolbar(props: ToolbarProps) {
     toolbarItems,
     props.displayMode,
     props.searchQuery,
+    props.toolbarSearchActive,
     props.zoom,
     props.viewMode,
     props.sidebarVisible,
@@ -455,7 +460,7 @@ export function Toolbar(props: ToolbarProps) {
             aria-expanded={searchExpanded}
             onClick={() => {
               setSearchExpanded(true)
-              searchInputRef.current?.focus()
+              window.requestAnimationFrame(() => searchInputRef.current?.focus())
             }}
           >
             <Search />
@@ -485,7 +490,8 @@ export function Toolbar(props: ToolbarProps) {
               )
             }}
             onBlur={(event) => {
-              if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) setSearchExpanded(false)
+              if (!props.toolbarSearchActive && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null))
+                setSearchExpanded(false)
             }}
             onChange={(event) => props.onSearchQueryChange(event.target.value)}
             placeholder={tx('search')}

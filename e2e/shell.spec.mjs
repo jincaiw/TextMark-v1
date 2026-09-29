@@ -378,7 +378,8 @@ describe('TextMark toolbar click matrix', () => {
       timeoutMsg: 'the expanding document search input should receive focus after its find bar opens',
     })
     await expect(await $('.find-bar')).toBeDisplayed()
-    const findInput = await $('.find-bar input')
+    await expect(await $('.find-bar .find-query')).not.toBeDisplayed()
+    const findInput = await $('.document-search input')
     await findInput.setValue('TextMark')
     await expect(await $('.find-count')).toBeDisplayed()
     await expect(await $('.find-icon[title="下一个匹配项"]')).toBeEnabled()

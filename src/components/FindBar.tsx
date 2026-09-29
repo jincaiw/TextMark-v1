@@ -10,6 +10,7 @@ interface FindBarProps {
   matchCase: boolean
   mode: SearchMode
   locale: Locale
+  hideQuery?: boolean
   onQueryChange: (value: string) => void
   onPrevious: () => void
   onNext: () => void
@@ -35,20 +36,22 @@ export function FindBar(props: FindBarProps) {
     </button>
   )
   return (
-    <div className="find-bar" role="search">
+    <div className={`find-bar ${props.hideQuery ? 'toolbar-search-active' : ''}`} role="search">
       <div className="find-query-row">
-        <input
-          className="find-query"
-          autoFocus
-          value={props.query}
-          onChange={(event) => props.onQueryChange(event.target.value)}
-          placeholder={t(props.locale, 'find')}
-          aria-label={t(props.locale, 'find')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.shiftKey ? props.onPrevious() : props.onNext()
-            if (event.key === 'Escape') props.onClose()
-          }}
-        />
+        {!props.hideQuery ? (
+          <input
+            className="find-query"
+            autoFocus
+            value={props.query}
+            onChange={(event) => props.onQueryChange(event.target.value)}
+            placeholder={t(props.locale, 'find')}
+            aria-label={t(props.locale, 'find')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.shiftKey ? props.onPrevious() : props.onNext()
+              if (event.key === 'Escape') props.onClose()
+            }}
+          />
+        ) : null}
         <span className="find-count">
           {props.query
             ? props.count

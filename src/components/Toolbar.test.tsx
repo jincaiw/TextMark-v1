@@ -23,6 +23,7 @@ const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
   onThemePresetChange: vi.fn(),
   onCustomizeAppearance: vi.fn(),
   searchQuery: '',
+  toolbarSearchActive: false,
   locale: 'en',
   items: [],
   displayMode: 'iconOnly',

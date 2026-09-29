@@ -142,6 +142,7 @@ function DocumentApp() {
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const [findFromToolbar, setFindFromToolbar] = useState(false)
   const [projectSearchOpen, setProjectSearchOpen] = useState(false)
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
@@ -728,8 +729,10 @@ function DocumentApp() {
     } else if (command === 'redo') {
       if (viewModeRef.current === 'edit') editorRef.current?.redo()
       else documents.redo()
-    } else if (command === 'find') setFindOpen(true)
-    else if (command === 'search-documents') setProjectSearchOpen(true)
+    } else if (command === 'find') {
+      setFindFromToolbar(false)
+      setFindOpen(true)
+    } else if (command === 'search-documents') setProjectSearchOpen(true)
     else if (command === 'find-next') nextMatch(1)
     else if (command === 'find-prev') nextMatch(-1)
     else if (command === 'edit-mode') switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
@@ -895,6 +898,7 @@ function DocumentApp() {
       if (event.key === 'Escape' && findOpen) {
         event.preventDefault()
         setFindOpen(false)
+        setFindFromToolbar(false)
         return
       }
       if (event.key === 'Escape' && defaultHandlerPrompt) {
@@ -1024,6 +1028,7 @@ function DocumentApp() {
         documents.closeSession(documents.activeId)
       } else if (key === 'f') {
         event.preventDefault()
+        setFindFromToolbar(false)
         setFindOpen(true)
       } else if (key === 'g') {
         event.preventDefault()
@@ -1241,6 +1246,7 @@ function DocumentApp() {
         alwaysOnTop={alwaysOnTop}
         zoom={settings.zoom}
         searchQuery={searchQuery}
+        toolbarSearchActive={findFromToolbar && findOpen}
         onToggleSidebar={() => setSidebarVisible((value) => !value)}
         onSidebarModeChange={chooseSidebarMode}
         onViewModeChange={switchViewMode}
@@ -1252,7 +1258,10 @@ function DocumentApp() {
           setSearchIndex(0)
           setFindOpen(true)
         }}
-        onSearchOpen={() => setFindOpen(true)}
+        onSearchOpen={() => {
+          setFindFromToolbar(true)
+          setFindOpen(true)
+        }}
         onSearchDocumentsOpen={() => setProjectSearchOpen(true)}
         onOpenWith={(application) => void openWith(application)}
         onOpenInLlm={(application) => void openInLlm(application)}
@@ -1341,6 +1350,7 @@ function DocumentApp() {
               {findOpen ? (
                 <FindBar
                   locale={settings.locale}
+                  hideQuery={findFromToolbar}
                   query={searchQuery}
                   current={searchIndex}
                   count={searchCount}
@@ -1358,7 +1368,10 @@ function DocumentApp() {
                   onNext={() => nextMatch(1)}
                   onMatchCaseChange={setMatchCase}
                   onModeChange={setSearchMode}
-                  onClose={() => setFindOpen(false)}
+                  onClose={() => {
+                    setFindOpen(false)
+                    setFindFromToolbar(false)
+                  }}
                 />
               ) : null}
               {viewMode === 'edit' ? (
