@@ -1,6 +1,6 @@
 # TextMark v0.10.32 工作树与 Markdown Preview v0.0.63 对照
 
-对照基准：Markdown Preview 官方 [v0.0.63 Release](https://github.com/pluk-inc/markdown-preview/releases/tag/v0.0.63)，于 2026-09-28 发布。TextMark 当前正式版为 v0.10.32；本文记录其后的未发布工作树改动，不代表 v0.10.32 安装包已包含这些改动。
+对照基准：Markdown Preview 官方 [v0.0.63 Release](https://github.com/pluk-inc/markdown-preview/releases/tag/v0.0.63)，于 2026-09-28 发布。本文记录的修复已包含于 TextMark [v0.10.33 正式版](https://github.com/jincaiw/TextMark-v1/releases/tag/v0.10.33)；版本提交为 `1693e31`。v0.10.32 安装包不包含本轮改动。
 
 2026-09-29 实际查看本机两款应用及同一 `MARKDOWN_RENDERING_TEST.md`。将两边窗口设为半屏、打开目录侧栏、编辑模式和相同文档章节，并将上游主题临时切到深色做截图对照；检查后已恢复上游“自动”主题。截图确认上游目录导航保留光标，而 TextMark 原先会把光标移动到标题，导致 Markdown 标记暴露并破坏所见即所得阅读状态。本轮将编辑模式目录/标题导航改成纯滚动，不更改选择或焦点；增加 E2E 光标状态回归。界面细节仍存在两端原生窗口工具栏和格式工具栏实现差异，本轮聚焦对齐交互与内容行为，没有声称逐像素相同。
 
@@ -23,8 +23,8 @@
 - 前端：55 个测试文件、506 项通过；定向编辑器/预览/渲染/搜索/更新窗口测试 86 项通过。
 - 发布构建：TypeScript、ESLint、Prettier、Vite 生产构建、bundle 预算通过（main+worker 312 KiB gzip、native preview 71 KiB gzip）。
 - 导出：完整 HTML/PNG/PDF 回归通过，结果包含 6 个标题、2 张表格、2 个只读任务项、数学公式和 Mermaid 图；PNG 尺寸及 HTML 安全检查通过。
-- 原生：Rust 27 项测试、Clippy 全目标检查、rustfmt 检查通过；macOS E2E shell 全套通过，25 项。
-- 这些测试验证本地工作树；本轮尚未提交、尚未发布，也不代表已发布 v0.10.32 包变化。
+- 原生：Rust 27 项测试、Clippy 全目标检查、rustfmt 检查通过；macOS E2E shell 全套通过，26 项。
+- 这些测试最初在本地候选工作树执行，随后通过 commit `1693e31` 发布为 v0.10.33；v0.10.32 安装包不包含本轮变更。
 
 ## 2026-09-29 收尾结果
 
