@@ -288,6 +288,7 @@ describe('Toolbar', () => {
     expect(trigger.getAttribute('aria-label')).toBe(t(locale, 'search'))
     expect(input.getAttribute('aria-label')).toBe(t(locale, 'search'))
     click(trigger)
+    act(() => vi.advanceTimersToNextFrame())
     expect(document.activeElement).toBe(input)
     expect(element('.document-search').classList.contains('is-expanded')).toBe(true)
     expect(props.onSearchOpen).toHaveBeenCalledTimes(1)
