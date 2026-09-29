@@ -79,7 +79,7 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 7
+  schemaVersion: 9
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth
@@ -87,6 +87,8 @@ export interface AppSettings {
   editorFontSize: number
   /** Reading line height for both the preview and the editor. */
   lineHeight: number
+  /** Treat Markdown soft line breaks as visible line breaks in reading views. */
+  strictLineBreaks: boolean
   /** Horizontal page gutter in px; the reading column keeps its own width. */
   pagePaddingHorizontal: number
   documentFont: DocumentFont
@@ -145,6 +147,7 @@ export interface AppError {
     | 'invalid_document'
     | 'not_found'
     | 'io'
+    | 'read_only'
     | 'save_conflict'
     | 'asset_outside_workspace'
     | 'asset_unsupported'

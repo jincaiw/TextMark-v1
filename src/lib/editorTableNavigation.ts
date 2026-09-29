@@ -34,9 +34,10 @@ export function markdownTableNavigationPlan(source: string, position: number, di
   const lines = source.split(/\r?\n/)
   const lineStarts: number[] = []
   let offset = 0
-  lines.forEach((line) => {
+  lines.forEach((line, index) => {
     lineStarts.push(offset)
-    offset += line.length + 1
+    offset += line.length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
   })
   let lineIndex = 0
   for (let index = 0; index < lineStarts.length; index += 1) if (lineStarts[index] <= position) lineIndex = index
@@ -92,6 +93,11 @@ export function markdownTableNavigationPlan(source: string, position: number, di
   const lastLine = lines[lastLineIndex]
   const lastLineStart = lineStarts[lastLineIndex]
   const columns = Math.max(...currentCells.filter((cell) => cell.line === lastLineNumber).map((cell) => cell.column + 1))
-  const insert = `\n| ${Array(columns).fill('').join(' | ')} |`
-  return { handled: true, change: { from: lastLineStart + lastLine.length, insert }, selection: lastLineStart + lastLine.length + 3 }
+  const lineSeparator = source.match(/\r\n|\n/)?.[0] ?? '\n'
+  const insert = `${lineSeparator}| ${Array(columns).fill('').join(' | ')} |`
+  return {
+    handled: true,
+    change: { from: lastLineStart + lastLine.length, insert },
+    selection: lastLineStart + lastLine.length + lineSeparator.length + 2,
+  }
 }

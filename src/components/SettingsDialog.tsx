@@ -25,6 +25,7 @@ interface SettingsDialogProps {
   contentWidth: ContentWidth
   editorFontSize: number
   lineHeight: number
+  strictLineBreaks: boolean
   pagePaddingHorizontal: number
   documentFont: DocumentFont
   themePreset: ThemePreset
@@ -52,6 +53,7 @@ interface SettingsDialogProps {
   onContentWidthChange: (width: ContentWidth) => void
   onEditorFontSizeChange: (size: number) => void
   onLineHeightChange: (value: number) => void
+  onStrictLineBreaksChange: (enabled: boolean) => void
   onPagePaddingHorizontalChange: (value: number) => void
   onDocumentFontChange: (font: DocumentFont) => void
   onThemePresetChange: (preset: ThemePreset) => void
@@ -204,6 +206,14 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     />
                     <output>{props.lineHeight.toFixed(2)}</output>
                   </div>
+                </label>
+                <label>
+                  <span>{t(props.locale, 'strictLineBreaks')}</span>
+                  <input
+                    type="checkbox"
+                    checked={props.strictLineBreaks}
+                    onChange={(event) => props.onStrictLineBreaksChange(event.target.checked)}
+                  />
                 </label>
                 <label>
                   <span>{t(props.locale, 'pagePaddingHorizontal')}</span>

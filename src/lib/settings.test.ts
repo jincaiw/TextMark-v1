@@ -9,8 +9,9 @@ describe('reading typography settings', () => {
   })
 
   it('keeps the new profile version ahead of the ones it reads from', () => {
-    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v7')
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(7)
+    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v9')
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(9)
+    expect(DEFAULT_SETTINGS.strictLineBreaks).toBe(false)
   })
 
   it('defaults document actions to independent, reorderable toolbar items', () => {
@@ -18,12 +19,15 @@ describe('reading typography settings', () => {
       'sidebar',
       'navigation',
       'flexibleSpace',
+      'documentSearch',
       'openActions',
       'space',
       'themesAndSettings',
       'space',
+      'copy',
       'inspector',
       'share',
+      'export',
       'edit',
       'search',
     ])
@@ -33,6 +37,22 @@ describe('reading typography settings', () => {
     [
       5,
       ['flexibleSpace', 'sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'zoom', 'inspector', 'share', 'edit', 'search'],
+    ],
+    [
+      8,
+      [
+        'sidebar',
+        'navigation',
+        'flexibleSpace',
+        'openActions',
+        'space',
+        'themesAndSettings',
+        'space',
+        'inspector',
+        'share',
+        'edit',
+        'search',
+      ],
     ],
     [7, ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'inspector', 'share', 'edit', 'search']],
     [7, ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'documentActions', 'search']],
@@ -49,9 +69,14 @@ describe('reading typography settings', () => {
     const migrated = normalizeSettings({ schemaVersion: 6, theme: 'dark', editorFontSize: 18 })
     expect(migrated.lineHeight).toBe(UPSTREAM_DOCUMENT_TOKENS.lineHeight)
     expect(migrated.pagePaddingHorizontal).toBe(UPSTREAM_DOCUMENT_TOKENS.pagePaddingHorizontal)
+    expect(migrated.strictLineBreaks).toBe(false)
     // Existing values must survive the migration.
     expect(migrated.theme).toBe('dark')
     expect(migrated.editorFontSize).toBe(18)
+  })
+
+  it('persists the strict soft-break reading preference when enabled', () => {
+    expect(normalizeSettings({ schemaVersion: 9, strictLineBreaks: true }).strictLineBreaks).toBe(true)
   })
 
   it('clamps instead of rejecting an out-of-range profile', () => {

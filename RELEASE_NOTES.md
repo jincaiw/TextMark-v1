@@ -1,3 +1,19 @@
+# TextMark v0.10.32
+
+TextMark 0.10.32 continues the Edit Mode WYSIWYG improvements with more reliable inline formatting, tables, lists, and line-break preferences. Save and export now preserve read-only files instead of silently replacing them, and macOS release packages use the ad-hoc signing flow with first-launch approval through System Settings.
+
+TextMark 0.10.32 继续优化编辑模式的所见即所得体验，完善行内格式、表格、任务列表和换行偏好。保存和导出会保护只读文件，避免被静默覆盖；macOS 发布包使用 ad-hoc 签名，首次启动可在“系统设置 → 隐私与安全性”中手动允许。
+
+## Highlights / 主要更新
+
+- Edit Mode: improve syntax-aware WYSIWYG rendering for headings, nested emphasis, quotes, callouts, inline semantics, tables, and task lists.
+- Tables: improve Tab / Shift+Tab navigation, including CRLF documents and appending rows at the end of a table.
+- Rendering: add an optional preference to render soft line breaks as visible line breaks across previews and exports.
+- Data safety: reject read-only save and export targets before atomic replacement; keep unsaved state and show a clear error.
+- Verification: 501 frontend tests, Rust tests, lint/format/build/bundle checks, export regression, and Ubuntu 22.04 x64/ARM64 DEB install/thumbnail/uninstall container smoke checks passed.
+
+---
+
 # TextMark v0.10.31
 
 TextMark 0.10.31 improves Markdown rendering in Edit Mode. Syntax-aware decorations now handle nested emphasis and structural markers more reliably, quoted and indented code blocks keep their content distinct from surrounding prose, and quoted code-fence delimiters no longer leak into the rendered editor view. Heading spacing and callout styling are also refined.

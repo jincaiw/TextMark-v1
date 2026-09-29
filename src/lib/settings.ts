@@ -3,6 +3,8 @@ import { normalizeThemeColors } from './theme'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 export const SETTINGS_KEYS = [
+  'textmark.settings.v9',
+  'textmark.settings.v8',
   'textmark.settings.v7',
   'textmark.settings.v6',
   'textmark.settings.v5',
@@ -41,6 +43,25 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
 // Upstream (markdown-preview) default toolbar order. The AppKit-only sidebar
 // tracking separator is intentionally omitted (native macOS affordance).
 export const DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'documentSearch',
+  'openActions',
+  'space',
+  'themesAndSettings',
+  'space',
+  'copy',
+  'inspector',
+  'share',
+  'export',
+  'edit',
+  'search',
+]
+
+// Schema v8 toolbar before adding upstream's default document-search, copy,
+// and export actions.
+const V8_DEFAULT_TOOLBAR: ToolbarItem[] = [
   'sidebar',
   'navigation',
   'flexibleSpace',
@@ -95,13 +116,14 @@ const V5_DEFAULT_TOOLBAR: ToolbarItem[] = [
 ]
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 7,
+  schemaVersion: 9,
   locale: 'zh-CN',
   theme: 'system',
   contentWidth: 'normal',
   zoom: 100,
   editorFontSize: 15,
   lineHeight: UPSTREAM_DOCUMENT_TOKENS.lineHeight,
+  strictLineBreaks: false,
   pagePaddingHorizontal: UPSTREAM_DOCUMENT_TOKENS.pagePaddingHorizontal,
   documentFont: 'system',
   themePreset: 'normal',
@@ -136,15 +158,19 @@ export function normalizeSettings(value: unknown): AppSettings {
   const matchesToolbar = (expected: ToolbarItem[]) =>
     rawToolbar.length === expected.length && rawToolbar.every((item, index) => item === expected[index])
   const usesPriorDefault =
-    matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) || matchesToolbar(V7_DEFAULT_TOOLBAR)
+    matchesToolbar(V5_DEFAULT_TOOLBAR) ||
+    matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) ||
+    matchesToolbar(V7_DEFAULT_TOOLBAR) ||
+    matchesToolbar(V8_DEFAULT_TOOLBAR)
   return {
-    schemaVersion: 7,
+    schemaVersion: 9,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
     theme: valid(stored.theme, ['system', 'light', 'dark'], 'system'),
     contentWidth: valid(stored.contentWidth, ['normal', 'full'], 'normal'),
     zoom: Number.isFinite(stored.zoom) ? Math.min(300, Math.max(50, Number(stored.zoom))) : 100,
     editorFontSize: Number.isFinite(stored.editorFontSize) ? Math.min(24, Math.max(12, Number(stored.editorFontSize))) : 15,
     lineHeight: normalizeLineHeight(stored.lineHeight),
+    strictLineBreaks: stored.strictLineBreaks === true,
     pagePaddingHorizontal: normalizePagePadding(stored.pagePaddingHorizontal),
     documentFont: valid(stored.documentFont, ['system', 'serif', 'rounded', 'monospace'], 'system'),
     themePreset: valid(

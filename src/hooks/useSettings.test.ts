@@ -5,9 +5,9 @@ import { normalizeSettings } from '../lib/settings'
 const storage = (values: Record<string, string>) => ({ getItem: (key: string) => values[key] ?? null })
 
 describe('settings migration', () => {
-  it('starts in Chinese with a stable v7 schema', () => {
+  it('starts in Chinese with a stable v9 schema', () => {
     expect(readSettings(storage({}))).toMatchObject({
-      schemaVersion: 7,
+      schemaVersion: 9,
       locale: 'zh-CN',
       updateChannel: 'stable',
       toolbarDisplay: 'iconOnly',
@@ -17,14 +17,14 @@ describe('settings migration', () => {
     const settings = readSettings(
       storage({ 'textmark.settings.v1': JSON.stringify({ locale: 'en', zoom: 999, toolbar: ['sidebar', 'bad', 'search'] }) }),
     )
-    expect(settings).toMatchObject({ schemaVersion: 7, locale: 'en', zoom: 300, toolbar: ['sidebar', 'search'] })
+    expect(settings).toMatchObject({ schemaVersion: 9, locale: 'en', zoom: 300, toolbar: ['sidebar', 'search'] })
   })
   it('migrates pre-v4 openWith into the combined openActions item', () => {
     expect(normalizeSettings({ schemaVersion: 3, toolbar: ['openWith', 'zoom'] }).toolbar).toEqual(['openActions', 'zoom'])
     expect(normalizeSettings({ schemaVersion: 4, toolbar: ['openWith', 'openInLlm'] }).toolbar).toEqual(['openWith', 'openInLlm'])
   })
   it('preserves dedicated openWith in every modern schema', () => {
-    for (const schemaVersion of [4, 5, 6, 7]) {
+    for (const schemaVersion of [4, 5, 6, 7, 8, 9]) {
       expect(normalizeSettings({ schemaVersion, toolbar: ['openWith', 'space', 'openInLlm'] }).toolbar).toEqual([
         'openWith',
         'space',

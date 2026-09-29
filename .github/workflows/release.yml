@@ -71,7 +71,7 @@ jobs:
         run: |
           # Retry through transient GitHub API outages (HTTP 5xx/429): view
           # first, create only when the tag has no release yet.
-          for attempt in 1 2 3 4 5 6; do
+          for _ in 1 2 3 4 5 6; do
             if gh release view "$RELEASE_TAG" --json databaseId >/dev/null 2>&1; then
               break
             fi
@@ -97,7 +97,9 @@ jobs:
       - run: npm ci --include=dev
       - run: npm run build
       - name: Build and test the native Quick Look host
-        run: TEXTMARK_SKIP_WEB_BUILD=1 platform/macos/build-quicklook.sh
+        run: platform/macos/build-quicklook.sh
+        env:
+          TEXTMARK_SKIP_WEB_BUILD: '1'
       - name: Build macOS ARM64 DMG
         shell: bash
         run: npm run tauri build -- --target aarch64-apple-darwin --bundles dmg
@@ -152,6 +154,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Install/mount/Quick Look registration smoke
         shell: bash
+        env:
+          APPLE_REQUIRE_NOTARIZATION: '0'
         run: |
           for dmg in \
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/TextMark_*.dmg \
@@ -440,7 +444,13 @@ jobs:
           test -s current-release-notes.md
       - name: Create SHA-256 checksums
         working-directory: release-assets
-        run: find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          checksum_file=$(mktemp)
+          trap 'rm -f "$checksum_file"' EXIT
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\0' | sort -z | xargs -0 sha256sum > "$checksum_file"
+          mv "$checksum_file" SHA256SUMS.txt
+          trap - EXIT
       - name: Upload release metadata
         run: gh release upload "$RELEASE_TAG" release-assets/latest.json release-assets/SHA256SUMS.txt release-assets/*-sbom.cdx.json release-assets/INSTALL.md release-assets/RELEASE_NOTES.md release-assets/THIRD_PARTY_NOTICES.md --clobber
         env: { GH_TOKEN: '${{ github.token }}' }

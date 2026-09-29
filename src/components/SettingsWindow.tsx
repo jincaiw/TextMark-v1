@@ -68,6 +68,7 @@ export function SettingsWindow() {
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
         lineHeight={settings.lineHeight}
+        strictLineBreaks={settings.strictLineBreaks}
         pagePaddingHorizontal={settings.pagePaddingHorizontal}
         documentFont={settings.documentFont}
         themePreset={settings.themePreset}
@@ -86,6 +87,7 @@ export function SettingsWindow() {
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
         onLineHeightChange={setLineHeight}
+        onStrictLineBreaksChange={(strictLineBreaks) => patch({ strictLineBreaks })}
         onPagePaddingHorizontalChange={setPagePaddingHorizontal}
         onDocumentFontChange={setDocumentFont}
         onThemePresetChange={(themePreset) => {

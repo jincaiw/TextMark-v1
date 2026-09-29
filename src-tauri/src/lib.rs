@@ -7,7 +7,7 @@ use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::{
-    fs,
+    fs::{self, OpenOptions},
     io::{Cursor, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -1304,6 +1304,20 @@ fn revision(metadata: &fs::Metadata) -> String {
     )
 }
 
+fn ensure_file_replaceable(path: &Path) -> AppResult<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let metadata = fs::metadata(path).map_err(io_error)?;
+    // AtomicWriteFile replaces an existing path through its parent directory.
+    // Probe the file itself first so a writable parent cannot bypass the
+    // target's mode bits, ACL, or platform read-only attribute.
+    if metadata.permissions().readonly() || OpenOptions::new().write(true).open(path).is_err() {
+        return Err(AppError { code: "read_only" });
+    }
+    Ok(())
+}
+
 fn is_markdown(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
@@ -1809,9 +1823,16 @@ fn write_text_file(
             code: "invalid_document",
         });
     }
-    if target.exists() && !force {
+    if target.exists() {
         let current = fs::metadata(&target).map_err(io_error)?;
-        if let Some(expected) = expected_revision
+        // AtomicWriteFile replaces the destination inode at commit time. That
+        // can bypass the file's write bit when its parent directory is
+        // writable, so probe the existing file itself before creating the
+        // replacement. Keep this check even for force saves: force resolves
+        // revision conflicts, not OS read-only protection.
+        ensure_file_replaceable(&target)?;
+        if !force
+            && let Some(expected) = expected_revision
             && revision(&current) != expected
         {
             return Err(AppError {
@@ -1828,6 +1849,7 @@ fn write_text_file(
 #[tauri::command]
 fn save_export_bytes(path: String, bytes: Vec<u8>) -> AppResult<()> {
     let target = PathBuf::from(path);
+    ensure_file_replaceable(&target)?;
     let mut file = AtomicWriteFile::open(&target).map_err(io_error)?;
     file.write_all(&bytes).map_err(io_error)?;
     file.commit().map_err(io_error)
@@ -3022,6 +3044,77 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.code, "save_conflict");
         assert_eq!(fs::read_to_string(&path).unwrap(), "external");
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn atomic_save_rejects_read_only_targets_without_replacing_them() {
+        let path =
+            std::env::temp_dir().join(format!("textmark-read-only-save-{}.md", std::process::id()));
+        fs::write(&path, "original").unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() & !0o222);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(true);
+        fs::set_permissions(&path, permissions).unwrap();
+
+        let result = write_text_file(
+            path.to_string_lossy().to_string(),
+            "replacement".into(),
+            None,
+            true,
+        );
+
+        assert_eq!(result.unwrap_err().code, "read_only");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original");
+
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(0o600);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(false);
+        fs::set_permissions(&path, permissions).unwrap();
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn atomic_export_rejects_read_only_targets_without_replacing_them() {
+        let path = std::env::temp_dir().join(format!(
+            "textmark-read-only-export-{}.html",
+            std::process::id()
+        ));
+        fs::write(&path, "original export").unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() & !0o222);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(true);
+        fs::set_permissions(&path, permissions).unwrap();
+
+        let result = save_export_bytes(path.to_string_lossy().to_string(), b"replacement".to_vec());
+
+        assert_eq!(result.unwrap_err().code, "read_only");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original export");
+
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(0o600);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(false);
+        fs::set_permissions(&path, permissions).unwrap();
         fs::remove_file(path).unwrap();
     }
 

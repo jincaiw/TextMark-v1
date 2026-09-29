@@ -1,14 +1,20 @@
-import { Range } from '@codemirror/state'
+import { Range, StateField, type EditorState } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 import { BlockWrapper, Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { markdownImageReferences } from './pastedImages'
 import { splitFrontmatter } from './frontmatter'
+import { renderMath } from './mathRender'
+import { renderMarkdown } from './markdown'
+import { sanitizeMermaidSvg } from './sanitize'
 
 const lineClass = (line: string) => {
+  if (/^\s{0,3}\[\^[^\]]+\]:/.test(line)) return 'cm-md-footnote-definition'
   const quotePrefix = markdownQuotePrefix(line)
   const quoteContent = line.slice(quotePrefix.length)
   const alert = quoteContent.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)
   if (alert) return `cm-md-quote cm-md-quote-alert cm-md-quote-alert-${alert[1].toLowerCase()}`
+  const heading = line.match(/^ {0,3}(#{1,6})(?:\s|$)/)
+  if (heading) return `cm-md-h${heading[1].length}`
   const fence = quoteContent.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?/)
   if (fence) return fence[2]?.toLowerCase() === 'mermaid' ? 'cm-md-mermaid-fence' : 'cm-md-code-fence'
   if (/^\s*(?:\$\$|\\\[|\\\])\s*$/.test(line)) return 'cm-md-math'
@@ -18,6 +24,38 @@ const lineClass = (line: string) => {
   if (quotePrefix) return 'cm-md-quote'
   if (/^\s*(?:[-+*]|\d+[.)])\s+/.test(line)) return 'cm-md-list'
   return ''
+}
+
+interface MarkdownFootnotes {
+  numberById: Map<string, number>
+  targetById: Map<string, number>
+}
+
+function markdownFootnotes(state: EditorState): MarkdownFootnotes {
+  const numberById = new Map<string, number>()
+  const targetById = new Map<string, number>()
+  const codeRanges: Array<[number, number]> = []
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === 'FencedCode' || node.name === 'CodeBlock') codeRanges.push([node.from, node.to])
+    },
+  })
+  const inCode = (position: number) => codeRanges.some(([from, to]) => position >= from && position <= to)
+  for (let number = 1; number <= state.doc.lines; number += 1) {
+    const line = state.doc.line(number)
+    const definition = line.text.match(/^\s{0,3}\[\^([^\]]+)\]:[ \t]*/)
+    if (definition && !targetById.has(definition[1])) targetById.set(definition[1], line.from + definition[0].length)
+  }
+  for (let number = 1; number <= state.doc.lines; number += 1) {
+    const line = state.doc.line(number)
+    if (/^\s{0,3}\[\^[^\]]+\]:/.test(line.text)) continue
+    for (const match of line.text.matchAll(/\[\^([^\]]+)\]/g)) {
+      const position = line.from + (match.index ?? 0)
+      if (inCode(position) || !targetById.has(match[1]) || numberById.has(match[1])) continue
+      numberById.set(match[1], numberById.size + 1)
+    }
+  }
+  return { numberById, targetById }
 }
 
 function markdownQuotePrefix(line: string): string {
@@ -142,6 +180,340 @@ export function markdownMathLines(source: string): Set<number> {
   return result
 }
 
+interface MathBlockRange {
+  from: number
+  to: number
+  source: string
+}
+
+/** Finds display-math ranges without interpreting math inside ordinary fences. */
+export function markdownMathBlocks(source: string): MathBlockRange[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    offsets.push(offset)
+    offset += line.length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+  const blocks: MathBlockRange[] = []
+  let open: { index: number; delimiter: '$$' | '\\[' | 'fence'; fenceChar?: string; fenceLength?: number } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?.*$/)
+    if (!open) {
+      if (fence && /^(?:math|latex|tex)$/i.test(fence[2] ?? '')) {
+        open = { index, delimiter: 'fence', fenceChar: fence[1][0], fenceLength: fence[1].length }
+      } else {
+        const trimmed = line.trim()
+        if (trimmed === '$$' || trimmed === '\\[') open = { index, delimiter: trimmed as '$$' | '\\[' }
+      }
+      continue
+    }
+    const closes =
+      open.delimiter === 'fence'
+        ? Boolean(fence && fence[1][0] === open.fenceChar && fence[1].length >= (open.fenceLength ?? 3))
+        : line.trim() === (open.delimiter === '$$' ? '$$' : '\\]')
+    if (!closes) continue
+    const from = offsets[open.index]
+    const to = offsets[index] + line.length
+    const sourceText = lines.slice(open.index + 1, index).join('\n')
+    blocks.push({ from, to, source: sourceText })
+    open = null
+  }
+  return blocks
+}
+
+function markdownMermaidBlocks(source: string): MathBlockRange[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    offsets.push(offset)
+    offset += lines[index].length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+  const blocks: MathBlockRange[] = []
+  let open: { index: number; marker: string } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const quote = markdownQuotePrefix(lines[index])
+    const line = lines[index].slice(quote.length)
+    const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)?.*$/)
+    if (!open) {
+      if (fence && (fence[2] ?? '').toLowerCase() === 'mermaid') open = { index, marker: fence[1] }
+      continue
+    }
+    if (!fence || fence[1][0] !== open.marker[0] || fence[1].length < open.marker.length) continue
+    const diagram = lines
+      .slice(open.index + 1, index)
+      .map((value) => value.slice(markdownQuotePrefix(value).length))
+      .join('\n')
+    blocks.push({ from: offsets[open.index], to: offsets[index] + lines[index].length, source: diagram })
+    open = null
+  }
+  return blocks
+}
+
+interface MarkdownDetailsBlock extends MathBlockRange {
+  summary: string
+  open: boolean
+}
+
+type MarkdownHtmlBlock = MathBlockRange
+type MarkdownTableBlock = MathBlockRange
+type MarkdownQuoteBlock = MathBlockRange
+type MarkdownTocBlock = MathBlockRange
+
+/** Finds standalone [TOC] directives outside frontmatter and fenced code. */
+function markdownTocBlocks(source: string): MarkdownTocBlock[] {
+  const lines = source.split(/\r?\n/)
+  const blocks: MarkdownTocBlock[] = []
+  let offset = 0
+  let fence: { character: string; length: number } | null = null
+  let frontmatter = false
+  let frontmatterClosed = false
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (index === 0 && /^\uFEFF?(---|\+\+\+)\s*$/.test(line)) frontmatter = true
+    if (frontmatter && !frontmatterClosed) {
+      if (index > 0 && /^(?:---|\.\.\.|\+\+\+)\s*$/.test(line)) {
+        frontmatter = false
+        frontmatterClosed = true
+      }
+    } else {
+      const codeFence = line.match(/^\s*(`{3,}|~{3,})/)
+      if (fence) {
+        if (codeFence && codeFence[1][0] === fence.character && codeFence[1].length >= fence.length) fence = null
+      } else if (codeFence) {
+        fence = { character: codeFence[1][0], length: codeFence[1].length }
+      } else if (/^ {0,3}\[TOC\]\s*$/i.test(line)) {
+        blocks.push({ from: offset, to: offset + line.length, source: line })
+      }
+    }
+    offset +=
+      line.length + (index < lines.length - 1 ? (source.slice(offset + line.length, offset + line.length + 2) === '\r\n' ? 2 : 1) : 0)
+  }
+  return blocks
+}
+
+function markdownDetailsBlocks(source: string): MarkdownDetailsBlock[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    offsets.push(offset)
+    offset += lines[index].length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+
+  const blocks: MarkdownDetailsBlock[] = []
+  let outerFence: { character: string; length: number } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const opening = lines[index].match(/^ {0,3}<details\b([^>]*)>\s*$/i)
+    const fence = lines[index].match(/^\s*(`{3,}|~{3,})/)
+    if (outerFence) {
+      if (fence && fence[1][0] === outerFence.character && fence[1].length >= outerFence.length) outerFence = null
+      continue
+    }
+    if (!opening) {
+      if (fence) outerFence = { character: fence[1][0], length: fence[1].length }
+      continue
+    }
+
+    let depth = 1
+    let innerFence: { character: string; length: number } | null = null
+    let summary = ''
+    const body: string[] = []
+    let closingLine = -1
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor]
+      const codeFence = line.match(/^\s*(`{3,}|~{3,})/)
+      if (innerFence) {
+        body.push(line)
+        if (codeFence && codeFence[1][0] === innerFence.character && codeFence[1].length >= innerFence.length) innerFence = null
+        continue
+      }
+      if (codeFence) {
+        innerFence = { character: codeFence[1][0], length: codeFence[1].length }
+        body.push(line)
+        continue
+      }
+      if (/^\s*<details\b[^>]*>\s*$/i.test(line)) {
+        depth += 1
+        body.push(line)
+        continue
+      }
+      if (/^\s*<\/details>\s*$/i.test(line)) {
+        depth -= 1
+        if (depth === 0) {
+          closingLine = cursor
+          break
+        }
+        body.push(line)
+        continue
+      }
+      const summaryMatch = line.match(/^\s*<summary(?:\s[^>]*)?>([\s\S]*)<\/summary>\s*$/i)
+      if (summaryMatch && depth === 1 && !summary) {
+        summary = summaryMatch[1]
+        continue
+      }
+      body.push(line)
+    }
+    if (closingLine < 0) continue
+    const summaryText = document.createElement('textarea')
+    summaryText.innerHTML = summary
+    blocks.push({
+      from: offsets[index],
+      to: offsets[closingLine] + lines[closingLine].length,
+      source: body.join('\n'),
+      summary: summaryText.value || 'Details',
+      open: /(?:^|\s)open(?:\s|=|$)/i.test(opening[1]),
+    })
+    index = closingLine
+  }
+  return blocks
+}
+
+/** Finds standalone container HTML blocks while ignoring fenced code. */
+function markdownHtmlBlocks(source: string): MarkdownHtmlBlock[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    offsets.push(offset)
+    offset += lines[index].length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+
+  const blocks: MarkdownHtmlBlock[] = []
+  let fence: { character: string; length: number } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const codeFence = line.match(/^\s*(`{3,}|~{3,})/)
+    if (fence) {
+      if (codeFence && codeFence[1][0] === fence.character && codeFence[1].length >= fence.length) fence = null
+      continue
+    }
+    if (codeFence) {
+      fence = { character: codeFence[1][0], length: codeFence[1].length }
+      continue
+    }
+    const opening = line.match(/^ {0,3}<(div|section|article|aside|figure|center)\b[^>]*>\s*$/i)
+    if (!opening) continue
+
+    const tag = opening[1].toLowerCase()
+    let depth = 1
+    let innerFence: { character: string; length: number } | null = null
+    let closingLine = -1
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const current = lines[cursor]
+      const currentFence = current.match(/^\s*(`{3,}|~{3,})/)
+      if (innerFence) {
+        if (currentFence && currentFence[1][0] === innerFence.character && currentFence[1].length >= innerFence.length) innerFence = null
+        continue
+      }
+      if (currentFence) {
+        innerFence = { character: currentFence[1][0], length: currentFence[1].length }
+        continue
+      }
+      for (const match of current.matchAll(new RegExp(`<\\/?${tag}\\b[^>]*>`, 'gi'))) {
+        if (match[0].startsWith('</')) depth -= 1
+        else if (!/\/\s*>$/.test(match[0])) depth += 1
+        if (depth === 0) {
+          closingLine = cursor
+          break
+        }
+      }
+      if (closingLine >= 0) break
+    }
+    if (closingLine < 0) continue
+    blocks.push({
+      from: offsets[index],
+      to: offsets[closingLine] + lines[closingLine].length,
+      source: lines.slice(index, closingLine + 1).join('\n'),
+    })
+    index = closingLine
+  }
+  return blocks
+}
+
+/** Finds GFM pipe tables as complete source ranges, excluding fenced examples. */
+function markdownTableBlocks(source: string): MarkdownTableBlock[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    offsets.push(offset)
+    offset += lines[index].length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+
+  const blocks: MarkdownTableBlock[] = []
+  let fence: { character: string; length: number } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const codeFence = lines[index].match(/^\s*(`{3,}|~{3,})/)
+    if (fence) {
+      if (codeFence && codeFence[1][0] === fence.character && codeFence[1].length >= fence.length) fence = null
+      continue
+    }
+    if (codeFence) {
+      fence = { character: codeFence[1][0], length: codeFence[1].length }
+      continue
+    }
+    if (!tableSeparator(lines[index]) || !tableRowCandidate(lines[index])) continue
+
+    let first = index
+    let last = index
+    while (first > 0 && tableRowCandidate(lines[first - 1]) && !/^\s*(`{3,}|~{3,})/.test(lines[first - 1])) first -= 1
+    while (last + 1 < lines.length && tableRowCandidate(lines[last + 1]) && !/^\s*(`{3,}|~{3,})/.test(lines[last + 1])) last += 1
+    blocks.push({ from: offsets[first], to: offsets[last] + lines[last].length, source: lines.slice(first, last + 1).join('\n') })
+    index = last
+  }
+  return blocks
+}
+
+/** Finds contiguous blockquote source regions while ignoring examples in fences. */
+function markdownQuoteBlocks(source: string): MarkdownQuoteBlock[] {
+  const lines = source.split(/\r?\n/)
+  const offsets: number[] = []
+  let offset = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    offsets.push(offset)
+    offset += lines[index].length
+    if (index < lines.length - 1) offset += source.slice(offset, offset + 2) === '\r\n' ? 2 : 1
+  }
+
+  const blocks: MarkdownQuoteBlock[] = []
+  let fence: { character: string; length: number } | null = null
+  for (let index = 0; index < lines.length; index += 1) {
+    const codeFence = lines[index].match(/^\s*(`{3,}|~{3,})/)
+    if (fence) {
+      if (codeFence && codeFence[1][0] === fence.character && codeFence[1].length >= fence.length) fence = null
+      continue
+    }
+    if (codeFence) {
+      fence = { character: codeFence[1][0], length: codeFence[1].length }
+      continue
+    }
+    if (!markdownQuotePrefix(lines[index])) continue
+
+    const first = index
+    while (index + 1 < lines.length && markdownQuotePrefix(lines[index + 1])) index += 1
+    const last = index
+    blocks.push({ from: offsets[first], to: offsets[last] + lines[last].length, source: lines.slice(first, last + 1).join('\n') })
+  }
+  return blocks
+}
+
+function canRenderQuotePreview(block: MarkdownQuoteBlock) {
+  return (
+    !/!\[[^\]]*\]\([^)]*\)/.test(block.source) &&
+    !/\[\^[^\]]+\]/.test(block.source) &&
+    !/^\s*>\s*(?:`{3,}|~{3,})\s*mermaid\b/im.test(block.source)
+  )
+}
+
 export function markdownAlertLines(source: string): Map<number, string> {
   const lines = source.split(/\r?\n/)
   const result = new Map<number, string>()
@@ -178,8 +550,8 @@ export function markdownFrontmatterLines(source: string): Map<number, string> {
   const closingIndex = lines.findIndex((line, index) => index > 0 && close.test(line))
   if (closingIndex < 0) return new Map()
   const result = new Map<number, string>([
-    [1, 'cm-md-frontmatter-boundary'],
-    [closingIndex + 1, 'cm-md-frontmatter-boundary'],
+    [1, 'cm-md-frontmatter-boundary cm-md-frontmatter-start'],
+    [closingIndex + 1, 'cm-md-frontmatter-boundary cm-md-frontmatter-end'],
   ])
   for (let index = 1; index < closingIndex; index += 1)
     if (/^[A-Za-z][\w-]*:\s*/.test(lines[index])) result.set(index + 1, 'cm-md-frontmatter-value')
@@ -199,12 +571,22 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   const add = (from: number, to: number, className = 'cm-md-syntax-marker') => {
     if (to > from) markers.push({ from, to, className })
   }
+  const isEscaped = (offset: number) => {
+    let backslashes = 0
+    for (let index = offset - 1; index >= 0 && line[index] === '\\'; index -= 1) backslashes += 1
+    return backslashes % 2 === 1
+  }
   const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)/)
   if (prefix) {
     const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? 0
     const marker = prefix[2] ?? prefix[4] ?? ''
-    const markerClass = prefix[4] ? (/^\d/.test(marker) ? 'cm-md-list-ordered-marker' : 'cm-md-list-marker') : 'cm-md-syntax-marker'
-    add(markerStart, markerStart + marker.length, markerClass)
+    if (prefix[2]) {
+      const headingPrefix = line.match(/^\s{0,3}#{1,6}\s+/)?.[0] ?? `${prefix[1]}${marker}`
+      add(0, headingPrefix.length, 'cm-md-heading-marker')
+    } else {
+      const markerClass = /^\d/.test(marker) ? 'cm-md-list-ordered-marker' : 'cm-md-list-marker'
+      add(markerStart, markerStart + marker.length, markerClass)
+    }
   }
   for (const match of line.matchAll(/(^|\s)(>)(?=\s|$)/g)) {
     const start = (match.index ?? 0) + match[1].length
@@ -222,6 +604,11 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
     )
   const fence = line.match(/^(\s*)(`{3,}|~{3,})(?:\s*[^\s]*)?\s*$/)
   if (fence) add(fence[1].length, fence[1].length + fence[2].length, 'cm-md-fence-marker')
+  const trailingBackslashes = line.match(/(\\+)[ \t]*$/)
+  if (trailingBackslashes && trailingBackslashes[1].length % 2 === 1) {
+    const offset = (trailingBackslashes.index ?? 0) + trailingBackslashes[1].length - 1
+    add(offset, offset + 1, 'cm-md-hardbreak-marker')
+  }
   if (/^\s*\|.*\|\s*$/.test(line)) {
     for (const match of line.matchAll(/\|/g)) add(match.index ?? 0, (match.index ?? 0) + 1, 'cm-md-table-marker')
   }
@@ -229,6 +616,7 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   // there), and let inactive lines read like rendered content. These ranges
   // are intentionally limited to simple, single-line inline constructs.
   for (const match of line.matchAll(/\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|`[^`\n]+`|\*(?!\*)[^*\n]+\*(?!\*)|_(?!_)[^_\n]+_(?!_)/g)) {
+    if (isEscaped(match.index ?? 0)) continue
     const value = match[0]
     const start = match.index ?? 0
     const delimiter = value.startsWith('**') || value.startsWith('~~') || value.startsWith('==') ? 2 : 1
@@ -237,6 +625,7 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
   }
   for (const match of line.matchAll(/\[([^\]\n]+)\]\(([^)\n]+)\)/g)) {
     const start = match.index ?? 0
+    if (isEscaped(start)) continue
     const labelEnd = start + match[0].indexOf(']')
     add(start, start + 1, 'cm-md-inline-syntax')
     add(labelEnd, start + match[0].length, 'cm-md-inline-syntax')
@@ -245,6 +634,7 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
 }
 
 const inlinePattern = /==[^=\n]+==/g
+const inlineHtmlPattern = /<(kbd|sup|sub|mark)>([^<>\n]*)<\/\1>/gi
 const inlineNodeClasses: Record<string, string> = {
   StrongEmphasis: 'cm-md-strong',
   Emphasis: 'cm-md-italic',
@@ -296,7 +686,13 @@ class ImagePreviewWidget extends WidgetType {
     button.append(image)
     void this.options.resolveImage?.(this.path).then((source) => {
       if (source && button.isConnected) image.src = source
-      else if (button.isConnected) button.classList.add('asset-error')
+      else if (button.isConnected) {
+        button.classList.add('asset-error')
+        const fallback = document.createElement('span')
+        fallback.className = 'cm-md-image-fallback'
+        fallback.textContent = this.alt || this.path
+        button.append(fallback)
+      }
     })
     button.addEventListener('mousedown', (event) => event.preventDefault())
     button.addEventListener('click', () => this.options.onRenameImage?.(this.path))
@@ -305,6 +701,367 @@ class ImagePreviewWidget extends WidgetType {
 
   ignoreEvent() {
     return false
+  }
+}
+
+class MathPreviewWidget extends WidgetType {
+  constructor(
+    readonly source: string,
+    readonly displayMode: boolean,
+  ) {
+    super()
+  }
+
+  eq(other: MathPreviewWidget) {
+    return other.source === this.source && other.displayMode === this.displayMode
+  }
+
+  toDOM() {
+    const element = document.createElement(this.displayMode ? 'div' : 'span')
+    element.className = `cm-md-math-preview${this.displayMode ? ' cm-md-math-preview-display' : ''}`
+    element.setAttribute('contenteditable', 'false')
+    element.innerHTML = renderMath(this.source, this.displayMode)
+    return element
+  }
+
+  ignoreEvent() {
+    return false
+  }
+}
+
+class InlineHtmlWidget extends WidgetType {
+  constructor(
+    readonly tag: 'kbd' | 'sup' | 'sub' | 'mark',
+    readonly content: string,
+  ) {
+    super()
+  }
+
+  eq(other: InlineHtmlWidget) {
+    return this.tag === other.tag && this.content === other.content
+  }
+
+  toDOM() {
+    const element = document.createElement(this.tag)
+    element.className = `cm-md-inline-html cm-md-inline-html-${this.tag}`
+    const text = document.createElement('textarea')
+    text.innerHTML = this.content
+    element.textContent = text.value
+    return element
+  }
+}
+
+class InlineSemanticWidget extends WidgetType {
+  constructor(
+    readonly tag: 'ins' | 'sup' | 'sub',
+    readonly content: string,
+  ) {
+    super()
+  }
+
+  eq(other: InlineSemanticWidget) {
+    return this.tag === other.tag && this.content === other.content
+  }
+
+  toDOM() {
+    const element = document.createElement(this.tag)
+    element.className = `cm-md-inline-semantic cm-md-inline-semantic-${this.tag}`
+    element.textContent = this.content
+    return element
+  }
+}
+
+class EntityWidget extends WidgetType {
+  constructor(readonly value: string) {
+    super()
+  }
+
+  eq(other: EntityWidget) {
+    return this.value === other.value
+  }
+
+  toDOM() {
+    const element = document.createElement('span')
+    element.className = 'cm-md-entity'
+    element.textContent = this.value
+    return element
+  }
+}
+
+class DetailsPreviewWidget extends WidgetType {
+  constructor(
+    readonly summaryText: string,
+    readonly bodySource: string,
+    readonly initiallyOpen: boolean,
+  ) {
+    super()
+  }
+
+  eq(other: DetailsPreviewWidget) {
+    return this.summaryText === other.summaryText && this.bodySource === other.bodySource && this.initiallyOpen === other.initiallyOpen
+  }
+
+  toDOM() {
+    const details = document.createElement('details')
+    details.className = 'cm-md-details-preview'
+    details.open = this.initiallyOpen
+    const summary = document.createElement('summary')
+    summary.textContent = this.summaryText
+    details.append(summary)
+
+    const body = document.createElement('div')
+    body.className = 'cm-md-details-body markdown-body'
+    body.innerHTML = renderMarkdown(this.bodySource).html
+    details.append(body)
+    return details
+  }
+
+  ignoreEvent(event: Event) {
+    return event.target instanceof Element && Boolean(event.target.closest('summary'))
+  }
+}
+
+class HtmlBlockPreviewWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super()
+  }
+
+  eq(other: HtmlBlockPreviewWidget) {
+    return this.source === other.source
+  }
+
+  toDOM() {
+    const element = document.createElement('div')
+    element.className = 'cm-md-html-block-preview markdown-body'
+    element.innerHTML = renderMarkdown(this.source).html
+    return element
+  }
+}
+
+class TablePreviewWidget extends WidgetType {
+  constructor(readonly block: MarkdownTableBlock) {
+    super()
+  }
+
+  eq(other: TablePreviewWidget) {
+    return this.block.from === other.block.from && this.block.to === other.block.to && this.block.source === other.block.source
+  }
+
+  toDOM(view: EditorView) {
+    const element = document.createElement('div')
+    element.className = 'cm-md-table-preview markdown-body'
+    element.innerHTML = renderMarkdown(this.block.source).html
+    element.querySelectorAll<HTMLTableCellElement>('th, td').forEach((cell) => {
+      cell.tabIndex = 0
+    })
+    const enterSourceCell = (cell: HTMLTableCellElement, event: MouseEvent | KeyboardEvent) => {
+      const row = cell.parentElement as HTMLTableRowElement | null
+      const table = cell.closest('table')
+      if (!row || !table) return
+      event.preventDefault()
+      event.stopPropagation()
+
+      const rowIndex = [...table.querySelectorAll('tr')].indexOf(row)
+      const cellIndex = [...row.cells].indexOf(cell)
+      // Markdown's delimiter row is omitted from the rendered table body.
+      const sourceLineIndex = rowIndex === 0 ? 0 : rowIndex + 1
+      const firstLine = view.state.doc.lineAt(this.block.from)
+      const sourceLineNumber = firstLine.number + sourceLineIndex
+      if (sourceLineNumber > view.state.doc.lines) return
+      const sourceLine = view.state.doc.line(sourceLineNumber)
+      const range = markdownTableCellRanges(sourceLine.text)[cellIndex]
+      if (!range) return
+
+      const rawCell = sourceLine.text.slice(range.from, range.to)
+      const leadingWhitespace = rawCell.length - rawCell.trimStart().length
+      const trimmedEnd = rawCell.trimEnd().length
+      const from = sourceLine.from + range.from + leadingWhitespace
+      const to = sourceLine.from + range.from + trimmedEnd
+      view.dispatch({ selection: { anchor: from, head: Math.max(from, to) }, scrollIntoView: true })
+      view.focus()
+    }
+    element.addEventListener('mousedown', (event) => {
+      if (event.target instanceof Element && event.target.closest('th, td')) event.preventDefault()
+    })
+    element.addEventListener('click', (event) => {
+      const cell = event.target instanceof Element ? event.target.closest<HTMLTableCellElement>('th, td') : null
+      if (cell) enterSourceCell(cell, event)
+    })
+    element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== 'F2') return
+      const cell = event.target instanceof Element ? event.target.closest<HTMLTableCellElement>('th, td') : null
+      if (cell) enterSourceCell(cell, event)
+    })
+    return element
+  }
+
+  ignoreEvent(event: Event) {
+    return event.target instanceof Element && Boolean(event.target.closest('th, td'))
+  }
+}
+
+class TocPreviewWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super()
+  }
+
+  eq(other: TocPreviewWidget) {
+    return this.source === other.source
+  }
+
+  toDOM(view: EditorView) {
+    const element = document.createElement('div')
+    element.className = 'cm-md-toc-preview markdown-body'
+    const rendered = renderMarkdown(view.state.doc.toString())
+    const nav = new DOMParser().parseFromString(rendered.html, 'text/html').querySelector('.table-of-contents')
+    if (!nav) {
+      element.classList.add('cm-md-toc-empty')
+      return element
+    }
+    element.append(nav)
+    element.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href^="#"]') : null
+      if (!target) return
+      let id = target.hash.slice(1)
+      try {
+        id = decodeURIComponent(id)
+      } catch {
+        // Preserve literal percent characters in headings when they are not a valid escape.
+      }
+      const heading = rendered.outline.find((item) => item.id === id)
+      if (!heading) return
+      event.preventDefault()
+      const position = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, heading.line))).from
+      view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'center' }) })
+      view.focus()
+    })
+    return element
+  }
+
+  ignoreEvent(event: Event) {
+    return event.target instanceof Element && Boolean(event.target.closest('a'))
+  }
+}
+
+class QuotePreviewWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super()
+  }
+
+  eq(other: QuotePreviewWidget) {
+    return this.source === other.source
+  }
+
+  toDOM() {
+    const element = document.createElement('div')
+    element.className = 'cm-md-quote-preview markdown-body'
+    element.innerHTML = renderMarkdown(this.source).html
+    return element
+  }
+}
+
+let mermaidRenderSequence = 0
+
+class MermaidPreviewWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super()
+  }
+
+  eq(other: MermaidPreviewWidget) {
+    return other.source === this.source
+  }
+
+  toDOM() {
+    const figure = document.createElement('figure')
+    figure.className = 'cm-md-mermaid-preview'
+    const diagram = document.createElement('div')
+    diagram.className = 'cm-md-mermaid'
+    diagram.setAttribute('aria-label', 'Mermaid diagram')
+    diagram.textContent = 'Rendering diagram…'
+    figure.append(diagram)
+    const renderId = `textmark-editor-mermaid-${++mermaidRenderSequence}`
+    void import('mermaid')
+      .then(async ({ default: mermaid }) => {
+        if (!diagram.isConnected) return null
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'neutral',
+          fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
+          flowchart: { htmlLabels: true },
+        })
+        return mermaid.render(renderId, this.source)
+      })
+      .then((result) => {
+        if (result && diagram.isConnected) diagram.innerHTML = sanitizeMermaidSvg(result.svg)
+      })
+      .catch(() => {
+        if (!diagram.isConnected) return
+        diagram.classList.add('render-error')
+        diagram.textContent = this.source
+      })
+    return figure
+  }
+
+  ignoreEvent() {
+    return false
+  }
+}
+
+class FootnoteReferenceWidget extends WidgetType {
+  constructor(
+    readonly number: number,
+    readonly target: number,
+  ) {
+    super()
+  }
+
+  eq(other: FootnoteReferenceWidget) {
+    return other.number === this.number && other.target === this.target
+  }
+
+  toDOM(view: EditorView) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.tabIndex = -1
+    button.className = 'cm-md-footnote-reference'
+    button.textContent = String(this.number)
+    button.setAttribute('aria-label', `Footnote ${this.number}`)
+    button.title = `Footnote ${this.number}`
+    button.addEventListener('mousedown', (event) => event.preventDefault())
+    button.addEventListener('click', () => {
+      view.dispatch({
+        selection: { anchor: this.target },
+        effects: EditorView.scrollIntoView(this.target, { y: 'center' }),
+      })
+      view.focus()
+    })
+    return button
+  }
+
+  ignoreEvent() {
+    return true
+  }
+}
+
+class LinkDefinitionWidget extends WidgetType {
+  constructor(
+    readonly label: string,
+    readonly destination: string,
+  ) {
+    super()
+  }
+
+  eq(other: LinkDefinitionWidget) {
+    return this.label === other.label && this.destination === other.destination
+  }
+
+  toDOM() {
+    const element = document.createElement('span')
+    element.className = 'cm-md-link-definition'
+    element.textContent = `Link reference · ${this.label} → ${this.destination}`
+    element.title = this.destination
+    return element
   }
 }
 
@@ -325,6 +1082,39 @@ class EmptyTableCellWidget extends WidgetType {
   }
 }
 
+class TaskCheckboxWidget extends WidgetType {
+  constructor(
+    readonly checked: boolean,
+    readonly from: number,
+    readonly to: number,
+  ) {
+    super()
+  }
+
+  eq(other: TaskCheckboxWidget) {
+    return this.checked === other.checked && this.from === other.from && this.to === other.to
+  }
+
+  toDOM(view: EditorView) {
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.className = 'cm-md-task-checkbox'
+    checkbox.checked = this.checked
+    checkbox.setAttribute('aria-label', this.checked ? 'Mark task incomplete' : 'Mark task complete')
+    checkbox.addEventListener('mousedown', (event) => event.preventDefault())
+    checkbox.addEventListener('click', (event) => {
+      event.preventDefault()
+      view.dispatch({ changes: { from: this.from, to: this.to, insert: this.checked ? '[ ]' : '[x]' } })
+      view.focus()
+    })
+    return checkbox
+  }
+
+  ignoreEvent(event: Event) {
+    return event.target instanceof HTMLInputElement
+  }
+}
+
 function buildDecorations(
   view: EditorView,
   options: EditorMarkdownDecorationOptions,
@@ -333,14 +1123,68 @@ function buildDecorations(
   frontmatterLines: Map<number, string>,
   mathLines: Set<number>,
   alertLines: Map<number, string>,
+  detailsBlocks: MarkdownDetailsBlock[],
+  htmlBlocks: MarkdownHtmlBlock[],
+  tableBlocks: MarkdownTableBlock[],
+  quoteBlocks: MarkdownQuoteBlock[],
+  tocBlocks: MarkdownTocBlock[],
 ): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
   const tree = syntaxTree(view.state)
-  const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number
+  const selection = view.state.selection.main
+  const footnotes = markdownFootnotes(view.state)
+  const setextHeadingLines = new Map<number, string>()
+  const setextMarkerLines = new Set<number>()
+  tree.iterate({
+    enter(node) {
+      if (node.name !== 'SetextHeading1' && node.name !== 'SetextHeading2') return
+      const headingLine = view.state.doc.lineAt(node.from)
+      const markerLine = view.state.doc.lineAt(node.to - 1)
+      setextHeadingLines.set(headingLine.number, node.name === 'SetextHeading1' ? 'cm-md-h1' : 'cm-md-h2')
+      setextMarkerLines.add(markerLine.number)
+    },
+  })
+  const visibleDetailsBlocks = detailsBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const visibleHtmlBlocks = htmlBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const standaloneHtmlBlocks = visibleHtmlBlocks.filter(
+    (html) =>
+      !detailsBlocks.some((details) => html.from >= details.from && html.to <= details.to) &&
+      !quoteBlocks.some((quote) => html.from >= quote.from && html.to <= quote.to),
+  )
+  const visibleTableBlocks = tableBlocks.filter(
+    (block) =>
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to) &&
+      !quoteBlocks.some((quote) => block.from >= quote.from && block.to <= quote.to),
+  )
+  const visibleQuoteBlocks = quoteBlocks.filter(
+    (block) =>
+      canRenderQuotePreview(block) &&
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to),
+  )
+  const visibleTocBlocks = tocBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  // Keep the rendered appearance on the caret line too. Only reveal Markdown
+  // delimiters while the user is editing/selecting the delimiter itself.
+  const markerClassForSelection = (from: number, to: number, className: string) => {
+    const touchesMarker = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+    return touchesMarker ? `${className} cm-md-source-revealed` : className
+  }
   const syntaxMarkerClasses: Record<string, string> = {
     QuoteMark: 'cm-md-syntax-marker',
-    HeaderMark: 'cm-md-syntax-marker',
     EmphasisMark: 'cm-md-inline-syntax',
     CodeMark: 'cm-md-inline-syntax',
     LinkMark: 'cm-md-inline-syntax',
@@ -352,18 +1196,46 @@ function buildDecorations(
       from: visible.from,
       to: visible.to,
       enter(node) {
+        if (
+          visibleDetailsBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          standaloneHtmlBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          visibleTableBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          visibleQuoteBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          visibleTocBlocks.some((block) => node.from >= block.from && node.from < block.to)
+        )
+          return
         const className = inlineNodeClasses[node.name]
         if (className && node.from !== node.to) {
           const first = view.state.doc.lineAt(node.from).number
           const source = view.state.sliceDoc(node.from, node.to)
-          const isAlertLabel = node.name === 'Link' && /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/i.test(source)
-          if (!isAlertLabel && !frontmatterLines.has(first) && !mathLines.has(first))
+          const line = view.state.doc.line(first)
+          const beforeNode = line.text.slice(0, node.from - line.from)
+          const quotePrefix = markdownQuotePrefix(line.text)
+          const alertLabel = line.text.slice(quotePrefix.length).match(/^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)
+          const alertLabelEnd = alertLabel ? line.from + quotePrefix.length + alertLabel[0].length : -1
+          const isAlertLabel = node.name === 'Link' && alertLabelEnd >= node.from && node.from < alertLabelEnd
+          // Lezer can expose the `[x]`/`[ ]` task marker as a Link node. The
+          // task-marker decoration below replaces it with a checkbox widget;
+          // painting it as an ordinary blue, underlined link makes completed
+          // tasks look broken and leaks Markdown parser internals into the UI.
+          const isTaskMarkerLink = node.name === 'Link' && /^\[[ xX]\]$/.test(source) && /^\s*(?:[-+*]|\d+[.)])\s+$/.test(beforeNode)
+          const isFootnoteReference = node.name === 'Link' && /^\[\^[^\]]+\]$/.test(source)
+          if (!isAlertLabel && !isTaskMarkerLink && !isFootnoteReference && !frontmatterLines.has(first) && !mathLines.has(first))
             add(node.from, node.to, Decoration.mark({ class: className }))
         }
         const markerClass = syntaxMarkerClasses[node.name]
         if (!markerClass || node.from === node.to) return
+        if (node.name === 'TaskMarker') return
         const line = view.state.doc.lineAt(node.from)
-        if (line.number === activeLine || frontmatterLines.has(line.number) || mathLines.has(line.number)) return
+        if (
+          frontmatterLines.has(line.number) ||
+          mathLines.has(line.number) ||
+          visibleDetailsBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          standaloneHtmlBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          visibleTableBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+          visibleQuoteBlocks.some((block) => node.from >= block.from && node.from < block.to)
+        )
+          return
         const codeOffset = markdownCodeContentOffset(line.text)
         const insideCode = tree.resolveInner(line.from + Math.min(codeOffset, Math.max(0, line.length - 1)), 1)
         let ancestor = insideCode
@@ -376,7 +1248,7 @@ function buildDecorations(
             : node.name === 'ListMark' && /^\d/.test(source)
               ? 'cm-md-list-ordered-marker'
               : markerClass
-        add(node.from, node.to, Decoration.mark({ class: cls }))
+        add(node.from, node.to, Decoration.mark({ class: markerClassForSelection(node.from, node.to, cls) }))
       },
     })
   for (const { from, to } of view.visibleRanges) {
@@ -384,6 +1256,13 @@ function buildDecorations(
     const last = view.state.doc.lineAt(to)
     for (let number = first.number; number <= last.number; number += 1) {
       const line = view.state.doc.line(number)
+      if (
+        visibleDetailsBlocks.some((block) => line.from >= block.from && line.from < block.to) ||
+        standaloneHtmlBlocks.some((block) => line.from >= block.from && line.from < block.to) ||
+        visibleTableBlocks.some((block) => line.from >= block.from && line.from < block.to) ||
+        visibleQuoteBlocks.some((block) => line.from >= block.from && line.from < block.to)
+      )
+        continue
       let codeNode = tree.resolveInner(line.from, 1)
       while (codeNode && codeNode.name !== 'FencedCode' && codeNode.name !== 'CodeBlock') codeNode = codeNode.parent!
       if (!codeNode) {
@@ -400,7 +1279,11 @@ function buildDecorations(
         const isFence = Boolean(fence)
         if (fence) {
           const fenceStart = line.from + quotePrefix.length + fence[1].length
-          add(fenceStart, fenceStart + fence[2].length, Decoration.mark({ class: 'cm-md-fence-marker' }))
+          add(
+            fenceStart,
+            fenceStart + fence[2].length,
+            Decoration.mark({ class: markerClassForSelection(fenceStart, fenceStart + fence[2].length, 'cm-md-fence-marker') }),
+          )
         }
         add(
           line.from,
@@ -411,14 +1294,21 @@ function buildDecorations(
           }),
         )
       } else {
+        const markerLineEditing =
+          setextMarkerLines.has(number) &&
+          (selection.empty
+            ? selection.head >= line.from && selection.head <= line.to
+            : selection.from <= line.to && selection.to >= line.from)
+        const fallbackLineClass = setextHeadingLines.get(number) ?? lineClass(line.text)
         const className =
+          (setextMarkerLines.has(number) ? `cm-md-setext-marker${markerLineEditing ? ' cm-md-source-revealed' : ''}` : null) ??
           frontmatterLines.get(number) ??
           (mathLines.has(number)
             ? 'cm-md-math-block'
             : (alertLines.get(number) ??
               (tableLines.has(number)
                 ? `cm-md-table-row${tableSeparator(line.text) ? ' cm-md-table-separator' : tableLines.has(number + 1) ? '' : ' cm-md-table-last-row'}`
-                : lineClass(line.text))))
+                : fallbackLineClass)))
         if (className) add(line.from, line.from, Decoration.line({ class: className }))
       }
       if (tableLines.has(number) && !tableSeparator(line.text)) {
@@ -430,18 +1320,152 @@ function buildDecorations(
             add(line.from + cell.from, line.from + cell.to, Decoration.mark({ class: `cm-md-table-cell cm-md-table-align-${alignment}` }))
         }
       }
-      const isActiveLine = activeLine === number
       const isMetadataOrMath = frontmatterLines.has(number) || mathLines.has(number)
       const isCodeLine = Boolean(codeNode)
-      if (!isActiveLine && !isMetadataOrMath && !isCodeLine)
+      const footnoteDefinition = line.text.match(/^\s{0,3}\[\^([^\]]+)\]:[ \t]*/)
+      if (footnoteDefinition && !isCodeLine) {
+        const footnoteNumber = footnotes.numberById.get(footnoteDefinition[1])
+        const from = line.from
+        const to = line.from + footnoteDefinition[0].length
+        const editingMarker = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+        if (footnoteNumber && !editingMarker)
+          add(
+            from,
+            to,
+            Decoration.replace({ widget: new FootnoteReferenceWidget(footnoteNumber, line.from + footnoteDefinition[0].length) }),
+          )
+      }
+      const linkDefinition = line.text.match(/^\s{0,3}\[(?!\^)([^\]]+)\]:\s*(<[^>]+>|\S+)(?:\s+["'(].*?["')])?\s*$/)
+      if (linkDefinition && !isCodeLine) {
+        const from = line.from
+        const to = line.to
+        const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+        if (!editing)
+          add(
+            from,
+            to,
+            Decoration.replace({ widget: new LinkDefinitionWidget(linkDefinition[1], linkDefinition[2].replace(/^<|>$/g, '')) }),
+          )
+      }
+      if (!isMetadataOrMath && !isCodeLine)
         for (const marker of markdownSyntaxMarkers(line.text))
           if (
+            marker.className === 'cm-md-hardbreak-marker' ||
             marker.className === 'cm-md-table-marker' ||
             marker.className === 'cm-md-admonition-marker' ||
+            marker.className === 'cm-md-heading-marker' ||
+            (marker.className === 'cm-md-syntax-marker' && /^\s{0,3}#{1,6}(?:\s|$)/.test(line.text)) ||
+            marker.className.startsWith('cm-md-task-marker') ||
             (marker.className === 'cm-md-inline-syntax' && line.text.slice(marker.from, marker.to).includes('='))
-          )
-            add(line.from + marker.from, line.from + marker.to, Decoration.mark({ class: marker.className }))
+          ) {
+            const from = line.from + marker.from
+            const to = line.from + marker.to
+            if (marker.className === 'cm-md-hardbreak-marker') {
+              let node = tree.resolveInner(from, 1)
+              let inlineCode = false
+              while (node) {
+                if (node.name === 'InlineCode') {
+                  inlineCode = true
+                  break
+                }
+                if (!node.parent) break
+                node = node.parent
+              }
+              const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+              if (!inlineCode && !editing) add(from, to, Decoration.mark({ class: marker.className }))
+              continue
+            }
+            if (marker.className.startsWith('cm-md-task-marker')) {
+              const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+              if (editing) add(from, to, Decoration.mark({ class: markerClassForSelection(from, to, marker.className) }))
+              else
+                add(
+                  from,
+                  to,
+                  Decoration.replace({
+                    widget: new TaskCheckboxWidget(/^\[x\]$/i.test(line.text.slice(marker.from, marker.to)), from, to),
+                  }),
+                )
+            } else add(from, to, Decoration.mark({ class: markerClassForSelection(from, to, marker.className) }))
+          }
       if (isMetadataOrMath || isCodeLine) continue
+      const inlineHtmlRanges: Array<{ from: number; to: number }> = []
+      inlineHtmlPattern.lastIndex = 0
+      for (const match of line.text.matchAll(inlineHtmlPattern)) {
+        const value = match[0]
+        const offset = match.index ?? 0
+        if (offset > 0 && line.text[offset - 1] === '\\') continue
+        const from = line.from + offset
+        const to = from + value.length
+        let node = tree.resolveInner(from, 1)
+        let insideCode = false
+        while (node) {
+          if (node.name === 'InlineCode' || node.name === 'FencedCode' || node.name === 'CodeBlock') {
+            insideCode = true
+            break
+          }
+          if (!node.parent) break
+          node = node.parent
+        }
+        if (insideCode) continue
+        inlineHtmlRanges.push({ from, to })
+        const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+        if (editing) continue
+        const tag = match[1].toLowerCase() as InlineHtmlWidget['tag']
+        add(from, to, Decoration.replace({ widget: new InlineHtmlWidget(tag, match[2]) }))
+      }
+      // Render the inline semantic extensions just like preview while keeping
+      // the original delimiters editable whenever the selection enters them.
+      for (const match of line.text.matchAll(/\+\+([^+\n]+)\+\+|(?<=[\p{L}\p{N}])\^([^\s^\n]+)\^|(?<=[\p{L}\p{N}])(?<!~)~(\d+)~(?!~)/gu)) {
+        const value = match[0]
+        const offset = match.index ?? 0
+        const from = line.from + offset
+        const to = from + value.length
+        if (offset > 0 && line.text[offset - 1] === '\\') continue
+        if (inlineHtmlRanges.some((range) => range.from < to && range.to > from)) continue
+        let node = tree.resolveInner(from, 1)
+        let insideCode = false
+        while (node) {
+          if (node.name === 'InlineCode' || node.name === 'FencedCode' || node.name === 'CodeBlock') {
+            insideCode = true
+            break
+          }
+          if (!node.parent) break
+          node = node.parent
+        }
+        if (insideCode) continue
+        const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+        if (editing) continue
+        const tag = match[1] !== undefined ? 'ins' : match[2] !== undefined ? 'sup' : 'sub'
+        add(from, to, Decoration.replace({ widget: new InlineSemanticWidget(tag, match[1] ?? match[2] ?? match[3] ?? '') }))
+      }
+      for (const match of line.text.matchAll(/&(?:#\d+|#x[\da-f]+|[a-z][a-z\d]+);/gi)) {
+        const value = match[0]
+        const offset = match.index ?? 0
+        if (
+          (offset > 0 && line.text[offset - 1] === '\\') ||
+          inlineHtmlRanges.some((range) => range.from <= line.from + offset && range.to >= line.from + offset + value.length)
+        )
+          continue
+        const from = line.from + offset
+        const to = from + value.length
+        let node = tree.resolveInner(from, 1)
+        let insideCodeOrLink = false
+        while (node) {
+          if (['InlineCode', 'FencedCode', 'CodeBlock', 'Link', 'Autolink', 'URL'].includes(node.name)) {
+            insideCodeOrLink = true
+            break
+          }
+          if (!node.parent) break
+          node = node.parent
+        }
+        if (insideCodeOrLink) continue
+        const decoded = document.createElement('textarea')
+        decoded.innerHTML = value
+        if (decoded.value === value) continue
+        const editing = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+        if (!editing) add(from, to, Decoration.replace({ widget: new EntityWidget(decoded.value) }))
+      }
       inlinePattern.lastIndex = 0
       for (const match of line.text.matchAll(inlinePattern)) {
         const value = match[0]
@@ -449,30 +1473,118 @@ function buildDecorations(
         const inlineClass = 'cm-md-highlight'
         add(line.from + offset, line.from + offset + value.length, Decoration.mark({ class: inlineClass }))
       }
+      for (const match of line.text.matchAll(/~~([^~\n]+)~~/g)) {
+        const value = match[1]
+        const offset = (match.index ?? 0) + 2
+        const from = line.from + offset
+        const to = from + value.length
+        const delimiterOffset = from - 2
+        let escapedSlashes = 0
+        for (let index = delimiterOffset - 1; index >= 0 && line.text[index] === '\\'; index -= 1) escapedSlashes += 1
+        if (escapedSlashes % 2 === 1) continue
+        let node = tree.resolveInner(from, 1)
+        let insideCode = false
+        while (node) {
+          if (node.name === 'InlineCode' || node.name === 'FencedCode' || node.name === 'CodeBlock') {
+            insideCode = true
+            break
+          }
+          if (!node.parent) break
+          node = node.parent
+        }
+        if (!insideCode) add(from, to, Decoration.mark({ class: 'cm-md-strikethrough' }))
+      }
+      if (!isMetadataOrMath && !isCodeLine) {
+        const inlineMath = /(?<!\\)\$\$([^$\n]+?)\$\$|(?<!\\)\$(?!\$)([^$\n]+?)\$(?!\$)|\\\((.+?)\\\)|\\\[([^\]]+?)\\\]/g
+        for (const match of line.text.matchAll(inlineMath)) {
+          const value = match[0]
+          const offset = match.index ?? 0
+          const from = line.from + offset
+          const to = from + value.length
+          const editingMath = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+          if (editingMath) continue
+          let mathNode = tree.resolveInner(from, 1)
+          while (mathNode && mathNode.name !== 'InlineCode' && mathNode.name !== 'FencedCode' && mathNode.name !== 'CodeBlock')
+            mathNode = mathNode.parent!
+          if (mathNode) continue
+          add(
+            from,
+            to,
+            Decoration.replace({
+              widget: new MathPreviewWidget(match[1] ?? match[2] ?? match[3] ?? match[4] ?? '', false),
+            }),
+          )
+        }
+      }
+      if (!isMetadataOrMath && !isCodeLine && !footnoteDefinition) {
+        for (const match of line.text.matchAll(/\[\^([^\]]+)\]/g)) {
+          const id = match[1]
+          const number = footnotes.numberById.get(id)
+          const target = footnotes.targetById.get(id)
+          if (!number || target === undefined) continue
+          const from = line.from + (match.index ?? 0)
+          const to = from + match[0].length
+          const editingReference = selection.empty
+            ? selection.head >= from && selection.head <= to
+            : selection.from < to && selection.to > from
+          if (!editingReference) add(from, to, Decoration.replace({ widget: new FootnoteReferenceWidget(number, target) }))
+        }
+      }
       if (options.resolveImage)
         for (const image of editorImageReferences(line.text)) {
           let node = tree.resolveInner(line.from + image.from, 1)
           while (node && node.name !== 'Image') node = node.parent!
           if (!node) continue
-          add(
-            line.from + image.to,
-            line.from + image.to,
-            Decoration.widget({ widget: new ImagePreviewWidget(image.path, image.alt, options), side: 1 }),
-          )
+          const from = line.from + image.from
+          const to = line.from + image.to
+          const editingImage = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+          if (editingImage) continue
+          add(from, to, Decoration.replace({ widget: new ImagePreviewWidget(image.path, image.alt, options) }))
         }
     }
   }
   return Decoration.set(ranges, true)
 }
 
-function buildCodeBlockWrappers(view: EditorView) {
+function buildCodeBlockWrappers(
+  view: EditorView,
+  detailsBlocks: MarkdownDetailsBlock[],
+  htmlBlocks: MarkdownHtmlBlock[],
+  quoteBlocks: MarkdownQuoteBlock[],
+) {
   const wrappers: Range<BlockWrapper>[] = []
   const document = view.state.doc
+  const selection = view.state.selection.main
+  const visibleDetailsBlocks = detailsBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const visibleHtmlBlocks = htmlBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const standaloneHtmlBlocks = visibleHtmlBlocks.filter(
+    (html) => !detailsBlocks.some((details) => html.from >= details.from && html.to <= details.to),
+  )
+  const visibleQuoteBlocks = quoteBlocks.filter(
+    (block) =>
+      canRenderQuotePreview(block) &&
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to),
+  )
   syntaxTree(view.state).iterate({
     enter(node) {
       if (node.name !== 'FencedCode' && node.name !== 'CodeBlock') return
+      if (
+        visibleDetailsBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+        standaloneHtmlBlocks.some((block) => node.from >= block.from && node.from < block.to) ||
+        visibleQuoteBlocks.some((block) => node.from >= block.from && node.from < block.to)
+      )
+        return
       const first = document.lineAt(node.from)
       const last = document.lineAt(Math.max(node.from, node.to - 1))
+      if (/^\s*(?:>\s*)?(`{3,}|~{3,})\s*mermaid\b/i.test(first.text)) return
       wrappers.push(
         BlockWrapper.create({
           tagName: 'div',
@@ -484,8 +1596,107 @@ function buildCodeBlockWrappers(view: EditorView) {
   return BlockWrapper.set(wrappers, true)
 }
 
+interface RenderedBlockDecorations {
+  mathBlocks: MathBlockRange[]
+  mermaidBlocks: MathBlockRange[]
+  detailsBlocks: MarkdownDetailsBlock[]
+  htmlBlocks: MarkdownHtmlBlock[]
+  tableBlocks: MarkdownTableBlock[]
+  quoteBlocks: MarkdownQuoteBlock[]
+  tocBlocks: MarkdownTocBlock[]
+  decorations: DecorationSet
+}
+
+function buildDisplayMathDecorations(
+  state: EditorState,
+  mathBlocks: MathBlockRange[],
+  mermaidBlocks: MathBlockRange[],
+  detailsBlocks: MarkdownDetailsBlock[],
+  htmlBlocks: MarkdownHtmlBlock[],
+  tableBlocks: MarkdownTableBlock[],
+  quoteBlocks: MarkdownQuoteBlock[],
+  tocBlocks: MarkdownTocBlock[],
+): DecorationSet {
+  const selection = state.selection.main
+  const ranges: Range<Decoration>[] = []
+  const visibleDetailsBlocks = detailsBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const visibleQuoteBlocks = quoteBlocks.filter(
+    (block) =>
+      canRenderQuotePreview(block) &&
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to),
+  )
+  const visibleHtmlBlocks = htmlBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  const standaloneHtmlBlocks = visibleHtmlBlocks.filter(
+    (html) =>
+      !detailsBlocks.some((details) => html.from >= details.from && html.to <= details.to) &&
+      !quoteBlocks.some((quote) => html.from >= quote.from && html.to <= quote.to),
+  )
+  const visibleTableBlocks = tableBlocks.filter(
+    (block) =>
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to) &&
+      !quoteBlocks.some((quote) => block.from >= quote.from && block.to <= quote.to),
+  )
+  const visibleTocBlocks = tocBlocks.filter((block) =>
+    selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
+  )
+  for (const block of mathBlocks) {
+    const editing = selection.empty
+      ? selection.head >= block.from && selection.head <= block.to
+      : selection.from < block.to && selection.to > block.from
+    if (
+      editing ||
+      !block.source.trim() ||
+      detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) ||
+      quoteBlocks.some((quote) => block.from >= quote.from && block.to <= quote.to && canRenderQuotePreview(quote))
+    )
+      continue
+    ranges.push(Decoration.replace({ widget: new MathPreviewWidget(block.source, true), block: true }).range(block.from, block.to))
+  }
+  for (const block of mermaidBlocks) {
+    const editing = selection.empty
+      ? selection.head >= block.from && selection.head <= block.to
+      : selection.from < block.to && selection.to > block.from
+    if (
+      editing ||
+      !block.source.trim() ||
+      detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) ||
+      quoteBlocks.some((quote) => block.from >= quote.from && block.to <= quote.to && canRenderQuotePreview(quote))
+    )
+      continue
+    ranges.push(Decoration.replace({ widget: new MermaidPreviewWidget(block.source), block: true }).range(block.from, block.to))
+  }
+  for (const block of visibleDetailsBlocks)
+    ranges.push(
+      Decoration.replace({ widget: new DetailsPreviewWidget(block.summary, block.source, block.open), block: true }).range(
+        block.from,
+        block.to,
+      ),
+    )
+  for (const block of visibleQuoteBlocks)
+    ranges.push(Decoration.replace({ widget: new QuotePreviewWidget(block.source), block: true }).range(block.from, block.to))
+  for (const block of standaloneHtmlBlocks)
+    ranges.push(Decoration.replace({ widget: new HtmlBlockPreviewWidget(block.source), block: true }).range(block.from, block.to))
+  for (const block of visibleTableBlocks)
+    ranges.push(Decoration.replace({ widget: new TablePreviewWidget(block), block: true }).range(block.from, block.to))
+  for (const block of visibleTocBlocks)
+    ranges.push(Decoration.replace({ widget: new TocPreviewWidget(state.doc.toString()), block: true }).range(block.from, block.to))
+  return Decoration.set(ranges, true)
+}
+
 export function createEditorMarkdownDecorations(options: EditorMarkdownDecorationOptions = {}) {
-  return ViewPlugin.fromClass(
+  const inlineDecorations = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
       blockWrappers: ReturnType<typeof buildCodeBlockWrappers>
@@ -494,12 +1705,22 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       frontmatterLines: Map<number, string>
       mathLines: Set<number>
       alertLines: Map<number, string>
+      detailsBlocks: MarkdownDetailsBlock[]
+      htmlBlocks: MarkdownHtmlBlock[]
+      tableBlocks: MarkdownTableBlock[]
+      quoteBlocks: MarkdownQuoteBlock[]
+      tocBlocks: MarkdownTocBlock[]
       constructor(view: EditorView) {
         this.tableLines = markdownTableLines(view.state.doc.toString())
         this.tableAlignments = markdownTableAlignmentMap(view.state.doc.toString())
         this.frontmatterLines = markdownFrontmatterLines(view.state.doc.toString())
         this.mathLines = markdownMathLines(view.state.doc.toString())
         this.alertLines = markdownAlertLines(view.state.doc.toString())
+        this.detailsBlocks = markdownDetailsBlocks(view.state.doc.toString())
+        this.htmlBlocks = markdownHtmlBlocks(view.state.doc.toString())
+        this.tableBlocks = markdownTableBlocks(view.state.doc.toString())
+        this.quoteBlocks = markdownQuoteBlocks(view.state.doc.toString())
+        this.tocBlocks = markdownTocBlocks(view.state.doc.toString())
         this.decorations = buildDecorations(
           view,
           options,
@@ -508,17 +1729,32 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           this.frontmatterLines,
           this.mathLines,
           this.alertLines,
+          this.detailsBlocks,
+          this.htmlBlocks,
+          this.tableBlocks,
+          this.quoteBlocks,
+          this.tocBlocks,
         )
-        this.blockWrappers = buildCodeBlockWrappers(view)
+        this.blockWrappers = buildCodeBlockWrappers(view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
       }
       update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
+        if (
+          update.docChanged ||
+          update.selectionSet ||
+          update.viewportChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state)
+        ) {
           if (update.docChanged) {
             this.tableLines = markdownTableLines(update.state.doc.toString())
             this.tableAlignments = markdownTableAlignmentMap(update.state.doc.toString())
             this.frontmatterLines = markdownFrontmatterLines(update.state.doc.toString())
             this.mathLines = markdownMathLines(update.state.doc.toString())
             this.alertLines = markdownAlertLines(update.state.doc.toString())
+            this.detailsBlocks = markdownDetailsBlocks(update.state.doc.toString())
+            this.htmlBlocks = markdownHtmlBlocks(update.state.doc.toString())
+            this.tableBlocks = markdownTableBlocks(update.state.doc.toString())
+            this.quoteBlocks = markdownQuoteBlocks(update.state.doc.toString())
+            this.tocBlocks = markdownTocBlocks(update.state.doc.toString())
           }
           this.decorations = buildDecorations(
             update.view,
@@ -528,8 +1764,13 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
             this.frontmatterLines,
             this.mathLines,
             this.alertLines,
+            this.detailsBlocks,
+            this.htmlBlocks,
+            this.tableBlocks,
+            this.quoteBlocks,
+            this.tocBlocks,
           )
-          this.blockWrappers = buildCodeBlockWrappers(update.view)
+          this.blockWrappers = buildCodeBlockWrappers(update.view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
         }
       }
     },
@@ -538,4 +1779,68 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       provide: (plugin) => EditorView.blockWrappers.of((view) => view.plugin(plugin)?.blockWrappers ?? BlockWrapper.set([])),
     },
   )
+  // Block widgets must come from the direct decorations facet (rather than a
+  // ViewPlugin) so CodeMirror can lay them out as document-level blocks.
+  const displayMathDecorations = StateField.define<RenderedBlockDecorations>({
+    create: (state) => {
+      const source = state.doc.toString()
+      const mathBlocks = markdownMathBlocks(source)
+      const mermaidBlocks = markdownMermaidBlocks(source)
+      const detailsBlocks = markdownDetailsBlocks(source)
+      const htmlBlocks = markdownHtmlBlocks(source)
+      const tableBlocks = markdownTableBlocks(source)
+      const quoteBlocks = markdownQuoteBlocks(source)
+      const tocBlocks = markdownTocBlocks(source)
+      return {
+        mathBlocks,
+        mermaidBlocks,
+        detailsBlocks,
+        htmlBlocks,
+        tableBlocks,
+        quoteBlocks,
+        tocBlocks,
+        decorations: buildDisplayMathDecorations(
+          state,
+          mathBlocks,
+          mermaidBlocks,
+          detailsBlocks,
+          htmlBlocks,
+          tableBlocks,
+          quoteBlocks,
+          tocBlocks,
+        ),
+      }
+    },
+    update: (current, transaction) => {
+      const source = transaction.docChanged ? transaction.state.doc.toString() : null
+      const mathBlocks = source === null ? current.mathBlocks : markdownMathBlocks(source)
+      const mermaidBlocks = source === null ? current.mermaidBlocks : markdownMermaidBlocks(source)
+      const detailsBlocks = source === null ? current.detailsBlocks : markdownDetailsBlocks(source)
+      const htmlBlocks = source === null ? current.htmlBlocks : markdownHtmlBlocks(source)
+      const tableBlocks = source === null ? current.tableBlocks : markdownTableBlocks(source)
+      const quoteBlocks = source === null ? current.quoteBlocks : markdownQuoteBlocks(source)
+      const tocBlocks = source === null ? current.tocBlocks : markdownTocBlocks(source)
+      return {
+        mathBlocks,
+        mermaidBlocks,
+        detailsBlocks,
+        htmlBlocks,
+        tableBlocks,
+        quoteBlocks,
+        tocBlocks,
+        decorations: buildDisplayMathDecorations(
+          transaction.state,
+          mathBlocks,
+          mermaidBlocks,
+          detailsBlocks,
+          htmlBlocks,
+          tableBlocks,
+          quoteBlocks,
+          tocBlocks,
+        ),
+      }
+    },
+    provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+  })
+  return [inlineDecorations, displayMathDecorations]
 }

@@ -33,6 +33,7 @@ const settingsDialogProps = {
   contentWidth: 'normal',
   editorFontSize: 15,
   lineHeight: 1.66,
+  strictLineBreaks: false,
   pagePaddingHorizontal: 56,
   documentFont: 'system',
   themePreset: 'normal',
@@ -65,6 +66,7 @@ const settingsDialogProps = {
   onContentWidthChange: vi.fn(),
   onEditorFontSizeChange: vi.fn(),
   onLineHeightChange: vi.fn(),
+  onStrictLineBreaksChange: vi.fn(),
   onPagePaddingHorizontalChange: vi.fn(),
   onDocumentFontChange: vi.fn(),
   onThemePresetChange: vi.fn(),
@@ -374,11 +376,27 @@ describe('localized desktop components', () => {
     const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} locale="zh-CN" />)
     expect(html).toContain('行高')
     expect(html).toContain('左右页边距')
+    expect(html).toContain('将软换行显示为换行')
     // The sliders must carry the live values; the markup is what proves the
     // controls are reachable at all.
     expect(html).toContain('value="1.66"')
     expect(html).toContain('value="56"')
     expect(html).toContain('max="96"')
+  })
+  it('allows enabling the strict soft-break reading preference', async () => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    const onStrictLineBreaksChange = vi.fn()
+    await act(async () =>
+      root.render(<SettingsDialog {...settingsDialogProps} locale="zh-CN" onStrictLineBreaksChange={onStrictLineBreaksChange} />),
+    )
+    const setting = [...host.querySelectorAll('label')].find((label) => label.textContent?.includes('将软换行显示为换行'))
+    const checkbox = setting?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(checkbox?.checked).toBe(false)
+    await act(async () => checkbox?.click())
+    expect(onStrictLineBreaksChange).toHaveBeenCalledWith(true)
+    await act(async () => root.unmount())
+    host.remove()
   })
   it('keeps the sidebar header as a section title without duplicate mode controls', () => {
     const html = renderToStaticMarkup(

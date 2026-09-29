@@ -234,9 +234,7 @@ describe('TextMark desktop shell', () => {
 })
 
 // Toolbar click matrix: every top-area control must respond to real clicks.
-// Runs against the default toolbar (flexibleSpace, sidebar, navigation,
-// flexibleSpace, openActions, space, zoom, inspector, share, edit, search)
-// in the default zh-CN locale. Native file dialogs are intentionally not
+// Runs against the default toolbar in the default zh-CN locale. Native file dialogs are intentionally not
 // invoked: their trigger items are asserted to exist and open the menu, and
 // dialog-bound actions stay covered by the shell tests above.
 
@@ -319,6 +317,23 @@ describe('TextMark toolbar click matrix', () => {
     const afterOut = await zoom.getText()
     expect(afterOut).not.toBe(afterIn)
     await appearance.$('summary').click()
+  })
+
+  it('keeps copy and export as first-class default toolbar actions', async () => {
+    const slots = await browser.execute(() =>
+      [...document.querySelectorAll('.native-actions > [data-toolbar-item]')]
+        .filter((element) => getComputedStyle(element).display !== 'none')
+        .map((element) => element.dataset.toolbarItem),
+    )
+    expect(slots).toContain('copy')
+    expect(slots).toContain('export')
+    expect(slots).toContain('documentSearch')
+    await expect(await $('button[aria-label="拷贝"]')).toBeDisplayed()
+    await expect(await $('button[aria-label="导出"]')).toBeDisplayed()
+    await $('button[aria-label="搜索文稿"]').click()
+    await expect(await $('.project-search-palette')).toBeDisplayed()
+    await $('.project-search-palette button[aria-label="关闭"]').click()
+    await expect(await $('.project-search-palette')).not.toBeDisplayed()
   })
 
   it('search opens the find bar and its controls respond', async () => {

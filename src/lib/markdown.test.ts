@@ -46,11 +46,24 @@ describe('renderMarkdown', () => {
   })
 
   it('renders footnotes, task lists, alerts and generated TOC', () => {
-    const rendered = renderMarkdown('# Guide\n\n[TOC]\n\n- [x] Done\n\nText[^1]\n\n[^1]: Note\n\n> [!NOTE]\n> Useful')
+    const rendered = renderMarkdown(
+      '# Guide\n\n[TOC]\n\n- [x] Done\n\nText[^first] and more[^second]\n\n[^first]: Note one\n[^second]: Note two\n\n> [!NOTE]\n> Useful',
+    )
     expect(rendered.html).toContain('table-of-contents')
     expect(rendered.html).toContain('task-list-item-checkbox')
     expect(rendered.html).toContain('footnote')
     expect(rendered.html).toContain('markdown-alert-note')
+  })
+
+  it('renders superscript, subscript, and inserted-text extensions safely around code', () => {
+    const rendered = renderMarkdown('x^2^ H~2~O ++new <script>++ and `x^2^`\n\n```text\nx^3^ H~2~O\n```')
+    expect(rendered.html).toContain('<sup>2</sup>')
+    expect(rendered.html).toContain('<sub>2</sub>')
+    expect(rendered.html).toContain('<ins>new &lt;script&gt;</ins>')
+    expect(rendered.html).toContain('<code>x^2^</code>')
+    expect(rendered.html).toContain('>x^3^ H~2~O')
+    expect(rendered.html).not.toContain('<sup>3</sup>')
+    expect(rendered.html).not.toContain('<script>')
   })
 
   it('extracts YAML and TOML frontmatter from the rendered body', () => {
@@ -157,6 +170,11 @@ describe('renderMarkdown', () => {
     const rendered = renderMarkdown('soft line\ncontinues\n\nhard line  \ncontinues\n\\\nhard again')
     expect(rendered.html).toContain('<p>soft line\ncontinues</p>')
     expect(rendered.html).toContain('hard line<br>\ncontinues\n<br>\nhard again')
+  })
+
+  it('can render soft line breaks as hard breaks when the reading preference is enabled', () => {
+    expect(renderMarkdown('first line\nsecond line').html).toContain('<p>first line\nsecond line</p>')
+    expect(renderMarkdown('first line\nsecond line', 'en', true).html).toContain('<p>first line<br>\nsecond line</p>')
   })
 
   it('uses safe alignment classes instead of inline table styles', () => {

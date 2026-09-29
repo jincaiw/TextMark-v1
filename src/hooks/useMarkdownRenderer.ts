@@ -18,12 +18,12 @@ const EMPTY_RENDER: RenderedMarkdown = {
 /** Keeps Markdown parsing outside the document shell's interaction state. The
  * source is deferred, parsing happens in a Worker, and optional renderers are
  * loaded only when the result requests them. */
-export function useMarkdownRenderer(source: string, locale: Locale) {
+export function useMarkdownRenderer(source: string, locale: Locale, strictLineBreaks = false) {
   const deferredSource = useDeferredValue(source)
   const [rendered, setRendered] = useState<RenderedMarkdown>(EMPTY_RENDER)
   const sequenceRef = useRef(0)
   const workerRef = useRef<Worker | null>(null)
-  const requestsRef = useRef(new Map<number, { source: string; locale: Locale }>())
+  const requestsRef = useRef(new Map<number, { source: string; locale: Locale; strictLineBreaks: boolean }>())
 
   useEffect(() => {
     if (typeof Worker === 'undefined') return
@@ -33,7 +33,7 @@ export function useMarkdownRenderer(source: string, locale: Locale) {
       const request = requestsRef.current.get(id)
       if (!request) return
       void import('../lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
-        const result = await renderMarkdownEnhanced(request.source, request.locale)
+        const result = await renderMarkdownEnhanced(request.source, request.locale, request.strictLineBreaks)
         await loadOptionalRendererStyles(result.optionalRenderers)
         if (id === sequenceRef.current) {
           document.documentElement.dataset.renderer = 'main'
@@ -69,11 +69,11 @@ export function useMarkdownRenderer(source: string, locale: Locale) {
 
   useEffect(() => {
     const id = ++sequenceRef.current
-    requestsRef.current.set(id, { source: deferredSource, locale })
+    requestsRef.current.set(id, { source: deferredSource, locale, strictLineBreaks })
     for (const previousId of requestsRef.current.keys()) if (previousId < id) requestsRef.current.delete(previousId)
     const renderInMain = () => {
       void import('../lib/markdown').then(async ({ renderMarkdownEnhanced }) => {
-        const result = await renderMarkdownEnhanced(deferredSource, locale)
+        const result = await renderMarkdownEnhanced(deferredSource, locale, strictLineBreaks)
         await loadOptionalRendererStyles(result.optionalRenderers)
         if (id === sequenceRef.current) {
           document.documentElement.dataset.renderer = 'main'
@@ -82,9 +82,9 @@ export function useMarkdownRenderer(source: string, locale: Locale) {
       })
     }
     const worker = workerRef.current
-    if (worker) worker.postMessage({ id, source: deferredSource, locale })
+    if (worker) worker.postMessage({ id, source: deferredSource, locale, strictLineBreaks })
     else renderInMain()
-  }, [deferredSource, locale])
+  }, [deferredSource, locale, strictLineBreaks])
 
   return rendered
 }

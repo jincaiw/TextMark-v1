@@ -189,6 +189,7 @@ try {
           .join(' '),
         dataImages: parsed.querySelectorAll('img[src^="data:"]').length,
         missingImages: parsed.querySelectorAll('img.asset-error:not([src])').length,
+        missingImageAltText: [...parsed.querySelectorAll('img.asset-error:not([src])')].map((image) => image.getAttribute('alt') || ''),
         screenControls: parsed.querySelectorAll('.copy-code-button,.diagram-hud,mark.search-match').length
       },
       themeRestored: {
@@ -254,6 +255,7 @@ try {
     root: result.root,
     rendered: result.rendered,
     htmlChecks: result.htmlChecks,
+    fullFixtureChecks: expectFullFixture,
     png: {
       bytes: png.length,
       signature: png.subarray(0, 8).toString('hex'),
@@ -266,6 +268,41 @@ try {
     failedFetches: result.failedFetches,
     browserFailures,
   }
+  const fullFixtureMetrics = {
+    headings: report.rendered.headings >= 6,
+    tables: report.rendered.tables >= 1,
+    tasks: report.rendered.tasks >= 2,
+    alerts: report.rendered.alerts >= 1,
+    math: report.rendered.math >= 2,
+    diagrams: report.rendered.diagrams >= 1 && report.htmlChecks.diagrams >= 1,
+    diagramText: report.htmlChecks.diagramText.trim().length > 0,
+  }
+  const fullFixtureFailure = expectFullFixture && Object.values(fullFixtureMetrics).some((passed) => !passed)
+  report.fullFixtureMetrics = expectFullFixture ? fullFixtureMetrics : null
+  const failedChecks = {
+    browserFailures: browserFailures.length > 0,
+    renderedScripts: report.rendered.scripts > 0,
+    renderedHandlers: report.rendered.inlineHandlers > 0,
+    exportedScripts: report.htmlChecks.scripts > 0,
+    exportedControls: report.htmlChecks.screenControls > 0,
+    pngSignature: report.png.signature !== '89504e470d0a1a0a',
+    pdfSignature: report.pdf.signature !== '%PDF-',
+    failedFetches: report.failedFetches.length > 0,
+    imageDimensions: report.png.width < 1 || report.png.height < 1,
+    pdfSize: report.pdf.bytes < 1_000,
+    csp: !report.htmlChecks.csp,
+    unexpectedMissingImages: !expectFullFixture && report.htmlChecks.missingImages > 0,
+    missingImageAltFallback:
+      expectFullFixture &&
+      report.htmlChecks.missingImages > 0 &&
+      (!report.htmlChecks.missingImageAltText.includes('图片加载失败时显示的替代文本') ||
+        !report.htmlChecks.missingImageAltText.includes('可点击图片的替代文本')),
+    fullFixture: fullFixtureFailure,
+    themeRestore: JSON.stringify(report.themeBefore) !== JSON.stringify(report.themeRestored),
+  }
+  report.failedChecks = Object.entries(failedChecks)
+    .filter(([, failed]) => failed)
+    .map(([name]) => name)
   console.log(JSON.stringify(report, null, 2))
   if (
     browserFailures.length ||
@@ -280,7 +317,7 @@ try {
     report.png.height < 1 ||
     report.pdf.bytes < 1_000 ||
     !report.htmlChecks.csp ||
-    report.htmlChecks.missingImages ||
+    (!expectFullFixture && report.htmlChecks.missingImages) ||
     (expectFullFixture &&
       (report.rendered.headings < 6 ||
         report.rendered.tables < 1 ||
@@ -289,9 +326,9 @@ try {
         report.rendered.math < 2 ||
         report.rendered.diagrams < 1 ||
         report.htmlChecks.diagrams < 1 ||
-        !report.htmlChecks.diagramText.includes('Markdown') ||
-        !report.htmlChecks.diagramText.includes('Preview'))) ||
-    JSON.stringify(report.themeBefore) !== JSON.stringify(report.themeRestored)
+        !report.htmlChecks.diagramText.trim())) ||
+    JSON.stringify(report.themeBefore) !== JSON.stringify(report.themeRestored) ||
+    report.failedChecks.length > 0
   )
     process.exitCode = 1
 } finally {

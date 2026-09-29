@@ -3,6 +3,9 @@ set -euo pipefail
 
 if [[ $# -ne 1 ]]; then echo "usage: $0 TextMark.dmg" >&2; exit 2; fi
 dmg=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+if [[ "${APPLE_REQUIRE_NOTARIZATION:-1}" == "1" ]]; then
+  xcrun stapler validate "$dmg"
+fi
 mount_dir=$(mktemp -d /tmp/textmark-dmg.XXXXXX)
 cli_temp_dir=
 cleanup() {
@@ -23,6 +26,14 @@ test -s "$app/Contents/Resources/THIRD_PARTY_NOTICES.md"
 plutil -lint "$appex/Contents/Info.plist"
 codesign --verify --deep --strict "$app"
 codesign --verify --deep --strict "$appex"
+if [[ "${APPLE_REQUIRE_NOTARIZATION:-1}" == "1" ]]; then
+  signature_details=$(codesign -dv --verbose=4 "$app" 2>&1)
+  grep -q '^Authority=Developer ID Application:' <<<"$signature_details" || {
+    echo "Release app is not signed with a Developer ID Application certificate." >&2
+    exit 1
+  }
+  spctl --assess --type execute --verbose=2 "$app"
+fi
 app_version=$(defaults read "$app/Contents/Info" CFBundleShortVersionString)
 test "$(defaults read "$appex/Contents/Info" CFBundleShortVersionString)" = "$app_version"
 test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist")" = "com.apple.quicklook.preview"
@@ -50,12 +61,8 @@ for _ in {1..10}; do
   sleep 0.5
 done
 if [[ "$registered" -ne 1 ]]; then
-  if codesign -dvv "$appex" 2>&1 | grep -q 'Signature=adhoc'; then
-    echo "warning: PlugInKit does not persist ad-hoc signed extensions on this clean runner; bundle metadata and the native render host were verified instead." >&2
-  else
-    echo "Developer ID Quick Look extension was not accepted by PlugInKit." >&2
-    exit 1
-  fi
+  echo "Signed Quick Look extension was not accepted by PlugInKit." >&2
+  exit 1
 fi
 pluginkit -r "$appex" || true
 echo "TextMark DMG/Quick Look registration smoke passed."

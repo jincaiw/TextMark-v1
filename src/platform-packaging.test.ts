@@ -58,13 +58,21 @@ describe('native desktop package integration', () => {
     expect(macosPackageTest).not.toContain('textmark-cli.XXXXXX.png')
   })
 
-  it('strictly validates Quick Look metadata while accounting for ad-hoc signing', () => {
+  it('supports ad-hoc macOS release packages with manual first-launch approval', () => {
     expect(macosConfig.bundle.macOS.signingIdentity).toBe('-')
     expect(macosPackageTest).toContain('NSExtension.NSExtensionPointIdentifier')
     expect(macosPackageTest).toContain('CFBundleShortVersionString')
     expect(macosPackageTest).toContain('QLSupportedContentTypes')
-    expect(macosPackageTest).toContain('Signature=adhoc')
-    expect(macosPackageTest).toContain('Developer ID Quick Look extension was not accepted by PlugInKit.')
+    expect(macosPackageTest).toContain('APPLE_REQUIRE_NOTARIZATION:-1')
+    expect(macosPackageTest).toContain('xcrun stapler validate "$dmg"')
+    expect(macosPackageTest).toContain('Authority=Developer ID Application:')
+    expect(macosPackageTest).toContain('spctl --assess --type execute')
+    expect(macosPackageTest).toContain('Signed Quick Look extension was not accepted by PlugInKit.')
+    expect(macosPackageTest).not.toContain('Signature=adhoc')
+    expect(releaseWorkflow).toContain("APPLE_SIGNING_IDENTITY: '-'")
+    expect(releaseWorkflow).toContain("APPLE_REQUIRE_NOTARIZATION: '0'")
+    expect(releaseWorkflow).not.toContain('APPLE_CERTIFICATE')
+    expect(releaseWorkflow).not.toContain('notarytool submit')
   })
 
   it("accepts Tauri's Universal updater name and verifies metadata targets", () => {

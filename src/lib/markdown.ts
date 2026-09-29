@@ -37,7 +37,42 @@ function escapeHtml(value: string): string {
   )
 }
 
-function makeRenderer() {
+/** Adds compact superscript/subscript markup to prose without interpreting
+ * fenced or inline code. It runs only on the rendered copy; source maps and
+ * editor contents always retain the authored Markdown. */
+function normalizeInlineSemantics(source: string): string {
+  const lines = source.split('\n')
+  let fence: { marker: string; length: number } | null = null
+  return lines
+    .map((line) => {
+      const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/)
+      if (fence) {
+        if (fenceMatch && fenceMatch[1][0] === fence.marker && fenceMatch[1].length >= fence.length) fence = null
+        return line
+      }
+      if (fenceMatch) {
+        fence = { marker: fenceMatch[1][0], length: fenceMatch[1].length }
+        return line
+      }
+      if (/^(?: {4}|\t)/.test(line)) return line
+
+      const transformProse = (text: string) =>
+        text
+          .replace(/(?<=[\p{L}\p{N}])(?<!\\)\^([^\s^]+)\^/gu, (_match, content: string) => `<sup>${escapeHtml(content)}</sup>`)
+          .replace(/(?<=[\p{L}\p{N}])(?<!\\)(?<!~)~(\d+)~(?!~)/gu, (_match, content: string) => `<sub>${content}</sub>`)
+      let output = ''
+      let cursor = 0
+      for (const match of line.matchAll(/(`+).*?\1|<[^>]*>/g)) {
+        const start = match.index ?? 0
+        output += transformProse(line.slice(cursor, start)) + match[0]
+        cursor = start + match[0].length
+      }
+      return output + transformProse(line.slice(cursor))
+    })
+    .join('\n')
+}
+
+function makeRenderer(strictLineBreaks = false) {
   const md: MarkdownItInstance = new MarkdownIt({
     html: true,
     linkify: true,
@@ -45,7 +80,7 @@ function makeRenderer() {
     // CommonMark soft line breaks are whitespace, while an explicit trailing
     // backslash or two spaces remains a <br>. This matters in imported prose
     // and keeps source wrapping separate from author-requested line breaks.
-    breaks: false,
+    breaks: strictLineBreaks,
     highlight(code, language): string {
       const normalized = parseCodeFenceInfo(language).highlightLanguage
       return `<pre class="hljs"><code${normalized ? ` data-highlight-language="${escapeHtml(normalized)}" data-highlight-source="${encodeURIComponent(code)}"` : ''}>${escapeHtml(code)}</code></pre>`
@@ -137,6 +172,23 @@ function makeRenderer() {
     return true
   })
 
+  // Keep the compact insertion syntax used by markdown-preview available in
+  // the canonical renderer (and exports). Code spans are consumed earlier.
+  md.inline.ruler.before('text', 'textmark_inline_semantics', (state, silent) => {
+    const start = state.pos
+    const source = state.src
+    const marker = '++'
+    if (source.slice(start, start + marker.length) !== marker || (start > 0 && /[\\\\\w]/.test(source[start - 1]))) return false
+    const end = source.indexOf(marker, start + marker.length)
+    if (end <= start + marker.length || /\s/.test(source[start + marker.length]) || /\s/.test(source[end - 1])) return false
+    if (!silent) {
+      const content = escapeHtml(source.slice(start + marker.length, end))
+      state.push('html_inline', '', 0).content = `<ins>${content}</ins>`
+    }
+    state.pos = end + marker.length
+    return true
+  })
+
   const headingOpenRule: RendererRule = (tokens, index, _options, env) => {
     const token = tokens[index]
     const inline = tokens[index + 1]
@@ -180,9 +232,13 @@ function makeRenderer() {
   return md
 }
 
-const renderer = makeRenderer()
+const renderers = new Map<boolean, MarkdownItInstance>([
+  [false, makeRenderer(false)],
+  [true, makeRenderer(true)],
+])
 let lastRenderSource: string | undefined
 let lastRenderLocale: 'zh-CN' | 'en' | undefined
+let lastRenderStrictLineBreaks: boolean | undefined
 let lastRenderResult: RenderedMarkdown | undefined
 
 function looksLikeDelimitedMath(body: string) {
@@ -398,18 +454,19 @@ function convertAlerts(html: string, locale: 'zh-CN' | 'en') {
   )
 }
 
-export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'en'): RenderedMarkdown {
+export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'en', strictLineBreaks = false): RenderedMarkdown {
   // React development replays, export fallbacks and native preview hosts can
   // request the same immutable document more than once. Retaining only the
   // most recent parse avoids duplicate work without allowing cache growth.
-  if (source === lastRenderSource && locale === lastRenderLocale && lastRenderResult) return lastRenderResult
+  if (source === lastRenderSource && locale === lastRenderLocale && strictLineBreaks === lastRenderStrictLineBreaks && lastRenderResult)
+    return lastRenderResult
   const frontmatter = splitFrontmatter(source)
   const environment: RenderEnvironment = {}
   // markdown-it-texmath handles dollar delimiters. Normalize the two canonical
   // LaTex delimiters before parsing so all renderers (including exports) agree.
   const hasMath = containsMath(frontmatter.body)
   const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body
-  let raw = renderer.render(mathNormalized, environment)
+  let raw = renderers.get(strictLineBreaks)!.render(normalizeInlineSemantics(mathNormalized), environment)
   const outline = anchorOutlineToSource(environment.outline ?? [], source)
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ul>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ul></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
@@ -432,12 +489,13 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   }
   lastRenderSource = source
   lastRenderLocale = locale
+  lastRenderStrictLineBreaks = strictLineBreaks
   lastRenderResult = result
   return result
 }
 
-export function renderMarkdown(source: string, locale: 'zh-CN' | 'en' = 'en'): RenderedMarkdown {
-  return sanitizeRenderedMarkdown(renderMarkdownUnsafe(source, locale))
+export function renderMarkdown(source: string, locale: 'zh-CN' | 'en' = 'en', strictLineBreaks = false): RenderedMarkdown {
+  return sanitizeRenderedMarkdown(renderMarkdownUnsafe(source, locale, strictLineBreaks))
 }
 
 /**
@@ -446,8 +504,12 @@ export function renderMarkdown(source: string, locale: 'zh-CN' | 'en' = 'en'): R
  * worker; callers must sanitise the returned result before inserting it into a
  * document.
  */
-export async function renderMarkdownEnhancedUnsafe(source: string, locale: 'zh-CN' | 'en' = 'en'): Promise<RenderedMarkdown> {
-  const result = renderMarkdownUnsafe(source, locale)
+export async function renderMarkdownEnhancedUnsafe(
+  source: string,
+  locale: 'zh-CN' | 'en' = 'en',
+  strictLineBreaks = false,
+): Promise<RenderedMarkdown> {
+  const result = renderMarkdownUnsafe(source, locale, strictLineBreaks)
   let html = result.html
   if (result.optionalRenderers.includes('highlight')) {
     const { highlightCode, prepareHighlightLanguages } = await import('./syntaxHighlight')
@@ -471,6 +533,10 @@ export async function renderMarkdownEnhancedUnsafe(source: string, locale: 'zh-C
   return { ...result, html }
 }
 
-export async function renderMarkdownEnhanced(source: string, locale: 'zh-CN' | 'en' = 'en'): Promise<RenderedMarkdown> {
-  return sanitizeRenderedMarkdown(await renderMarkdownEnhancedUnsafe(source, locale))
+export async function renderMarkdownEnhanced(
+  source: string,
+  locale: 'zh-CN' | 'en' = 'en',
+  strictLineBreaks = false,
+): Promise<RenderedMarkdown> {
+  return sanitizeRenderedMarkdown(await renderMarkdownEnhancedUnsafe(source, locale, strictLineBreaks))
 }

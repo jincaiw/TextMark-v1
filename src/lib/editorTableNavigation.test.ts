@@ -34,6 +34,18 @@ describe('Markdown table keyboard navigation', () => {
     })
   })
 
+  it('keeps cell offsets and inserted rows correct for CRLF documents', () => {
+    const crlfSource = source.replace(/\n/g, '\r\n')
+    expect(markdownTableNavigationPlan(crlfSource, crlfSource.indexOf('B'), 'next')).toMatchObject({
+      selection: crlfSource.indexOf('C'),
+    })
+    expect(markdownTableNavigationPlan(crlfSource, crlfSource.indexOf('D'), 'next')).toEqual({
+      handled: true,
+      change: { from: crlfSource.length, insert: '\r\n|  |  |' },
+      selection: crlfSource.length + 4,
+    })
+  })
+
   it('keeps Shift-Tab at the first cell inside the table and ignores prose', () => {
     expect(markdownTableNavigationPlan(source, source.indexOf('A'), 'previous')).toEqual({ handled: true })
     expect(markdownTableNavigationPlan(`Before\n${source}\nAfter`, 0, 'next')).toEqual({ handled: false })

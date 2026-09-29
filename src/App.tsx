@@ -38,6 +38,7 @@ import {
   detectPlatform,
   detectRuntime,
   discoverApplications,
+  errorCode,
   isMacos,
   isTauri,
   installCli,
@@ -170,7 +171,7 @@ function DocumentApp() {
   // Remembering it on the way out is what lets an output action put it back.
   const editorExitRef = useRef<EditorExitCaret | null>(null)
   const editorExitSelectionRef = useRef<EditorSessionState['selection'] | null>(null)
-  const rendered = useMarkdownRenderer(documents.document.contents, settings.locale)
+  const rendered = useMarkdownRenderer(documents.document.contents, settings.locale, settings.strictLineBreaks)
   useEffect(() => {
     localStorage.setItem('textmark.sidebarVisible', String(sidebarVisible))
     localStorage.setItem('textmark.sidebarMode', sidebarMode)
@@ -634,8 +635,14 @@ function DocumentApp() {
         const { name, bytes } = await exporter.buildPngExport(documents.document.name, root)
         if (await saveExportFile(name, bytes, 'PNG', ['png'])) flash(t(settings.locale, 'exported'))
       }
-    } catch {
-      flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+    } catch (error) {
+      if (errorCode(error) === 'read_only') {
+        flash(
+          settings.locale === 'zh-CN'
+            ? '目标文件只读。请选择可写位置或更改权限后重试。'
+            : 'The destination is read-only. Choose a writable location or change its permissions and try again.',
+        )
+      } else flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
     } finally {
       if (restoreEditMode) switchViewMode('edit')
     }
@@ -654,8 +661,14 @@ function DocumentApp() {
       }
       const { name, bytes } = await exporter.buildPdfExport(documents.document.name, root)
       if (await saveExportFile(name, bytes, 'PDF', ['pdf'])) flash(t(settings.locale, 'exported'))
-    } catch {
-      flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+    } catch (error) {
+      if (errorCode(error) === 'read_only') {
+        flash(
+          settings.locale === 'zh-CN'
+            ? '目标文件只读。请选择可写位置或更改权限后重试。'
+            : 'The destination is read-only. Choose a writable location or change its permissions and try again.',
+        )
+      } else flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
     } finally {
       if (restoreEditMode) switchViewMode('edit')
     }
@@ -1529,6 +1542,7 @@ function DocumentApp() {
         contentWidth={settings.contentWidth}
         editorFontSize={settings.editorFontSize}
         lineHeight={settings.lineHeight}
+        strictLineBreaks={settings.strictLineBreaks}
         pagePaddingHorizontal={settings.pagePaddingHorizontal}
         documentFont={settings.documentFont}
         themePreset={settings.themePreset}
@@ -1547,6 +1561,7 @@ function DocumentApp() {
         onContentWidthChange={setContentWidth}
         onEditorFontSizeChange={setEditorFontSize}
         onLineHeightChange={setLineHeight}
+        onStrictLineBreaksChange={(strictLineBreaks) => patch({ strictLineBreaks })}
         onPagePaddingHorizontalChange={setPagePaddingHorizontal}
         onDocumentFontChange={setDocumentFont}
         onThemePresetChange={chooseThemePreset}

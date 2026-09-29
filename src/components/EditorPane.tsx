@@ -10,6 +10,7 @@ import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
 import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
 import { markdownTableNavigationPlan } from '../lib/editorTableNavigation'
+import { taskListEnterPlan } from '../lib/editorTaskList'
 import {
   codeFenceAutoCloseInsertion,
   editableCodeFenceAtLine,
@@ -346,6 +347,20 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     }
     return true
   }
+  const continueTaskList = (view: EditorView) => {
+    const selection = view.state.selection.main
+    const plan = taskListEnterPlan(view.state.doc.toString(), selection.head, selection.empty)
+    if (!plan.handled) return false
+    if (plan.change) {
+      view.dispatch({
+        changes: plan.change,
+        selection: { anchor: plan.selection ?? plan.change.from + plan.change.insert.length },
+        userEvent: 'input',
+        scrollIntoView: true,
+      })
+    }
+    return true
+  }
 
   useImperativeHandle(
     forwardedRef,
@@ -408,6 +423,19 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         const position = view.state.doc.line(target).from
         view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) })
         view.focus()
+        // WebKit can accept the selection transaction without applying the
+        // CodeMirror scroll effect when the target line is outside its current
+        // virtualized viewport. Reconcile the scroll position against the
+        // measured caret rectangle after the new viewport has been laid out.
+        requestAnimationFrame(() => {
+          if (viewRef.current !== view) return
+          const caret = view.coordsAtPos(position)
+          if (!caret) return
+          const scroller = view.scrollDOM
+          const visibleTop = scroller.getBoundingClientRect().top + scroller.clientTop + editorOverlayHeight(view) + 12
+          const delta = caret.top - visibleTop
+          if (Math.abs(delta) > 1) scroller.scrollBy({ top: delta, behavior: 'smooth' })
+        })
       },
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
@@ -605,13 +633,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             EditorView.scrollMargins.of((view) => ({ top: editorOverlayHeight(view) })),
             EditorView.contentAttributes.of({ spellcheck: 'true', autocapitalize: 'sentences' }),
             keymap.of([
+              { key: 'Enter', run: continueTaskList },
               { key: 'Tab', run: (view) => navigateTableCell(view, 'next') || indentFenceBody(view, 'more') },
               { key: 'Shift-Tab', run: (view) => navigateTableCell(view, 'previous') || indentFenceBody(view, 'less') },
             ]),
           ]}
           onCreateEditor={(view) => {
             viewRef.current = view
-            if (import.meta.env.DEV) (window as Window & { __TEXTMARK_EDITOR_VIEW__?: EditorView }).__TEXTMARK_EDITOR_VIEW__ = view
+            if (import.meta.env.DEV || import.meta.env.VITE_WDIO)
+              (window as Window & { __TEXTMARK_EDITOR_VIEW__?: EditorView }).__TEXTMARK_EDITOR_VIEW__ = view
             const head = view.state.selection.main.head
             const line = view.state.doc.lineAt(head)
             setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
