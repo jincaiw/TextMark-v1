@@ -28,10 +28,18 @@ describe('WhatsNewDialog', () => {
   it('shows localized update highlights and closes from the Done button', () => {
     render('zh-CN')
     expect(host.textContent).toContain('TextMark 更新内容')
-    expect(host.textContent).toContain('中文输入更稳定')
-    expect(host.textContent).toContain('目录跳转保留编辑位置')
+    expect(host.textContent).toContain('长文档目录跳转更可靠')
+    expect(host.textContent).toContain('工具栏查找不再重复显示')
+    expect(host.textContent).toContain('快捷键查找保留完整操作')
     act(() => host.querySelector<HTMLButtonElement>('footer button')!.click())
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('shows the matching search highlights in English', () => {
+    render('en')
+    expect(host.textContent).toContain('More reliable outline navigation in long documents')
+    expect(host.textContent).toContain('Toolbar search has a single query field')
+    expect(host.textContent).toContain('Keyboard search keeps full find controls')
   })
 
   it('closes from Escape and clicking outside the dialog', () => {

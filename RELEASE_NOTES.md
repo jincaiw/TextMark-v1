@@ -1,3 +1,16 @@
+# TextMark v0.10.35
+
+TextMark 0.10.35 aligns the first-launch What's New dialog with the release. It highlights reliable outline navigation in long Edit Mode documents and the integrated toolbar search experience introduced in v0.10.34.
+
+TextMark 0.10.35 修正首次启动“更新内容”弹窗仍显示旧版本说明的问题。弹窗现在准确介绍 0.10.34 带来的长文档目录跳转和工具栏查找改进，并提供中英文内容。
+
+## Highlights / 主要更新
+
+- What's New: replace outdated highlights with the current release's long-document outline navigation and toolbar search improvements in both Chinese and English.
+- Verification: 508 frontend tests, lint, format, production build and bundle-budget checks pass. Full release CI performs dependency audits, Rust checks and platform package smoke tests. No physical Windows/Linux testing is claimed; macOS ad-hoc signing is accepted without Developer ID or notarization.
+
+---
+
 # TextMark v0.10.34
 
 TextMark 0.10.34 improves navigation and search in Edit Mode. Outline links now scroll reliably to headings in long virtualized documents without moving the caret. Toolbar search keeps its query in the toolbar, focuses the field reliably, and keeps it available when toolbar items overflow.

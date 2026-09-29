@@ -30,7 +30,7 @@ export function WhatsNewDialog({ locale, onClose }: WhatsNewDialogProps) {
         <header>
           <div>
             <h2 id="whats-new-title">{isChinese ? 'TextMark 更新内容' : "What's New in TextMark"}</h2>
-            <p>{isChinese ? '编辑体验与桌面操作改进' : 'Improvements to editing and desktop workflows'}</p>
+            <p>{isChinese ? '目录跳转与文稿查找体验改进' : 'Improvements to outline navigation and document search'}</p>
           </div>
           <button type="button" aria-label={isChinese ? '关闭' : 'Close'} onClick={onClose}>
             <X size={16} />
@@ -38,27 +38,27 @@ export function WhatsNewDialog({ locale, onClose }: WhatsNewDialogProps) {
         </header>
         <ul>
           <li>
-            <strong>{isChinese ? '目录跳转保留编辑位置' : 'Outline navigation keeps your edit position'}</strong>
+            <strong>{isChinese ? '长文档目录跳转更可靠' : 'More reliable outline navigation in long documents'}</strong>
             <span>
               {isChinese
-                ? '编辑模式下点击目录只滚动到标题，不移动光标，也不打开展示 Markdown 标记的编辑状态。'
-                : 'In Edit Mode, selecting an outline heading scrolls to it without moving the caret or revealing Markdown markers.'}
+                ? '编辑模式下点击目录可滚动到屏幕外的标题，同时保留当前编辑光标。'
+                : 'In Edit Mode, selecting an offscreen heading scrolls it into view while preserving the current caret position.'}
             </span>
           </li>
           <li>
-            <strong>{isChinese ? '阅读和导出保持只读' : 'Read-only task lists in previews and exports'}</strong>
+            <strong>{isChinese ? '工具栏查找不再重复显示' : 'Toolbar search has a single query field'}</strong>
             <span>
               {isChinese
-                ? '预览与导出中的任务复选框不能意外修改文稿；文稿搜索路径也会在窄窗口中完整提示。'
-                : 'Task checkboxes in previews and exports cannot unexpectedly modify documents; search paths remain discoverable in narrow windows.'}
+                ? '搜索框直接在工具栏展开，不会再与查找栏重复；打开后会自动聚焦，工具栏空间不足时仍保持可用。'
+                : 'The query expands in the toolbar without a duplicate field, receives focus when opened, and remains available when toolbar items overflow.'}
             </span>
           </li>
           <li>
-            <strong>{isChinese ? '中文输入更稳定' : 'More stable CJK input'}</strong>
+            <strong>{isChinese ? '快捷键查找保留完整操作' : 'Keyboard search keeps full find controls'}</strong>
             <span>
               {isChinese
-                ? '在标题中使用中文输入法时，组合输入期间会保持 Markdown 标题标记稳定显示。'
-                : 'Markdown heading markers stay stable while composing text with a Chinese or Japanese input method.'}
+                ? '使用快捷键打开查找时，查找栏仍提供匹配计数、大小写选项和替换操作。'
+                : 'Opening Find with its keyboard shortcut keeps the match count, case options, and replacement controls available.'}
             </span>
           </li>
           <li>
