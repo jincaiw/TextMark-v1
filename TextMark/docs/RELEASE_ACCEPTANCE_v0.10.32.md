@@ -4,8 +4,8 @@
 
 - Developer ID、公证票据、Gatekeeper 评估不作为发布门槛；未签名或 ad-hoc 签名应用可由用户在“系统设置 → 隐私与安全性”手动允许打开。Windows/Linux 真机测试不执行，也不作为放行条件。
 - 已发布 v0.10.31 的 GitHub Release run `36319119058` 全部成功：质量门、macOS Universal/Quick Look、Windows x64/ARM64 安装器和 Explorer 预览、Linux x64/ARM64 DEB/AppImage/RPM/KDE 预览及最终发布均通过。其 macOS 包按 ad-hoc 身份构建，符合上述策略。
-- 当前工作树已将版本号更新到 0.10.32，尚未提交。前端 54 个测试文件/501 项、ESLint、Prettier、生产构建、bundle 预算、生产依赖审计、导出回归、Rust 27 项测试、Clippy、macOS Quick Look XCTest，以及 Ubuntu 22.04 x64/ARM64 容器 DEB 构建和安装生命周期烟测均通过。v0.10.32 的 GitHub Release CI 尚未运行。
-- **当前工作树验收状态：本地门禁通过，待提交并由正式发布 CI 验证。** 之前章节中将公证/Gatekeeper或 Windows/Linux 真机验收列为 P1 阻断的结论，均由本节与后续标准调整补记覆盖。其余历史检查记录保留作追溯。
+- v0.10.32 已提交为 `ad115cb` 并于 2026-09-29 正式发布。GitHub Release run `36506128410` 全部通过，公开 Release 状态为非草稿、非预发布，共发布 36 项资产；安装器矩阵、Quick Look、updater metadata 和完整资产清单检查均成功。
+- **当前验收状态：通过并已发布。** 按要求没有进行 Windows/Linux 用户真机测试；发布流水线的 Windows/Linux 托管 CI runner 已完成包构建与安装/预览/卸载自动化烟测。macOS ad-hoc 包和 Quick Look 注册检查通过；不要求 Developer ID、公证或 Gatekeeper 验收，用户可在“系统设置 → 隐私与安全性”手动允许打开。之前章节中的旧门槛结论均为历史记录，由本节和后续标准调整补记覆盖。
 
 ## 结论
 
@@ -177,8 +177,8 @@
 - 不要求 Windows/Linux 真机验证。容器构建与包安装脚本只报告为容器烟测，不宣称目标桌面环境实机验收。
 - Ubuntu 22.04 x64/amd64 容器补测成功：Tauri release 构建生成 `TextMark_0.10.31_amd64.deb`；安装、命令别名/MIME/缩略图器注册、CLI PNG 缩略图生成、卸载脚本通过。该结果与 ARM64 DEB 容器烟测合并记录；本轮未在真实 Linux 桌面会话测试窗口启动，也未测 AppImage/RPM/KDE 插件或发行版差异。
 - Ubuntu 22.04 x64/amd64 容器补测成功：Tauri release 构建生成 `TextMark_0.10.31_amd64.deb`；安装、命令别名/MIME/缩略图器注册、CLI PNG 缩略图生成、卸载脚本通过。该结果与 ARM64 DEB 烟测合并记录；本轮未在真实 Linux 桌面会话测试窗口启动，也未测 AppImage/RPM/KDE 插件或发行版差异。
-- 新候选版本已更新为 `0.10.32`，对外说明涵盖编辑模式 WYSIWYG、表格键盘导航、换行偏好、只读保存/导出保护及 ad-hoc macOS 首次启动提示。候选已完成本地全量质量门，但尚未提交、打标签或运行新的发布 CI。
-- 因此，先前的“缺少 Apple 签名/公证与 Windows/Linux 实机验证”不再单独阻止发布。按用户要求不进行 Windows/Linux 真机测试；剩余跨平台包矩阵交由发布流水线运行，成功后再公开发布。
+- `v0.10.32` 已公开发布，Release 页面为 https://github.com/jincaiw/TextMark-v1/releases/tag/v0.10.32 。36 项资产包含 macOS ARM64/Universal DMG、Universal updater archive、Windows x64/ARM64 MSI/NSIS/portable ZIP、Linux x64/ARM64 DEB/AppImage、Fedora x64/ARM64 RPM、updater manifest、SBOM、安装说明、发布说明和 SHA-256 校验清单。
+- Release CI 的 Windows x64/ARM64、Ubuntu x64/ARM64、Fedora x64/ARM64 包矩阵全部成功；包含 MSI/NSIS 安装与卸载、Explorer 预览，DEB/AppImage 安装与便携模式、RPM/KDE 缩略图，以及 macOS Quick Look 注册烟测。这些是托管 runner 自动测试记录，不作为用户 Windows/Linux 真机测试的表述。
 
 
 ### 严格换行偏好补充验证
