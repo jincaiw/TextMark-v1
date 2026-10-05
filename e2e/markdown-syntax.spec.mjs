@@ -66,6 +66,11 @@ describeSyntax('Markdown syntax corpus rendering', () => {
   it('keeps math, Mermaid, and footnotes readable in WYSIWYG edit mode', async () => {
     await $('button[aria-label="编辑"]').click()
     await (await $('.cm-content')).waitForDisplayed()
+    await browser.execute(() => {
+      const scroller = document.querySelector('.cm-scroller')
+      if (scroller) scroller.scrollTop = 0
+    })
+    await browser.waitUntil(async () => (await $$('.cm-md-frontmatter-start')).length > 0)
 
     const frontmatterCard = await browser.execute(() => {
       const start = document.querySelector('.cm-md-frontmatter-start')

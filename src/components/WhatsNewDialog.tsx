@@ -30,7 +30,7 @@ export function WhatsNewDialog({ locale, onClose }: WhatsNewDialogProps) {
         <header>
           <div>
             <h2 id="whats-new-title">{isChinese ? 'TextMark 更新内容' : "What's New in TextMark"}</h2>
-            <p>{isChinese ? '目录跳转与文稿查找体验改进' : 'Improvements to outline navigation and document search'}</p>
+            <p>{isChinese ? '编辑模式所见即所得体验优化' : 'A more WYSIWYG Edit Mode'}</p>
           </div>
           <button type="button" aria-label={isChinese ? '关闭' : 'Close'} onClick={onClose}>
             <X size={16} />
@@ -38,27 +38,27 @@ export function WhatsNewDialog({ locale, onClose }: WhatsNewDialogProps) {
         </header>
         <ul>
           <li>
-            <strong>{isChinese ? '长文档目录跳转更可靠' : 'More reliable outline navigation in long documents'}</strong>
+            <strong>{isChinese ? '格式标记按需显隐' : 'Markdown syntax appears when you edit it'}</strong>
             <span>
               {isChinese
-                ? '编辑模式下点击目录可滚动到屏幕外的标题，同时保留当前编辑光标。'
-                : 'In Edit Mode, selecting an offscreen heading scrolls it into view while preserving the current caret position.'}
+                ? '标题、格式符号、代码围栏和链接目标在阅读内容时收起；光标进入对应源码后再显示。'
+                : 'Headings, formatting delimiters, code fences, and link destinations stay out of the way until the caret enters their source.'}
             </span>
           </li>
           <li>
-            <strong>{isChinese ? '工具栏查找不再重复显示' : 'Toolbar search has a single query field'}</strong>
+            <strong>{isChinese ? '复杂 Markdown 区块更贴近成稿' : 'Markdown blocks look closer to the final document'}</strong>
             <span>
               {isChinese
-                ? '搜索框直接在工具栏展开，不会再与查找栏重复；打开后会自动聚焦，工具栏空间不足时仍保持可用。'
-                : 'The query expands in the toolbar without a duplicate field, receives focus when opened, and remains available when toolbar items overflow.'}
+                ? '改进嵌套列表、引用、提示块、代码块、定义列表和段落留白；点击渲染区可回到对应源码。'
+                : 'Nested lists, quotes, alerts, code blocks, definition lists, and paragraph spacing are refined; clicking a rendered block returns to its source.'}
             </span>
           </li>
           <li>
-            <strong>{isChinese ? '快捷键查找保留完整操作' : 'Keyboard search keeps full find controls'}</strong>
+            <strong>{isChinese ? '表格与转义字符编辑更自然' : 'Tables and escaped punctuation edit naturally'}</strong>
             <span>
               {isChinese
-                ? '使用快捷键打开查找时，查找栏仍提供匹配计数、大小写选项和替换操作。'
-                : 'Opening Find with its keyboard shortcut keeps the match count, case options, and replacement controls available.'}
+                ? '点击表格单元格可定位对应 Markdown 内容；转义标点显示为阅读效果，仍保留原始文稿。'
+                : 'Clicking a table cell selects its matching Markdown source; escaped punctuation displays cleanly while the document source stays intact.'}
             </span>
           </li>
           <li>

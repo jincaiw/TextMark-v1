@@ -5,7 +5,10 @@ import { markdownImageReferences } from './pastedImages'
 import { splitFrontmatter } from './frontmatter'
 import { renderMath } from './mathRender'
 import { renderMarkdown } from './markdown'
+import { markdownDefinitionListBlocks, type MarkdownDefinitionListBlock } from './markdownDefinitionLists'
 import { sanitizeMermaidSvg } from './sanitize'
+
+export { markdownDefinitionListBlocks } from './markdownDefinitionLists'
 
 const lineClass = (line: string) => {
   if (/^\s{0,3}\[\^[^\]]+\]:/.test(line)) return 'cm-md-footnote-definition'
@@ -60,6 +63,14 @@ function markdownFootnotes(state: EditorState): MarkdownFootnotes {
 
 function markdownQuotePrefix(line: string): string {
   return line.match(/^(?:[ \t]{0,3}>[ \t]?)+/)?.[0] ?? ''
+}
+
+/** Alternating bullet shapes improve the hierarchy cues in nested lists. */
+export function markdownListMarkerClass(line: string): string {
+  const quotePrefix = markdownQuotePrefix(line)
+  const indentation = line.slice(quotePrefix.length).match(/^[\t ]*/)?.[0] ?? ''
+  const columns = indentation.replace(/\t/g, '    ').length
+  return `cm-md-list-marker cm-md-list-depth-${Math.floor(columns / 2) % 3}`
 }
 
 function markdownCodeContentOffset(line: string): number {
@@ -594,6 +605,26 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
     })
   const isFullyInsideRange = (from: number, to: number, ranges: Array<{ from: number; to: number }>) =>
     ranges.some((range) => range.from <= from && range.to >= to)
+  if (!isFenceLine) {
+    for (let index = 0; index + 1 < line.length; index += 1) {
+      if (line[index] !== '\\') continue
+      const escaped = line.charCodeAt(index + 1)
+      const isAsciiPunctuation =
+        (escaped >= 33 && escaped <= 47) ||
+        (escaped >= 58 && escaped <= 64) ||
+        (escaped >= 91 && escaped <= 96) ||
+        (escaped >= 123 && escaped <= 126)
+      if (
+        !isAsciiPunctuation ||
+        isFullyInsideRange(index, index + 2, inlineCodeRanges) ||
+        isFullyInsideRange(index, index + 2, inlineMathRanges)
+      )
+        continue
+      add(index, index + 1, 'cm-md-escape-marker')
+      add(index + 1, index + 2, 'cm-md-escaped-character')
+      index += 1
+    }
+  }
   const prefix = line.match(/^(\s{0,3})(#{1,6})(?=\s)|^(\s*)([-+*]|\d+[.)])(?=\s)/)
   if (prefix) {
     const markerStart = prefix[1]?.length ?? prefix[3]?.length ?? 0
@@ -632,7 +663,10 @@ export function markdownSyntaxMarkers(line: string): MarkdownSyntaxMarker[] {
     add(offset, offset + 1, 'cm-md-hardbreak-marker')
   }
   if (/^\s*\|.*\|\s*$/.test(line)) {
-    for (const match of line.matchAll(/\|/g)) add(match.index ?? 0, (match.index ?? 0) + 1, 'cm-md-table-marker')
+    for (const match of line.matchAll(/\|/g)) {
+      const offset = match.index ?? 0
+      if (!isEscaped(offset)) add(offset, offset + 1, 'cm-md-table-marker')
+    }
   }
   // Keep Markdown syntax visible on the active line (the caller skips markers
   // there), and let inactive lines read like rendered content. These ranges
@@ -678,6 +712,7 @@ const inlineNodeClasses: Record<string, string> = {
 export interface EditorImageReference {
   alt: string
   path: string
+  title?: string
   from: number
   to: number
 }
@@ -685,7 +720,7 @@ export interface EditorImageReference {
 export function editorImageReferences(line: string): EditorImageReference[] {
   return markdownImageReferences(line)
     .filter(({ path }) => !/^(?:[a-z][a-z0-9+.-]*:|\/|\\|#)/i.test(path))
-    .map(({ alt, path, imageFrom, imageTo }) => ({ alt, path, from: imageFrom, to: imageTo }))
+    .map(({ alt, path, title, imageFrom, imageTo }) => ({ alt, path, ...(title ? { title } : {}), from: imageFrom, to: imageTo }))
 }
 
 interface EditorMarkdownDecorationOptions {
@@ -697,13 +732,14 @@ class ImagePreviewWidget extends WidgetType {
   constructor(
     readonly path: string,
     readonly alt: string,
+    readonly title: string | undefined,
     readonly options: EditorMarkdownDecorationOptions,
   ) {
     super()
   }
 
   eq(other: ImagePreviewWidget) {
-    return other.path === this.path && other.alt === this.alt && other.options === this.options
+    return other.path === this.path && other.alt === this.alt && other.title === this.title && other.options === this.options
   }
 
   toDOM() {
@@ -711,7 +747,7 @@ class ImagePreviewWidget extends WidgetType {
     button.type = 'button'
     button.className = 'cm-md-image-preview'
     button.setAttribute('aria-label', this.alt ? `Image: ${this.alt}` : 'Markdown image')
-    button.title = this.path
+    button.title = this.title || this.alt || this.path
     const image = document.createElement('img')
     image.alt = this.alt
     button.append(image)
@@ -908,8 +944,21 @@ class TablePreviewWidget extends WidgetType {
       const trimmedEnd = rawCell.trimEnd().length
       const from = sourceLine.from + range.from + leadingWhitespace
       const to = sourceLine.from + range.from + trimmedEnd
-      view.dispatch({ selection: { anchor: from, head: Math.max(from, to) }, scrollIntoView: true })
+      const scroller = view.scrollDOM
+      const clickedY = cell.getBoundingClientRect().top
+      // Selecting a cell removes the rendered table widget. Scrolling in the
+      // same transaction uses the widget's old height and can jump to the
+      // document start. Align the source row after CodeMirror lays it out.
+      view.dispatch({ selection: { anchor: from, head: Math.max(from, to) } })
       view.focus()
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (!view.dom.isConnected || view.state.selection.main.from !== from || view.state.selection.main.to !== Math.max(from, to))
+            return
+          const sourceY = view.coordsAtPos(from)?.top
+          if (sourceY !== undefined) scroller.scrollTop += sourceY - clickedY
+        }),
+      )
     }
     element.addEventListener('mousedown', (event) => {
       if (event.target instanceof Element && event.target.closest('th, td')) event.preventDefault()
@@ -928,6 +977,69 @@ class TablePreviewWidget extends WidgetType {
 
   ignoreEvent(event: Event) {
     return event.target instanceof Element && Boolean(event.target.closest('th, td'))
+  }
+}
+
+class DefinitionListPreviewWidget extends WidgetType {
+  constructor(readonly block: MarkdownDefinitionListBlock) {
+    super()
+  }
+
+  eq(other: DefinitionListPreviewWidget) {
+    return this.block.from === other.block.from && this.block.to === other.block.to && this.block.source === other.block.source
+  }
+
+  toDOM(view: EditorView) {
+    const renderContents = (container: HTMLElement, markdown: string) => {
+      const rendered = renderMarkdown(markdown).html.trim()
+      const parsed = new DOMParser().parseFromString(rendered, 'text/html')
+      const paragraph =
+        parsed.body.children.length === 1 && parsed.body.firstElementChild?.tagName === 'P' ? parsed.body.firstElementChild : null
+      container.innerHTML = paragraph?.innerHTML ?? rendered
+    }
+    const list = document.createElement('dl')
+    list.className = 'cm-md-definition-list-preview markdown-body'
+    const term = document.createElement('dt')
+    renderContents(term, this.block.term)
+    term.dataset.sourcePosition = String(this.block.termFrom)
+    list.append(term)
+    for (const definition of this.block.definitions) {
+      const description = document.createElement('dd')
+      renderContents(description, definition.source)
+      description.dataset.sourcePosition = String(definition.from)
+      list.append(description)
+    }
+    list.addEventListener('mousedown', (event) => event.preventDefault())
+    list.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-source-position]') : null
+      const position = Number(target?.dataset.sourcePosition)
+      if (!Number.isFinite(position)) return
+      // Changing the selection expands this block replacement back into its
+      // source lines. Scroll after that layout update, otherwise CodeMirror
+      // measures the old widget height and can jump to the document top.
+      view.dispatch({ selection: { anchor: position } })
+      view.focus()
+      const alignSourceLine = () => {
+        if (!view.dom.isConnected || view.state.selection.main.head !== position) return
+        const block = view.lineBlockAt(position)
+        const scroller = view.scrollDOM
+        const targetTop = block.top + block.height / 2 - scroller.clientHeight / 2
+        if (Math.abs(targetTop - scroller.scrollTop) > 1) scroller.scrollTo({ top: targetTop, behavior: 'auto' })
+      }
+      requestAnimationFrame(() => {
+        if (!view.dom.isConnected) return
+        view.dispatch({ effects: EditorView.scrollIntoView(position, { y: 'center' }) })
+        // Selection changes also update the editor toolbar through React.
+        // Reconcile after that update has painted; WebKit otherwise restores
+        // the previous scroll offset while replacing the quote widget.
+        requestAnimationFrame(alignSourceLine)
+      })
+    })
+    return list
+  }
+
+  ignoreEvent(event: Event) {
+    return event.target instanceof Element && Boolean(event.target.closest('dt, dd'))
   }
 }
 
@@ -975,27 +1087,92 @@ class TocPreviewWidget extends WidgetType {
 }
 
 class QuotePreviewWidget extends WidgetType {
-  constructor(readonly source: string) {
+  constructor(readonly block: MarkdownQuoteBlock) {
     super()
   }
 
   eq(other: QuotePreviewWidget) {
-    return this.source === other.source
+    return this.block.from === other.block.from && this.block.to === other.block.to && this.block.source === other.block.source
   }
 
-  toDOM() {
+  toDOM(view: EditorView) {
     const element = document.createElement('div')
     element.className = 'cm-md-quote-preview markdown-body'
-    element.innerHTML = renderMarkdown(collapseRepeatedQuoteBlankLines(this.source)).html
-    element.querySelectorAll<HTMLElement>('.md-source-blank-line').forEach((blankLine) => {
-      blankLine.style.display = 'none'
-    })
+    element.tabIndex = 0
+    element.setAttribute('aria-label', '编辑引用块')
+    const firstLine = this.block.source.split('\n', 1)[0] ?? ''
+    const indentation = firstLine.match(/^[\t ]*/)?.[0] ?? ''
+    const indentColumns = indentation.replace(/\t/g, '    ').length
+    if (indentColumns >= 2) {
+      // Block widgets are laid out at the editor's left edge, even when the
+      // source quote continues a list item. Preserve that list indentation in
+      // the preview so the quote remains visually nested under its item.
+      const indent = `${indentColumns * 0.5}em`
+      element.style.marginInlineStart = indent
+      element.style.width = `calc(100% - ${indent})`
+    }
+    element.innerHTML = renderMarkdown(collapseRepeatedQuoteBlankLines(this.block.source)).html
+    // The renderer preserves authored blank-line rhythm with synthetic
+    // elements. In a block replacement the original Markdown lines are
+    // already hidden, so carrying those spacers into the widget doubles the
+    // vertical gap between quote paragraphs and nested blocks.
+    element.querySelectorAll('.md-source-blank-line, .md-source-blank-line-final').forEach((blankLine) => blankLine.remove())
     element.querySelectorAll<HTMLElement>('p').forEach((paragraph) => {
-      paragraph.style.margin = '0 0 0.5em'
+      if (!paragraph.textContent?.trim() && !paragraph.querySelector('img, svg, math, input, video, audio')) paragraph.remove()
     })
-    const lastChild = element.lastElementChild
-    if (lastChild instanceof HTMLElement) lastChild.style.marginBottom = '0'
+    const enterSource = (target: EventTarget | null) => {
+      const renderedLine = target instanceof Element ? target.closest('p, li, pre, .markdown-alert-title') : null
+      const visibleText = renderedLine?.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? ''
+      const sourceLines = this.block.source.split('\n')
+      const lineIndex = sourceLines.findIndex((line) => {
+        const content = line
+          .slice(markdownQuotePrefix(line).length)
+          .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)?/, '')
+          .replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, '$1')
+          .replace(/[\*_`~]/g, '')
+          .trim()
+          .toLowerCase()
+        return visibleText.length > 0 && content.startsWith(visibleText.slice(0, Math.min(6, visibleText.length)))
+      })
+      const fallback = sourceLines.findIndex((line) => line.slice(markdownQuotePrefix(line).length).trim())
+      const firstLine = view.state.doc.lineAt(this.block.from).number
+      const line = view.state.doc.line(firstLine + Math.max(0, lineIndex < 0 ? fallback : lineIndex))
+      const quotePrefixLength = markdownQuotePrefix(line.text).length
+      const listPrefix = line.text.slice(quotePrefixLength).match(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/)?.[0] ?? ''
+      // A click on rendered list text should enter the text, leaving its
+      // bullet or number rendered while the caret is inside the item.
+      const position = line.from + quotePrefixLength + listPrefix.length
+      // Removing the preview replacement changes the height of this block.
+      // Let CodeMirror finish that layout before scrolling to the source line;
+      // an immediate scroll request can be anchored against the old widget and
+      // leave the caret off screen (or jump all the way to the document top).
+      view.dispatch({ selection: { anchor: position } })
+      view.focus()
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (!view.dom.isConnected || view.state.selection.main.head !== position) return
+          const scroller = view.scrollDOM
+          const line = view.lineBlockAt(position)
+          scroller.scrollTop = Math.max(0, line.top - (scroller.clientHeight - line.height) / 2)
+        }),
+      )
+    }
+    element.addEventListener('mousedown', (event) => event.preventDefault())
+    element.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      enterSource(event.target)
+    })
+    element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== 'F2') return
+      event.preventDefault()
+      enterSource(event.target)
+    })
     return element
+  }
+
+  ignoreEvent() {
+    return true
   }
 }
 
@@ -1193,6 +1370,14 @@ function buildDecorations(
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
   const tree = syntaxTree(view.state)
   const selection = view.state.selection.main
+  const markdownLinks: Array<{ from: number; to: number }> = []
+  const inlineFormattingRanges: Array<{ from: number; to: number }> = []
+  tree.iterate({
+    enter(node) {
+      if (node.name === 'Link') markdownLinks.push({ from: node.from, to: node.to })
+      if (inlineNodeClasses[node.name]) inlineFormattingRanges.push({ from: node.from, to: node.to })
+    },
+  })
   const footnotes = markdownFootnotes(view.state)
   const setextHeadingLines = new Map<number, string>()
   const setextMarkerLines = new Set<number>()
@@ -1238,14 +1423,32 @@ function buildDecorations(
     selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
   )
   // Keep the rendered appearance on the caret line too. Only reveal Markdown
-  // delimiters while the user is editing/selecting the delimiter itself.
+  // delimiters while the user is editing/selecting the delimiter itself. When
+  // the caret touches either edge of an inline construct, reveal both edges so
+  // a single trailing marker cannot look like malformed source.
   const markerClassForSelection = (from: number, to: number, className: string) => {
-    const touchesMarker = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
+    // An outline jump places the caret at the beginning of the heading line.
+    // Keep the heading prefix hidden at that boundary so the heading remains
+    // WYSIWYG; the user can still reveal and edit it by moving into the prefix.
+    const touchesMarker = selection.empty
+      ? selection.head >= from && selection.head <= to && !(className.includes('cm-md-heading-marker') && selection.head === from)
+      : selection.from < to && selection.to > from
+    const delimiterWidth = to - from
+    const touchesInlineDelimiterPair =
+      selection.empty &&
+      className.includes('cm-md-inline-syntax') &&
+      inlineFormattingRanges.some(
+        (range) =>
+          range.from <= from &&
+          range.to >= to &&
+          ((selection.head >= range.from && selection.head <= range.from + delimiterWidth) ||
+            (selection.head >= range.to - delimiterWidth && selection.head <= range.to)),
+      )
     // Keep heading syntax visible while an IME owns the composition range. Some
     // input methods temporarily move that range across the prefix; hiding it
     // then changes the measured line width and makes the heading flicker.
     const composingHeading = view.composing && className.includes('cm-md-heading-marker')
-    return touchesMarker || composingHeading ? `${className} cm-md-source-revealed` : className
+    return touchesMarker || touchesInlineDelimiterPair || composingHeading ? `${className} cm-md-source-revealed` : className
   }
   const syntaxMarkerClasses: Record<string, string> = {
     QuoteMark: 'cm-md-syntax-marker',
@@ -1268,7 +1471,8 @@ function buildDecorations(
           visibleTocBlocks.some((block) => node.from >= block.from && node.from < block.to)
         )
           return
-        const className = inlineNodeClasses[node.name]
+        const isLinkDestination = node.name === 'URL' && markdownLinks.some((link) => link.from <= node.from && link.to >= node.to)
+        const className = isLinkDestination ? 'cm-md-link-destination' : inlineNodeClasses[node.name]
         if (className && node.from !== node.to) {
           const first = view.state.doc.lineAt(node.from).number
           const source = view.state.sliceDoc(node.from, node.to)
@@ -1285,7 +1489,11 @@ function buildDecorations(
           const isTaskMarkerLink = node.name === 'Link' && /^\[[ xX]\]$/.test(source) && /^\s*(?:[-+*]|\d+[.)])\s+$/.test(beforeNode)
           const isFootnoteReference = node.name === 'Link' && /^\[\^[^\]]+\]$/.test(source)
           if (!isAlertLabel && !isTaskMarkerLink && !isFootnoteReference && !frontmatterLines.has(first) && !mathLines.has(first))
-            add(node.from, node.to, Decoration.mark({ class: className }))
+            add(
+              node.from,
+              node.to,
+              Decoration.mark({ class: isLinkDestination ? markerClassForSelection(node.from, node.to, className) : className }),
+            )
         }
         const markerClass = syntaxMarkerClasses[node.name]
         if (!markerClass || node.from === node.to) return
@@ -1311,7 +1519,9 @@ function buildDecorations(
             ? 'cm-md-task-marker cm-md-task-checked'
             : node.name === 'ListMark' && /^\d/.test(source)
               ? 'cm-md-list-ordered-marker'
-              : markerClass
+              : node.name === 'ListMark'
+                ? markdownListMarkerClass(line.text)
+                : markerClass
         add(node.from, node.to, Decoration.mark({ class: markerClassForSelection(node.from, node.to, cls) }))
       },
     })
@@ -1383,8 +1593,8 @@ function buildDecorations(
             ? 'cm-md-blank-line-collapsed'
             : lineClass(line.text))
         const className =
-          (setextMarkerLines.has(number) ? `cm-md-setext-marker${markerLineEditing ? ' cm-md-source-revealed' : ''}` : null) ??
           frontmatterLines.get(number) ??
+          (setextMarkerLines.has(number) ? `cm-md-setext-marker${markerLineEditing ? ' cm-md-source-revealed' : ''}` : null) ??
           (mathLines.has(number)
             ? 'cm-md-math-block'
             : (alertLines.get(number) ??
@@ -1433,6 +1643,8 @@ function buildDecorations(
         for (const marker of markdownSyntaxMarkers(line.text))
           if (
             marker.className === 'cm-md-hardbreak-marker' ||
+            marker.className === 'cm-md-escape-marker' ||
+            marker.className === 'cm-md-escaped-character' ||
             marker.className === 'cm-md-table-marker' ||
             marker.className === 'cm-md-admonition-marker' ||
             marker.className === 'cm-md-heading-marker' ||
@@ -1625,7 +1837,7 @@ function buildDecorations(
           const to = line.from + image.to
           const editingImage = selection.empty ? selection.head >= from && selection.head <= to : selection.from < to && selection.to > from
           if (editingImage) continue
-          add(from, to, Decoration.replace({ widget: new ImagePreviewWidget(image.path, image.alt, options) }))
+          add(from, to, Decoration.replace({ widget: new ImagePreviewWidget(image.path, image.alt, image.title, options) }))
         }
     }
   }
@@ -1674,7 +1886,7 @@ function buildCodeBlockWrappers(
       wrappers.push(
         BlockWrapper.create({
           tagName: 'div',
-          attributes: { class: 'cm-md-code-card' },
+          attributes: { class: markdownQuotePrefix(first.text) ? 'cm-md-code-card cm-md-quote-code-card' : 'cm-md-code-card' },
         }).range(first.from, Math.max(last.to, last.from + 1)),
       )
     },
@@ -1690,6 +1902,7 @@ interface RenderedBlockDecorations {
   tableBlocks: MarkdownTableBlock[]
   quoteBlocks: MarkdownQuoteBlock[]
   tocBlocks: MarkdownTocBlock[]
+  definitionListBlocks: MarkdownDefinitionListBlock[]
   decorations: DecorationSet
 }
 
@@ -1702,6 +1915,7 @@ function buildDisplayMathDecorations(
   tableBlocks: MarkdownTableBlock[],
   quoteBlocks: MarkdownQuoteBlock[],
   tocBlocks: MarkdownTocBlock[],
+  definitionListBlocks: MarkdownDefinitionListBlock[],
 ): DecorationSet {
   const selection = state.selection.main
   const ranges: Range<Decoration>[] = []
@@ -1737,6 +1951,16 @@ function buildDisplayMathDecorations(
   const visibleTocBlocks = tocBlocks.filter((block) =>
     selection.empty ? selection.head < block.from || selection.head > block.to : selection.from >= block.to || selection.to <= block.from,
   )
+  const visibleDefinitionListBlocks = definitionListBlocks.filter(
+    (block) =>
+      (selection.empty
+        ? selection.head < block.from || selection.head > block.to
+        : selection.from >= block.to || selection.to <= block.from) &&
+      !detailsBlocks.some((details) => block.from >= details.from && block.to <= details.to) &&
+      !htmlBlocks.some((html) => block.from >= html.from && block.to <= html.to) &&
+      !tableBlocks.some((table) => block.from >= table.from && block.to <= table.to) &&
+      !quoteBlocks.some((quote) => block.from >= quote.from && block.to <= quote.to),
+  )
   for (const block of mathBlocks) {
     const editing = selection.empty
       ? selection.head >= block.from && selection.head <= block.to
@@ -1771,13 +1995,15 @@ function buildDisplayMathDecorations(
       ),
     )
   for (const block of visibleQuoteBlocks)
-    ranges.push(Decoration.replace({ widget: new QuotePreviewWidget(block.source), block: true }).range(block.from, block.to))
+    ranges.push(Decoration.replace({ widget: new QuotePreviewWidget(block), block: true }).range(block.from, block.to))
   for (const block of standaloneHtmlBlocks)
     ranges.push(Decoration.replace({ widget: new HtmlBlockPreviewWidget(block.source), block: true }).range(block.from, block.to))
   for (const block of visibleTableBlocks)
     ranges.push(Decoration.replace({ widget: new TablePreviewWidget(block), block: true }).range(block.from, block.to))
   for (const block of visibleTocBlocks)
     ranges.push(Decoration.replace({ widget: new TocPreviewWidget(state.doc.toString()), block: true }).range(block.from, block.to))
+  for (const block of visibleDefinitionListBlocks)
+    ranges.push(Decoration.replace({ widget: new DefinitionListPreviewWidget(block), block: true }).range(block.from, block.to))
   return Decoration.set(ranges, true)
 }
 
@@ -1877,6 +2103,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       const tableBlocks = markdownTableBlocks(source)
       const quoteBlocks = markdownQuoteBlocks(source)
       const tocBlocks = markdownTocBlocks(source)
+      const definitionListBlocks = markdownDefinitionListBlocks(source)
       return {
         mathBlocks,
         mermaidBlocks,
@@ -1885,6 +2112,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
         tableBlocks,
         quoteBlocks,
         tocBlocks,
+        definitionListBlocks,
         decorations: buildDisplayMathDecorations(
           state,
           mathBlocks,
@@ -1894,6 +2122,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           tableBlocks,
           quoteBlocks,
           tocBlocks,
+          definitionListBlocks,
         ),
       }
     },
@@ -1906,6 +2135,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
       const tableBlocks = source === null ? current.tableBlocks : markdownTableBlocks(source)
       const quoteBlocks = source === null ? current.quoteBlocks : markdownQuoteBlocks(source)
       const tocBlocks = source === null ? current.tocBlocks : markdownTocBlocks(source)
+      const definitionListBlocks = source === null ? current.definitionListBlocks : markdownDefinitionListBlocks(source)
       return {
         mathBlocks,
         mermaidBlocks,
@@ -1914,6 +2144,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
         tableBlocks,
         quoteBlocks,
         tocBlocks,
+        definitionListBlocks,
         decorations: buildDisplayMathDecorations(
           transaction.state,
           mathBlocks,
@@ -1923,6 +2154,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           tableBlocks,
           quoteBlocks,
           tocBlocks,
+          definitionListBlocks,
         ),
       }
     },

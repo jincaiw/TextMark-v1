@@ -1,3 +1,18 @@
+# TextMark v0.10.37
+
+TextMark 0.10.37 continues the Edit Mode WYSIWYG improvements. Markdown delimiters, escaped punctuation, links, nested lists, quotes, definition lists, code blocks, and tables now behave more like the rendered document, while editor clicks return to the corresponding source. Production DOMPurify and markdown-it dependencies are also updated to patched releases.
+
+TextMark 0.10.37 继续优化编辑模式的所见即所得体验：格式标记、转义标点、链接、嵌套列表、引用、定义列表、代码块和表格行为更贴近最终显示；点击渲染区可回到对应源码。同步更新 DOMPurify 与 markdown-it 的生产依赖补丁版本。
+
+## Highlights / 主要更新
+
+- Edit Mode: hide Markdown syntax while reading formatted content, reveal it when editing source, and improve heading, list, quote, alert, code, definition-list, and table presentation and source navigation.
+- Images: preserve optional Markdown image titles in editor previews.
+- Security: update DOMPurify to 3.4.16 and markdown-it to 15.0.2; the production npm audit reports no vulnerabilities.
+- Verification: 526 frontend tests, 27 Rust tests, Rust clippy, lint, format, production build, bundle budget, export regression, and production dependency audit pass. No physical Windows/Linux testing is claimed; release CI builds and smoke-tests platform packages. macOS Developer ID and notarization are not release gates.
+
+---
+
 # TextMark v0.10.35
 
 TextMark 0.10.35 aligns the first-launch What's New dialog with the release. It highlights reliable outline navigation in long Edit Mode documents and the integrated toolbar search experience introduced in v0.10.34.

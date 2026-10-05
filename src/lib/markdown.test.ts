@@ -66,6 +66,18 @@ describe('renderMarkdown', () => {
     expect(rendered.html).not.toContain('<script>')
   })
 
+  it('renders definition lists consistently and preserves following heading source lines', () => {
+    const rendered = renderMarkdown('Terms\n\nMarkdown\n: **A lightweight language.**\n\n## Next section')
+    expect(rendered.html).toContain(
+      '<dl class="md-definition-list"><dt>Markdown</dt><dd><strong>A lightweight language.</strong></dd></dl>',
+    )
+    expect(rendered.outline).toContainEqual({ id: 'next-section', text: 'Next section', level: 2, line: 6 })
+
+    const unsafe = renderMarkdown('Term\n: <script>window.compromised = true</script>')
+    expect(unsafe.html).not.toContain('<script>')
+    expect(unsafe.html).not.toContain('window.compromised')
+  })
+
   it('extracts YAML and TOML frontmatter from the rendered body', () => {
     const rendered = renderMarkdown('---\ntitle: Demo\ntags: docs\n---\n# Body')
     expect(rendered.frontmatter).toEqual([

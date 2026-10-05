@@ -2119,13 +2119,18 @@ select:focus-visible {
   align-content: start;
   overflow-x: auto;
   overflow-y: hidden;
-  margin-block: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 42%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 68%, var(--document-fill));
+  margin-block: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 6px;
+  background: var(--document-fill);
 }
 .editor-pane .cm-md-code-card-wrapped {
   grid-template-columns: minmax(0, 1fr);
+}
+.editor-pane .cm-md-quote-code-card {
+  margin-block: 0;
+  border-left: 2px solid color-mix(in srgb, var(--document-grid) 76%, var(--muted));
+  border-radius: 0 8px 8px 0;
 }
 .editor-pane .cm-line.cm-md-code-line,
 .editor-pane .cm-line.cm-md-code-fence {
@@ -2211,6 +2216,7 @@ select:focus-visible {
 .editor-pane .cm-md-syntax-marker,
 .editor-pane .cm-md-fence-marker,
 .editor-pane .cm-md-hardbreak-marker,
+.editor-pane .cm-md-escape-marker,
 .editor-pane .cm-md-inline-syntax {
   color: color-mix(in srgb, var(--muted) 62%, transparent);
   /* Invisible punctuation must not take up line width. Opacity alone left
@@ -2220,11 +2226,21 @@ select:focus-visible {
   font-size: 0;
   opacity: 0;
 }
-.editor-pane .cm-md-heading-marker {
-  font-size: 0;
+.editor-pane .cm-md-escaped-character,
+.editor-pane .cm-md-escaped-character span {
+  color: var(--document-text) !important;
 }
-.editor-pane .cm-md-source-revealed.cm-md-heading-marker {
-  font-size: inherit;
+.editor-pane .cm-md-heading-marker:not(.cm-md-source-revealed),
+.editor-pane .cm-md-heading-marker:not(.cm-md-source-revealed) * {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  opacity: 0 !important;
+}
+.editor-pane .cm-md-source-revealed.cm-md-heading-marker,
+.editor-pane .cm-md-source-revealed.cm-md-heading-marker * {
+  font-size: inherit !important;
+  line-height: inherit !important;
+  opacity: 1 !important;
 }
 .editor-pane .cm-md-source-revealed {
   color: var(--document-text) !important;
@@ -2313,12 +2329,23 @@ select:focus-visible {
   position: relative;
   color: transparent;
 }
+.editor-pane .cm-md-list-marker:not(.cm-md-source-revealed) span {
+  color: transparent !important;
+}
 .editor-pane .cm-md-list-marker::after {
   content: '•';
   position: absolute;
   inset: 0;
   color: var(--document-text);
-  opacity: 0.72;
+  font-size: 1.25em;
+  line-height: 1.2;
+  opacity: 0.88;
+}
+.editor-pane .cm-md-list-depth-1::after {
+  content: '◦';
+}
+.editor-pane .cm-md-list-depth-2::after {
+  content: '▪';
 }
 .editor-pane .cm-line.cm-md-task .cm-md-list-marker::after {
   display: none;
@@ -2410,6 +2437,30 @@ select:focus-visible {
 .editor-pane .cm-md-table-preview .md-table-scroll {
   margin-top: 0;
 }
+.editor-pane .cm-md-definition-list-preview {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 12px 0 16px;
+  padding: 0;
+}
+.editor-pane .cm-md-definition-list-preview dt {
+  margin: 0.55em 0 0.2em;
+  color: var(--document-text);
+  font-weight: 650;
+}
+.editor-pane .cm-md-definition-list-preview dd {
+  margin: 0 0 0.7em 1.5em;
+  color: var(--muted);
+}
+.editor-pane .cm-md-definition-list-preview :is(p, ul, ol):first-child {
+  margin-top: 0;
+}
+.editor-pane .cm-md-definition-list-preview :is(p, ul, ol):last-child {
+  margin-bottom: 0;
+}
+.editor-pane .cm-md-definition-list-preview :is(dt, dd) {
+  cursor: text;
+}
 .editor-pane .cm-md-table-preview th,
 .editor-pane .cm-md-table-preview td {
   cursor: text;
@@ -2445,15 +2496,53 @@ select:focus-visible {
   min-height: 0;
   margin: 0;
   padding: 0;
+  font-size: inherit;
+  line-height: 1.45;
+}
+.editor-pane .cm-md-quote-preview :is(p, ul, ol, pre, blockquote, .markdown-alert) {
+  margin: 0 !important;
+}
+.editor-pane .cm-md-quote-preview :is(p, ul, ol, pre, blockquote, .markdown-alert) + :is(p, ul, ol, pre, blockquote, .markdown-alert) {
+  margin-top: 0.42em !important;
+}
+.editor-pane .cm-md-quote-preview > :first-child,
+.editor-pane .cm-md-quote-preview :is(blockquote, .markdown-alert) > :first-child {
+  margin-top: 0 !important;
+}
+.editor-pane .cm-md-quote-preview > :last-child,
+.editor-pane .cm-md-quote-preview :is(blockquote, .markdown-alert) > :last-child {
+  margin-bottom: 0 !important;
+}
+.editor-pane .cm-md-quote-preview blockquote {
+  padding-block: 0;
+  padding-inline-start: 0.72em;
+}
+.editor-pane .cm-md-quote-preview blockquote blockquote {
+  margin-inline-start: 0.45em;
+}
+.editor-pane .cm-md-quote-preview :is(ul, ol) {
+  padding-left: 1.45em;
+}
+.editor-pane .cm-md-quote-preview li {
+  margin-top: 0 !important;
+}
+.editor-pane .cm-md-quote-preview pre {
+  padding: 0.55em 0.75em;
+  border: 1px solid color-mix(in srgb, var(--document-grid) 72%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--document-fill) 62%, transparent);
 }
 .editor-pane .cm-md-quote-preview .markdown-alert {
   margin-top: 0;
+  padding: 6px 12px;
+  border-radius: 0;
+  background: transparent;
 }
-.editor-pane .cm-md-quote-preview > :first-child {
-  margin-top: 0;
+.editor-pane .cm-md-quote-preview .markdown-alert > :last-child {
+  margin-bottom: 0 !important;
 }
-.editor-pane .cm-md-quote-preview > :last-child {
-  margin-bottom: 0;
+.editor-pane .cm-md-quote-preview .markdown-alert-title {
+  margin-bottom: 4px !important;
 }
 .cm-md-quote-preview .md-source-blank-line {
   display: none;
@@ -2462,7 +2551,8 @@ select:focus-visible {
   display: none;
 }
 .cm-md-quote-preview p {
-  margin: 0 0 0.5em !important;
+  margin: 0 0 0.32em !important;
+  line-height: 1.45;
 }
 .cm-md-quote-preview > :last-child {
   margin-bottom: 0;
@@ -2723,12 +2813,22 @@ select:focus-visible {
   color: transparent;
   position: relative;
 }
+.editor-pane .cm-md-rule:not(.cm-activeLine) span {
+  color: transparent !important;
+}
 .editor-pane .cm-md-rule::after {
   content: '';
   position: absolute;
   inset: 50% 0 auto;
   height: 1px;
   background: var(--document-grid);
+}
+.editor-pane .cm-md-rule.cm-activeLine,
+.editor-pane .cm-md-rule.cm-activeLine span {
+  color: var(--document-text) !important;
+}
+.editor-pane .cm-md-rule.cm-activeLine::after {
+  display: none;
 }
 .editor-pane .cm-md-quote {
   padding-left: 12px;
@@ -2826,6 +2926,11 @@ select:focus-visible {
   color: var(--document-link);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.editor-pane .cm-md-link-destination:not(.cm-md-source-revealed) {
+  font-size: 0;
+  opacity: 0;
+  text-decoration: none;
 }
 .editor-pane .cm-md-footnote-definition {
   margin-top: 0.35em;
@@ -3003,6 +3108,24 @@ select:focus-visible {
 .markdown-body ol {
   margin: 14px 0 0;
   padding-left: 1.55em;
+}
+.markdown-body dl {
+  margin: 14px 0 0;
+}
+.markdown-body dt {
+  margin: 0.55em 0 0.2em;
+  font-weight: 650;
+}
+.markdown-body dd {
+  margin: 0 0 0.7em 1.5em;
+}
+.markdown-body dl > :is(dt, dd):first-child,
+.markdown-body dl > :is(dt, dd):first-child > :first-child {
+  margin-top: 0;
+}
+.markdown-body dl > :is(dt, dd):last-child,
+.markdown-body dl > :is(dt, dd):last-child > :last-child {
+  margin-bottom: 0;
 }
 .markdown-body li {
   margin-top: 5px;

@@ -6,6 +6,7 @@ import type { OutlineItem, RenderedMarkdown } from '../types'
 import { splitFrontmatter } from './frontmatter'
 import { sanitizeRenderedMarkdown } from './sanitize'
 import { detectCodeFenceLanguage, parseCodeFenceInfo } from './codeFence'
+import { markdownDefinitionListBlocks } from './markdownDefinitionLists'
 
 const slugPattern = /[^\p{L}\p{N}\s-]/gu
 const remotePattern = /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i
@@ -230,6 +231,25 @@ function makeRenderer(strictLineBreaks = false) {
     `<div class="md-source-blank-line${tokens[index].attrGet('class') ? ` ${tokens[index].attrGet('class')}` : ''}" aria-hidden="true"></div>`
 
   return md
+}
+
+/** Converts the supported term/definition shorthand into semantic HTML before
+ * MarkdownIt parses the document. Padding keeps subsequent source line numbers
+ * stable for heading navigation and editor/preview synchronization. */
+function renderDefinitionListSyntax(source: string, renderer: MarkdownItInstance, environment: RenderEnvironment): string {
+  const blocks = markdownDefinitionListBlocks(source)
+  if (!blocks.length) return source
+  let result = source
+  for (const block of blocks.reverse()) {
+    const term = renderer.renderInline(block.term, environment)
+    const definitions = block.definitions
+      .map(({ source: definition }) => `<dd>${renderer.renderInline(definition, environment)}</dd>`)
+      .join('')
+    const list = `<dl class="md-definition-list"><dt>${term}</dt>${definitions}</dl>`
+    const newlines = (block.source.match(/\n/g) ?? []).length
+    result = `${result.slice(0, block.from)}${list}${'\n'.repeat(newlines)}${result.slice(block.to)}`
+  }
+  return result
 }
 
 const renderers = new Map<boolean, MarkdownItInstance>([
@@ -466,7 +486,10 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   // LaTex delimiters before parsing so all renderers (including exports) agree.
   const hasMath = containsMath(frontmatter.body)
   const mathNormalized = hasMath ? normalizeMath(frontmatter.body) : frontmatter.body
-  let raw = renderers.get(strictLineBreaks)!.render(normalizeInlineSemantics(mathNormalized), environment)
+  const renderer = renderers.get(strictLineBreaks)!
+  const normalized = normalizeInlineSemantics(mathNormalized)
+  const definitionListsNormalized = renderDefinitionListSyntax(normalized, renderer, environment)
+  let raw = renderer.render(definitionListsNormalized, environment)
   const outline = anchorOutlineToSource(environment.outline ?? [], source)
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ul>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ul></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)

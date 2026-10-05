@@ -28,18 +28,18 @@ describe('WhatsNewDialog', () => {
   it('shows localized update highlights and closes from the Done button', () => {
     render('zh-CN')
     expect(host.textContent).toContain('TextMark 更新内容')
-    expect(host.textContent).toContain('长文档目录跳转更可靠')
-    expect(host.textContent).toContain('工具栏查找不再重复显示')
-    expect(host.textContent).toContain('快捷键查找保留完整操作')
+    expect(host.textContent).toContain('编辑模式所见即所得体验优化')
+    expect(host.textContent).toContain('格式标记按需显隐')
+    expect(host.textContent).toContain('复杂 Markdown 区块更贴近成稿')
     act(() => host.querySelector<HTMLButtonElement>('footer button')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('shows the matching search highlights in English', () => {
     render('en')
-    expect(host.textContent).toContain('More reliable outline navigation in long documents')
-    expect(host.textContent).toContain('Toolbar search has a single query field')
-    expect(host.textContent).toContain('Keyboard search keeps full find controls')
+    expect(host.textContent).toContain('A more WYSIWYG Edit Mode')
+    expect(host.textContent).toContain('Markdown syntax appears when you edit it')
+    expect(host.textContent).toContain('Tables and escaped punctuation edit naturally')
   })
 
   it('closes from Escape and clicking outside the dialog', () => {

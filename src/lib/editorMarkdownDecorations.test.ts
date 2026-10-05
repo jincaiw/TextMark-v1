@@ -7,16 +7,25 @@ import {
   markdownFrontmatterLines,
   markdownAlertLines,
   markdownLineClass,
+  markdownListMarkerClass,
   markdownMathLines,
   markdownMathBlocks,
   markdownTableAlignmentMap,
   markdownSyntaxMarkers,
   markdownTableCellRanges,
   markdownTableLines,
+  markdownDefinitionListBlocks,
   createEditorMarkdownDecorations,
 } from './editorMarkdownDecorations'
 
 describe('editor Markdown line semantics', () => {
+  it('uses Typora-like bullet shapes for nested unordered lists', () => {
+    expect(markdownListMarkerClass('- top level')).toBe('cm-md-list-marker cm-md-list-depth-0')
+    expect(markdownListMarkerClass('  - second level')).toBe('cm-md-list-marker cm-md-list-depth-1')
+    expect(markdownListMarkerClass('    - third level')).toBe('cm-md-list-marker cm-md-list-depth-2')
+    expect(markdownListMarkerClass('>   - quoted nested item')).toBe('cm-md-list-marker cm-md-list-depth-1')
+  })
+
   it.each([
     ['---', 'cm-md-rule'],
     ['title: Draft', ''],
@@ -60,9 +69,87 @@ describe('editor Markdown line semantics', () => {
       ]),
     )
   })
+
+  it('finds term/definition pairs while ignoring fenced examples', () => {
+    const source = 'Markdown\n: A lightweight language.\n\n```md\nTerm\n: Literal example\n```\n\nRenderer\n: Converts Markdown.'
+    const blocks = markdownDefinitionListBlocks(source)
+    expect(blocks).toHaveLength(2)
+    expect(blocks.map(({ term, definitions }) => [term, definitions.map(({ source: value }) => value)])).toEqual([
+      ['Markdown', ['A lightweight language.']],
+      ['Renderer', ['Converts Markdown.']],
+    ])
+  })
+})
+
+describe('editor definition list presentation', () => {
+  it('renders definition lists and returns to the matching source when clicked', () => {
+    const source = 'Markdown\n: **A lightweight language.**\n\nRenderer\n: Converts Markdown.'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const list = view.dom.querySelector('.cm-md-definition-list-preview')
+      expect(list?.querySelector('dt')?.textContent?.trim()).toBe('Markdown')
+      expect(list?.querySelector('dd strong')?.textContent).toBe('A lightweight language.')
+      list?.querySelector('dd')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(view.state.selection.main.head).toBe(source.indexOf('**A lightweight language.**'))
+      expect(view.dom.querySelectorAll('.cm-md-definition-list-preview')).toHaveLength(1)
+      expect(view.dom.querySelector('.cm-md-definition-list-preview dt')?.textContent?.trim()).toBe('Renderer')
+      expect(view.dom.textContent).toContain(': **A lightweight language.**')
+    } finally {
+      view.destroy()
+    }
+  })
 })
 
 describe('editor code block presentation', () => {
+  it('opens a rendered table cell at its matching Markdown source', () => {
+    const source = '| A | B |\n| --- | --- |\n| one | two |\n\nAfter'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const cell = view.dom.querySelector<HTMLTableCellElement>('.cm-md-table-preview tbody td')
+      expect(cell?.textContent).toBe('one')
+      cell?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe('one')
+      expect(view.dom.querySelector('.cm-md-table-preview')).toBeNull()
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('applies alternating visual markers to nested unordered list levels', () => {
+    const source = '- top level\n  - second level\n    - third level'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const lineFor = (content: string) =>
+        [...view.dom.querySelectorAll<HTMLElement>('.cm-line')].find((line) => line.textContent?.includes(content))
+      expect(lineFor('top level')?.querySelector('.cm-md-list-marker')?.classList.contains('cm-md-list-depth-0')).toBe(true)
+      expect(lineFor('second level')?.querySelector('.cm-md-list-marker')?.classList.contains('cm-md-list-depth-1')).toBe(true)
+      expect(lineFor('third level')?.querySelector('.cm-md-list-marker')?.classList.contains('cm-md-list-depth-2')).toBe(true)
+    } finally {
+      view.destroy()
+    }
+  })
+
   it('hides active hard-break backslashes outside source editing without changing escaped text', () => {
     const source = 'Hard break\\\nNext line\nLiteral \\\\ and `inline \\\\`'
     const view = new EditorView({
@@ -404,6 +491,7 @@ describe('editor code block presentation', () => {
         false,
       )
       expect(view.dom.querySelectorAll('.cm-md-code-card')).toHaveLength(1)
+      expect(view.dom.querySelector('.cm-md-code-card')?.classList.contains('cm-md-quote-code-card')).toBe(true)
       expect(view.dom.textContent).toContain('> > 内层引用 **加粗**')
 
       view.dispatch({ selection: { anchor: source.length } })
@@ -428,14 +516,49 @@ describe('editor code block presentation', () => {
     try {
       const preview = view.dom.querySelector('.cm-md-quote-preview')
       expect(preview?.querySelectorAll('p')).toHaveLength(2)
-      expect(preview?.querySelectorAll('.md-source-blank-line').length ?? 0).toBeLessThanOrEqual(1)
-      expect((preview?.querySelector('p') as HTMLElement | null)?.style.margin).toBe('0px 0px 0.5em')
-      expect(
-        [...(preview?.querySelectorAll<HTMLElement>('.md-source-blank-line') ?? [])].every(
-          (blankLine) => blankLine.style.display === 'none',
-        ),
-      ).toBe(true)
+      expect(preview?.querySelectorAll('.md-source-blank-line')).toHaveLength(0)
       expect(preview?.querySelector('pre code')?.textContent).toContain('one\n\n\ntwo')
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('opens the matching quote source line when rendered content is clicked', () => {
+    const source = 'Intro.\n\n> first paragraph\n>\n> second paragraph\n> - list item'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: 0 },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const item = view.dom.querySelector('.cm-md-quote-preview li')
+      expect(item).not.toBeNull()
+      item?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(view.state.selection.main.head).toBe(source.indexOf('list item'))
+      expect(view.dom.querySelector('.cm-md-quote-preview')).toBeNull()
+      expect(view.dom.textContent).toContain('> - list item')
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('keeps a quote preview indented when it belongs to a list item', () => {
+    const source = '1. First item\n\n   > A nested quote'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: 0 },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const quote = view.dom.querySelector<HTMLElement>('.cm-md-quote-preview')
+      expect(quote?.style.marginInlineStart).toBe('1.5em')
+      expect(quote?.style.width).toBe('calc(100% - 1.5em)')
     } finally {
       view.destroy()
     }
@@ -510,6 +633,31 @@ describe('editor display-math source regions', () => {
 })
 
 describe('inactive Markdown syntax markers', () => {
+  it('hides Markdown link destinations until the source caret enters them', () => {
+    const source = '[guide](https://example.com) and <https://example.org>'
+    const destinationStart = source.indexOf('https://example.com')
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const destination = view.dom.querySelector('.cm-md-link-destination')
+      expect(destination?.textContent).toBe('https://example.com')
+      expect(destination?.classList.contains('cm-md-source-revealed')).toBe(false)
+      expect(view.dom.querySelectorAll('.cm-md-link-destination')).toHaveLength(1)
+
+      view.dispatch({ selection: { anchor: destinationStart + 5 } })
+      expect(view.dom.querySelector('.cm-md-link-destination')?.classList.contains('cm-md-source-revealed')).toBe(true)
+      expect(view.dom.querySelector('.cm-md-link')?.textContent).toContain('guide')
+    } finally {
+      view.destroy()
+    }
+  })
+
   it('keeps rich formatting on the caret line and reveals delimiters only when editing them', () => {
     const view = new EditorView({
       parent: document.body,
@@ -525,8 +673,29 @@ describe('inactive Markdown syntax markers', () => {
       const headingMarker = view.dom.querySelector('.cm-md-heading-marker')
       expect(headingMarker).not.toBeNull()
       expect(headingMarker?.classList.contains('cm-md-source-revealed')).toBe(false)
+      view.dispatch({ selection: { anchor: 0 } })
+      expect(view.dom.querySelector('.cm-md-heading-marker')?.classList.contains('cm-md-source-revealed')).toBe(false)
       view.dispatch({ selection: { anchor: 2 } })
       expect(view.dom.querySelector('.cm-md-heading-marker')?.classList.contains('cm-md-source-revealed')).toBe(true)
+    } finally {
+      view.destroy()
+    }
+  })
+
+  it('reveals both inline delimiters when the caret touches either edge', () => {
+    const source = '**bold**'
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('bold') + 'bold'.length },
+        extensions: [markdown(), createEditorMarkdownDecorations()],
+      }),
+    })
+    try {
+      const delimiters = Array.from(view.dom.querySelectorAll('.cm-md-inline-syntax'))
+      expect(delimiters).toHaveLength(2)
+      expect(delimiters.every((delimiter) => delimiter.classList.contains('cm-md-source-revealed'))).toBe(true)
     } finally {
       view.destroy()
     }
@@ -553,7 +722,10 @@ describe('inactive Markdown syntax markers', () => {
   it('marks structural punctuation without marking content', () => {
     expect(markdownSyntaxMarkers('  ## Heading')).toEqual([{ from: 0, to: 5, className: 'cm-md-heading-marker' }])
     expect(markdownSyntaxMarkers('Hard break\\')).toEqual([{ from: 10, to: 11, className: 'cm-md-hardbreak-marker' }])
-    expect(markdownSyntaxMarkers('Literal \\\\')).toEqual([])
+    expect(markdownSyntaxMarkers('Literal \\\\')).toEqual([
+      { from: 8, to: 9, className: 'cm-md-escape-marker' },
+      { from: 9, to: 10, className: 'cm-md-escaped-character' },
+    ])
     expect(markdownSyntaxMarkers('- [x] Done')).toEqual([
       { from: 0, to: 1, className: 'cm-md-list-marker' },
       { from: 2, to: 5, className: 'cm-md-task-marker cm-md-task-checked' },
@@ -567,6 +739,13 @@ describe('inactive Markdown syntax markers', () => {
       { from: 8, to: 9, className: 'cm-md-table-marker' },
     ])
     expect(markdownSyntaxMarkers('```mermaid')).toEqual([{ from: 0, to: 3, className: 'cm-md-fence-marker' }])
+    expect(markdownSyntaxMarkers('| a \\| b | c |')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-table-marker' },
+      { from: 4, to: 5, className: 'cm-md-escape-marker' },
+      { from: 5, to: 6, className: 'cm-md-escaped-character' },
+      { from: 9, to: 10, className: 'cm-md-table-marker' },
+      { from: 13, to: 14, className: 'cm-md-table-marker' },
+    ])
   })
 
   it('marks inline wrappers so inactive lines can display as formatted text', () => {
@@ -630,8 +809,18 @@ describe('inactive Markdown syntax markers', () => {
     }
   })
 
-  it('does not hide escaped inline formatting delimiters', () => {
-    expect(markdownSyntaxMarkers('\\~~literal~~ and \\*literal*')).toEqual([])
+  it('renders escaped punctuation without its backslash while leaving literal delimiters intact', () => {
+    expect(markdownSyntaxMarkers('\\~~literal~~ and \\*literal*')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-escape-marker' },
+      { from: 1, to: 2, className: 'cm-md-escaped-character' },
+      { from: 17, to: 18, className: 'cm-md-escape-marker' },
+      { from: 18, to: 19, className: 'cm-md-escaped-character' },
+    ])
+    expect(markdownSyntaxMarkers('`\\*literal*`')).toEqual([
+      { from: 0, to: 1, className: 'cm-md-inline-syntax' },
+      { from: 11, to: 12, className: 'cm-md-inline-syntax' },
+    ])
+    expect(markdownSyntaxMarkers('```md')).toEqual([{ from: 0, to: 3, className: 'cm-md-fence-marker' }])
   })
 
   it('marks link destination syntax while retaining the label', () => {
@@ -815,13 +1004,13 @@ describe('safe inline HTML in WYSIWYG mode', () => {
 describe('editor image previews', () => {
   it('finds safe relative inline images and preserves their labels', () => {
     expect(editorImageReferences('before ![Diagram](Pictures/guide/1.png "caption") after')).toEqual([
-      { alt: 'Diagram', path: 'Pictures/guide/1.png', from: 7, to: 49 },
+      { alt: 'Diagram', path: 'Pictures/guide/1.png', title: 'caption', from: 7, to: 49 },
     ])
   })
 
   it('supports balanced destinations and ignores inline code', () => {
     expect(editorImageReferences('`![skip](a.png)` ![Chart](Pictures/guide/chart(1).png "caption")')).toEqual([
-      { alt: 'Chart', path: 'Pictures/guide/chart(1).png', from: 17, to: 64 },
+      { alt: 'Chart', path: 'Pictures/guide/chart(1).png', title: 'caption', from: 17, to: 64 },
     ])
   })
 
@@ -830,7 +1019,7 @@ describe('editor image previews', () => {
   })
 
   it('replaces local image syntax with an inline preview until the caret enters it', () => {
-    const source = 'Before ![Guide image](images/guide.png) after'
+    const source = 'Before ![Guide image](images/guide.png "Image tooltip") after'
     const view = new EditorView({
       parent: document.body,
       state: EditorState.create({
@@ -842,9 +1031,10 @@ describe('editor image previews', () => {
     try {
       expect(view.dom.querySelectorAll('.cm-md-image-preview')).toHaveLength(1)
       expect(view.dom.querySelector('.cm-md-image-preview')?.getAttribute('aria-label')).toBe('Image: Guide image')
+      expect(view.dom.querySelector('.cm-md-image-preview')?.getAttribute('title')).toBe('Image tooltip')
       view.dispatch({ selection: { anchor: source.indexOf('guide.png') + 2 } })
       expect(view.dom.querySelector('.cm-md-image-preview')).toBeNull()
-      expect(view.dom.textContent).toContain('![Guide image](images/guide.png)')
+      expect(view.dom.textContent).toContain('![Guide image](images/guide.png "Image tooltip")')
     } finally {
       view.destroy()
     }

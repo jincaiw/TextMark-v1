@@ -6,6 +6,7 @@ interface Replacement {
 export interface MarkdownImageReference extends Replacement {
   alt: string
   path: string
+  title?: string
   /** End of the complete inline image, including its optional title. */
   imageTo: number
   imageFrom: number
@@ -60,6 +61,19 @@ function inlineImageEnd(line: string, destinationEnd: number) {
   return line[cursor] === ')' ? cursor + 1 : null
 }
 
+function inlineImageTitle(line: string, destinationEnd: number): string | undefined {
+  let cursor = destinationEnd
+  while (line[cursor] === ' ' || line[cursor] === '\t') cursor += 1
+  const opener = line[cursor]
+  const closer = opener === '"' ? '"' : opener === "'" ? "'" : opener === '(' ? ')' : null
+  if (!closer) return undefined
+  const start = cursor + 1
+  cursor = start
+  while (cursor < line.length && !unescapedAt(line, cursor, closer)) cursor += 1
+  if (cursor >= line.length) return undefined
+  return line.slice(start, cursor).replace(/\\([\\"'()])/g, '$1')
+}
+
 /** Parses valid-looking inline image spans on one source line. Fenced-code
  * filtering is handled by the caller because it requires document context. */
 export function markdownImageReferences(line: string): MarkdownImageReference[] {
@@ -83,7 +97,15 @@ export function markdownImageReferences(line: string): MarkdownImageReference[] 
       while (to < line.length && !unescapedAt(line, to, '>')) to += 1
       const imageTo = to < line.length ? inlineImageEnd(line, to + 1) : null
       if (imageTo && to > from)
-        references.push({ alt: line.slice(imageStart + 2, labelEnd), path: line.slice(from, to), from, to, imageFrom: imageStart, imageTo })
+        references.push({
+          alt: line.slice(imageStart + 2, labelEnd),
+          path: line.slice(from, to),
+          title: inlineImageTitle(line, to + 1),
+          from,
+          to,
+          imageFrom: imageStart,
+          imageTo,
+        })
       cursor = Math.max(cursor, imageTo ?? to + 1)
       continue
     }
@@ -103,7 +125,15 @@ export function markdownImageReferences(line: string): MarkdownImageReference[] 
     }
     const imageTo = inlineImageEnd(line, to)
     if (imageTo && to > from)
-      references.push({ alt: line.slice(imageStart + 2, labelEnd), path: line.slice(from, to), from, to, imageFrom: imageStart, imageTo })
+      references.push({
+        alt: line.slice(imageStart + 2, labelEnd),
+        path: line.slice(from, to),
+        title: inlineImageTitle(line, to),
+        from,
+        to,
+        imageFrom: imageStart,
+        imageTo,
+      })
     cursor = Math.max(cursor, imageTo ?? to + 1)
   }
   return references
