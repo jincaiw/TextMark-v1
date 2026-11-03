@@ -30,7 +30,7 @@ jobs:
         with: { ref: '${{ inputs.tag || github.ref }}' }
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.90.0
         with: { components: clippy }
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
@@ -91,7 +91,7 @@ jobs:
         with: { ref: '${{ inputs.tag || github.ref }}' }
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.90.0
         with: { targets: 'aarch64-apple-darwin,x86_64-apple-darwin' }
       - run: brew install xcodegen
       - run: npm ci --include=dev
@@ -182,7 +182,7 @@ jobs:
         with: { ref: '${{ inputs.tag || github.ref }}' }
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.90.0
         with: { targets: '${{ matrix.target }}' }
       - uses: NuGet/setup-nuget@v3
       - run: npm ci --include=dev
@@ -284,7 +284,7 @@ jobs:
         with: { ref: '${{ inputs.tag || github.ref }}' }
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.90.0
         with: { targets: '${{ matrix.target }}' }
       - run: npm ci --include=dev
       - name: Build AppImage + DEB bundles
@@ -371,7 +371,7 @@ jobs:
         with: { ref: '${{ inputs.tag || github.ref }}' }
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.90.0
         with: { targets: '${{ matrix.target }}' }
       - run: npm ci --include=dev
       - name: Build and test the KDE 6 plugin

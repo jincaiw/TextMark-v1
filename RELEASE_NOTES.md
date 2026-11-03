@@ -1,3 +1,18 @@
+# TextMark v0.10.39
+
+TextMark 0.10.39 delivers the desktop toolbar improvements prepared for v0.10.38 and updates vulnerable production dependencies. DOMPurify 3.4.17, markdown-it 15.0.3, and Tauri updater 2.14.1 with patched ZIP and TLS dependencies address published advisories. The minimum supported Rust version is now 1.90.
+
+TextMark 0.10.39 带来原计划随 v0.10.38 发布的桌面工具栏优化，并更新生产依赖以修复已公开的安全问题：DOMPurify 3.4.17、markdown-it 15.0.3、Tauri updater 2.14.1 及其 ZIP/TLS 依赖。Rust 最低版本提升至 1.90。
+
+## Highlights / 主要更新
+
+- Desktop toolbar: open the document with the default editor in one click, switch editors or AI apps from the adjacent menu, and group sharing and output actions with document statistics.
+- Security: update DOMPurify to 3.4.17, markdown-it to 15.0.3, and the Tauri updater to 2.14.1 with patched ZIP and TLS dependencies. npm and Rust audits report no vulnerable dependencies; RustSec retains existing allowed maintenance and yanked-crate warnings.
+- Build: raise the minimum supported Rust version to 1.90 for the patched Tauri updater.
+- Verification: release CI runs frontend tests, Rust checks, dependency audits, and platform package gates.
+
+---
+
 # TextMark v0.10.38
 
 TextMark 0.10.38 refines the desktop toolbar around the document. A primary editor button opens the document directly, with its adjacent menu for switching editors or AI apps. Share, copy Markdown, print, and export actions live together in a compact menu with document word-count and size details. Older default toolbar layouts migrate automatically and custom layouts remain intact.
