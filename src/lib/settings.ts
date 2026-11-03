@@ -51,6 +51,22 @@ export const DEFAULT_TOOLBAR: ToolbarItem[] = [
   'space',
   'themesAndSettings',
   'space',
+  'inspector',
+  'share',
+  'edit',
+  'search',
+]
+
+// Schema v9 toolbar before grouping copy and export in the Share popover.
+const V9_DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'documentSearch',
+  'openActions',
+  'space',
+  'themesAndSettings',
+  'space',
   'copy',
   'inspector',
   'share',
@@ -161,7 +177,8 @@ export function normalizeSettings(value: unknown): AppSettings {
     matchesToolbar(V5_DEFAULT_TOOLBAR) ||
     matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) ||
     matchesToolbar(V7_DEFAULT_TOOLBAR) ||
-    matchesToolbar(V8_DEFAULT_TOOLBAR)
+    matchesToolbar(V8_DEFAULT_TOOLBAR) ||
+    matchesToolbar(V9_DEFAULT_TOOLBAR)
   return {
     schemaVersion: 9,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),

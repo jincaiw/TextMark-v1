@@ -217,6 +217,7 @@ function DocumentApp() {
       headings: rendered.outline.length,
       links: (documents.document.contents.match(/(?<!!)\[[^\]]*]\([^)]+\)/g) ?? []).length,
       images: (documents.document.contents.match(/!\[[^\]]*]\([^)]+\)/g) ?? []).length,
+      bytes: new TextEncoder().encode(documents.document.contents).byteLength,
     }),
     [documents.document.contents, rendered.outline.length],
   )
@@ -1227,6 +1228,8 @@ function DocumentApp() {
     <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? '' : 'toolbar-hidden'}`}>
       <Toolbar
         documentName={documents.document.name}
+        documentWords={stats.words}
+        documentSizeBytes={stats.bytes}
         visible={toolbarVisible}
         busy={documents.busy}
         viewMode={viewMode}

@@ -1,7 +1,7 @@
 {
   "name": "textmark",
   "private": true,
-  "version": "0.10.37",
+  "version": "0.10.38",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -55,6 +55,7 @@
   },
   "overrides": {
     "@puppeteer/browsers": "3.2.0",
+    "katex": "^0.18.1",
     "nanoid": "3.3.18",
     "serialize-javascript": "7.1.0"
   },

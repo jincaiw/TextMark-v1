@@ -8,6 +8,8 @@ import {
   Clipboard,
   Download,
   FileDown,
+  FileOutput,
+  FileText,
   FilePenLine,
   FolderOpen,
   Folder,
@@ -35,6 +37,8 @@ import { ToolbarAppearance } from './ToolbarAppearance'
 
 interface ToolbarProps {
   documentName?: string
+  documentWords?: number
+  documentSizeBytes?: number
   visible: boolean
   busy: boolean
   viewMode: ViewMode
@@ -105,6 +109,12 @@ const SIMPLE_ACTIONS: Partial<
 const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>
   item === 'edit' && props.viewMode === 'edit' ? ('stopEditing' as const) : fallback
 
+const formatByteSize = (bytes: number, locale: Locale) => {
+  const unit = bytes >= 1024 * 1024 ? 'megabyte' : bytes >= 1024 ? 'kilobyte' : 'byte'
+  const divisor = unit === 'megabyte' ? 1024 * 1024 : unit === 'kilobyte' ? 1024 : 1
+  return new Intl.NumberFormat(locale, { style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / divisor)
+}
+
 export function Toolbar(props: ToolbarProps) {
   const tx = (key: Parameters<typeof t>[1]) => t(props.locale, key)
   const [copiedFlash, setCopiedFlash] = useState(false)
@@ -116,20 +126,27 @@ export function Toolbar(props: ToolbarProps) {
   useEffect(() => {
     const closeOutsideMenus = (event: Event) => {
       document
-        .querySelectorAll<HTMLDetailsElement>('.native-toolbar .open-with[open], .native-toolbar .more-menu[open]')
+        .querySelectorAll<HTMLDetailsElement>(
+          '.native-toolbar .open-with[open], .native-toolbar .more-menu[open], .native-toolbar .share-menu[open]',
+        )
         .forEach((menu) => {
           if (!menu.contains(event.target as Node)) menu.open = false
         })
     }
     const closeMenusOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      const menus = [...document.querySelectorAll<HTMLDetailsElement>('.native-toolbar .open-with[open], .native-toolbar .more-menu[open]')]
+      const menus = [
+        ...document.querySelectorAll<HTMLDetailsElement>(
+          '.native-toolbar .open-with[open], .native-toolbar .more-menu[open], .native-toolbar .share-menu[open]',
+        ),
+      ]
       if (!menus.length) return
       event.preventDefault()
       menus.forEach((menu) => {
         menu.open = false
       })
-      menus[menus.length - 1]?.querySelector<HTMLElement>('summary')?.focus()
+      const focusMenu = menus.find((menu) => menu.classList.contains('more-menu')) ?? menus[0]
+      focusMenu?.querySelector<HTMLElement>('summary')?.focus()
     }
     document.addEventListener('pointerdown', closeOutsideMenus)
     document.addEventListener('click', closeOutsideMenus)
@@ -352,29 +369,47 @@ export function Toolbar(props: ToolbarProps) {
           </button>
         </div>,
       )
-    if (item === 'openActions')
+    if (item === 'openActions') {
+      const defaultEditorName = defaultEditor?.name ?? tx('systemDefault')
+      const defaultEditorTitle = `${tx('openWithDefault')}: ${defaultEditorName}`
       return slot(
-        <details className="toolbar-group open-with">
-          <summary title={tx('open')}>
-            {withLabel(<AppWindow />, 'open')}
-            <ChevronDown />
-          </summary>
-          <div className="menu-popover">
-            {llmApps.length === 0 && editorApps.length === 0 ? (
-              emptyAppItem()
+        <div className="toolbar-group open-actions-split">
+          <button
+            className="open-actions-primary"
+            title={defaultEditorTitle}
+            aria-label={defaultEditorTitle}
+            onClick={() => props.onOpenWith(effectiveDefaultTarget)}
+          >
+            {defaultEditor ? (
+              <span className="open-actions-app-badge" aria-hidden="true">
+                {defaultEditor.name.slice(0, 1).toUpperCase()}
+              </span>
             ) : (
-              <>
-                {defaultEditorButton}
-                {llmApps.length > 0 && <b>{tx('aiApps')}</b>}
-                {llmButtons}
-                {llmApps.length > 0 && editorApps.length > 0 && <hr />}
-                {editorApps.length > 0 && <b>{tx('editors')}</b>}
-                {editorButtons}
-              </>
+              <AppWindow />
             )}
-          </div>
-        </details>,
+          </button>
+          <details className="open-with">
+            <summary title={tx('openWith')} aria-label={tx('openWith')}>
+              <ChevronDown />
+            </summary>
+            <div className="menu-popover">
+              {llmApps.length === 0 && editorApps.length === 0 ? (
+                emptyAppItem()
+              ) : (
+                <>
+                  {defaultEditorButton}
+                  {llmApps.length > 0 && <b>{tx('aiApps')}</b>}
+                  {llmButtons}
+                  {llmApps.length > 0 && editorApps.length > 0 && <hr />}
+                  {editorApps.length > 0 && <b>{tx('editors')}</b>}
+                  {editorButtons}
+                </>
+              )}
+            </div>
+          </details>
+        </div>,
       )
+    }
     if (item === 'openWith')
       return slot(
         <details className="toolbar-group open-with">
@@ -498,6 +533,48 @@ export function Toolbar(props: ToolbarProps) {
           />
         </div>,
       )
+    if (item === 'share')
+      return slot(
+        <details className="toolbar-group share-menu">
+          <summary title={tx('share')} aria-label={tx('share')}>
+            {withLabel(<Share />, 'share')}
+            <ChevronDown />
+          </summary>
+          <div className="menu-popover share-popover">
+            <div className="share-document-meta">
+              <strong title={props.documentName}>{props.documentName || tx('noDocumentOpen')}</strong>
+              <div>
+                <span>
+                  <FileText />
+                  {props.locale === 'zh-CN'
+                    ? `${tx('wordCount')} ${(props.documentWords ?? 0).toLocaleString(props.locale)}`
+                    : `${(props.documentWords ?? 0).toLocaleString(props.locale)} ${tx('words')}`}
+                </span>
+                <span>
+                  {tx('fileSize')}: {formatByteSize(props.documentSizeBytes ?? 0, props.locale)}
+                </span>
+              </div>
+            </div>
+            <button onClick={props.onShare}>
+              <Share />
+              {tx('shareSource')}
+            </button>
+            <button onClick={props.onCopy}>
+              <Clipboard />
+              {tx('copySource')}
+            </button>
+            <hr />
+            <button onClick={props.onPrint}>
+              <Printer />
+              {tx('printItem')}
+            </button>
+            <button onClick={props.onExport}>
+              <FileOutput />
+              {tx('exportItem')}…
+            </button>
+          </div>
+        </details>,
+      )
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
       const title = actionTitle(item, props, simple.title)
@@ -545,8 +622,12 @@ export function Toolbar(props: ToolbarProps) {
       data-tauri-drag-region
       onClick={(event) => {
         if ((event.target as HTMLElement).closest('.appearance-popover')) return
-        const details = (event.target as HTMLElement).closest('.menu-popover button')?.closest('details')
-        if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
+        const button = (event.target as HTMLElement).closest('.menu-popover button')
+        if (!button) return
+        window.setTimeout(() => {
+          button.closest('details')?.removeAttribute('open')
+          button.closest('.more-menu')?.removeAttribute('open')
+        }, 0)
       }}
     >
       <div className="window-leading" data-tauri-drag-region>
@@ -609,6 +690,12 @@ export function Toolbar(props: ToolbarProps) {
                   </div>
                 )
               }
+              if (item === 'share')
+                return (
+                  <div key={`overflow-${item}-${index}`} className="toolbar-overflow-controls">
+                    {renderItem(item, -1)}
+                  </div>
+                )
               const title = actionTitle(item, props, meta.title)
               return (
                 <button key={`overflow-${item}-${index}`} onClick={() => meta.action(props)}>

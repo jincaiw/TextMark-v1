@@ -357,15 +357,15 @@ describe('Toolbar', () => {
     render(props)
     expect(slots().map((slot) => slot.dataset.toolbarItem)).toEqual(['edit', 'share', 'inspector'])
     expect(host.querySelector('.toolbar-group.document-actions')).toBeNull()
-    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.native-actions > [data-toolbar-item] button'))
-    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-      t(props.locale, 'edit'),
-      t(props.locale, 'shareSource'),
-      t(props.locale, 'getInfo'),
-    ])
-    click(buttons[0])
-    click(buttons[1])
-    click(buttons[2])
+    const edit = element<HTMLButtonElement>('.native-actions > [data-toolbar-item="edit"] button')
+    const shareMenu = element<HTMLDetailsElement>('.native-actions > [data-toolbar-item="share"] .share-menu')
+    const shareTrigger = element<HTMLElement>('summary', shareMenu)
+    const inspector = element<HTMLButtonElement>('.native-actions > [data-toolbar-item="inspector"] button')
+    click(edit)
+    click(shareTrigger)
+    expect(shareMenu.open).toBe(true)
+    click(element<HTMLButtonElement>('button', shareMenu))
+    click(inspector)
     expect(props.onViewModeChange).toHaveBeenCalledExactlyOnceWith('edit')
     expect(props.onShare).toHaveBeenCalledOnce()
     expect(props.onToggleInspector).toHaveBeenCalledOnce()

@@ -1,3 +1,18 @@
+# TextMark v0.10.38
+
+TextMark 0.10.38 refines the desktop toolbar around the document. A primary editor button opens the document directly, with its adjacent menu for switching editors or AI apps. Share, copy Markdown, print, and export actions live together in a compact menu with document word-count and size details. Older default toolbar layouts migrate automatically and custom layouts remain intact.
+
+TextMark 0.10.38 优化桌面顶部工具栏：默认编辑器可一键打开文档，箭头菜单用于切换编辑器或 AI 应用；分享、复制 Markdown、打印和导出操作集中在同一菜单中，并显示文档词数和大小。旧版默认工具栏会自动迁移，用户自定义排列保持不变。
+
+## Highlights / 主要更新
+
+- Toolbar: group document sharing and output actions, with current document statistics, in the Share menu.
+- Layout: keep the Share menu within narrow windows and support Escape dismissal with focus restoration.
+- Preferences: migrate prior default toolbar layouts without changing custom arrangements.
+- Verification: production build and desktop UI interaction checks pass. The release workflow runs the full automated and platform package gates.
+
+---
+
 # TextMark v0.10.37
 
 TextMark 0.10.37 continues the Edit Mode WYSIWYG improvements. Markdown delimiters, escaped punctuation, links, nested lists, quotes, definition lists, code blocks, and tables now behave more like the rendered document, while editor clicks return to the corresponding source. Production DOMPurify and markdown-it dependencies are also updated to patched releases.
