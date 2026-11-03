@@ -1,8 +1,8 @@
-# TextMark v0.10.39
+# TextMark v0.10.40
 
-TextMark 0.10.39 delivers the desktop toolbar improvements prepared for v0.10.38 and updates vulnerable production dependencies. DOMPurify 3.4.17, markdown-it 15.0.3, and Tauri updater 2.14.1 with patched ZIP and TLS dependencies address published advisories. The minimum supported Rust version is now 1.90.
+TextMark 0.10.40 delivers the desktop toolbar improvements prepared for v0.10.38, updates vulnerable production dependencies, and aligns JavaScript Tauri packages with their Rust crate releases. DOMPurify 3.4.17, markdown-it 15.0.3, and Tauri updater 2.14.1 with patched ZIP and TLS dependencies address published advisories. The minimum supported Rust version is now 1.90.
 
-TextMark 0.10.39 带来原计划随 v0.10.38 发布的桌面工具栏优化，并更新生产依赖以修复已公开的安全问题：DOMPurify 3.4.17、markdown-it 15.0.3、Tauri updater 2.14.1 及其 ZIP/TLS 依赖。Rust 最低版本提升至 1.90。
+TextMark 0.10.40 带来原计划随 v0.10.38 发布的桌面工具栏优化，更新存在安全公告的生产依赖，并使 JavaScript Tauri 包与对应 Rust crate 版本保持一致。DOMPurify 3.4.17、markdown-it 15.0.3、Tauri updater 2.14.1 及其修复版 ZIP/TLS 依赖解决了已公开的安全问题。Rust 最低版本提升至 1.90。
 
 ## Highlights / 主要更新
 
