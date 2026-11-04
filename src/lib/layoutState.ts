@@ -44,10 +44,7 @@ const clampWidth = (value: number, range: { min: number; max: number; default: n
 export function readSidebarWidth(storage: LayoutStorageReader = localStorage): number {
   const storedWidth = Number(storage.getItem(LAYOUT_STORAGE_KEYS.sidebarWidth))
   const migratedWidth = storedWidth === LEGACY_SIDEBAR_WIDTH_DEFAULT ? SIDEBAR_WIDTH_RANGE.default : storedWidth
-  return clampWidth(
-    Number.isFinite(migratedWidth) && migratedWidth > 0 ? migratedWidth : SIDEBAR_WIDTH_RANGE.default,
-    SIDEBAR_WIDTH_RANGE,
-  )
+  return clampWidth(Number.isFinite(migratedWidth) && migratedWidth > 0 ? migratedWidth : SIDEBAR_WIDTH_RANGE.default, SIDEBAR_WIDTH_RANGE)
 }
 
 export function readLayoutState(storage: LayoutStorageReader = localStorage): LayoutState {
