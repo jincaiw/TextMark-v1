@@ -79,7 +79,7 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 9
+  schemaVersion: 10
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth

@@ -57,6 +57,7 @@ import {
   shouldUseDedicatedSettingsWindow,
 } from './lib/platform'
 import { partitionDroppedPaths } from './lib/documentPresentation'
+import { readSidebarWidth } from './lib/layoutState'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
@@ -115,9 +116,7 @@ function DocumentApp() {
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
     () => (localStorage.getItem('textmark.sidebarMode') as SidebarMode) || 'outline',
   )
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    Math.min(400, Math.max(230, Number(localStorage.getItem('textmark.sidebarWidth')) || 240)),
-  )
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
   // Inspector 默认关闭，因此只有显式存过 'true' 才恢复——与 sidebarVisible 的「默认开」相反。
   const [inspectorVisible, setInspectorVisible] = useState(() => localStorage.getItem('textmark.inspectorVisible') === 'true')
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(
@@ -149,6 +148,7 @@ function DocumentApp() {
   const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
   const [pendingEditorSelection, setPendingEditorSelection] = useState<EditorSessionState['selection'] | null>(null)
   const [pendingPreviewLine, setPendingPreviewLine] = useState<number | null>(null)
+  const [pendingPreviewGap, setPendingPreviewGap] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [replacement, setReplacement] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
@@ -185,8 +185,8 @@ function DocumentApp() {
   viewModeRef.current = viewMode
   const cursorRef = useRef(cursor)
   cursorRef.current = cursor
-  // The caret belongs to the editor, which is unmounted on every mode switch.
-  // Remembering it on the way out is what lets an output action put it back.
+  // Keep the editor's caret available while the preview is visible. Remembering
+  // the last source anchor also lets output actions return to the same position.
   const editorExitRef = useRef<EditorExitCaret | null>(null)
   const editorExitSelectionRef = useRef<EditorSessionState['selection'] | null>(null)
   const rendered = useMarkdownRenderer(documents.document.contents, settings.locale, settings.strictLineBreaks)
@@ -226,16 +226,8 @@ function DocumentApp() {
 
   const waitForPreviewHydration = () => previewHydrationRef.current!.wait(previewRenderKey)
   const markPreviewHydrated = (key: string) => previewHydrationRef.current!.report(key)
-  // The pane is only on screen in preview mode, and a render key repeats across
-  // the edit/preview round trip. Invalidating on both edges of that switch is
-  // what keeps an edit-mode export from capturing a preview that has not drawn
-  // its diagrams yet (see lib/previewHydration).
-  useEffect(() => {
-    const gate = previewHydrationRef.current!
-    if (viewMode === 'preview') gate.markMounted()
-    else gate.markUnmounted()
-  }, [viewMode])
-
+  // The preview remains mounted behind the editor, so its hydration report stays
+  // valid across view-mode switches and is refreshed whenever its render key changes.
   useEffect(() => {
     void configureCrashReporting(settings.crashReports)
   }, [settings.crashReports])
@@ -427,6 +419,7 @@ function DocumentApp() {
       setPendingEditorLine(null)
       setPendingEditorCursor(null)
       setPendingPreviewLine(editorRef.current?.getTopLine() ?? null)
+      setPendingPreviewGap(editorRef.current?.getTopGap() ?? 0)
       setPendingScrollFraction(editorRef.current?.getScrollFraction() ?? 0)
     }
     setViewMode(mode)
@@ -470,7 +463,7 @@ function DocumentApp() {
             { lines: anchors.map((anchor) => anchor.line), offsets: anchors.map((anchor) => anchor.top) },
             pendingPreviewLine,
           )
-          if (offset != null) pane.scrollTop = offset
+          if (offset != null) pane.scrollTop = Math.max(0, offset - (pendingPreviewGap ?? 0))
         }
         setPendingPreviewLine(null)
       })
@@ -479,7 +472,7 @@ function DocumentApp() {
       cancelled = true
       cancelAnimationFrame(frame)
     }
-  }, [pendingPreviewLine, previewRenderKey, viewMode])
+  }, [pendingPreviewGap, pendingPreviewLine, previewRenderKey, viewMode])
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
@@ -995,6 +988,17 @@ function DocumentApp() {
         toggleAlwaysOnTop()
         return
       }
+      // Safari-style tab switching (⌘1–⌘9), as in the upstream 0.0.70 tab
+      // feature. ⌘9 always lands on the last tab, however many are open.
+      if (event.metaKey && !event.ctrlKey && !event.altKey && /^[1-9]$/.test(key)) {
+        const index = key === '9' ? documentsRef.current.sessions.length - 1 : Number(key) - 1
+        const target = documentsRef.current.sessions[index]
+        if (target && target.id !== documentsRef.current.activeId) {
+          event.preventDefault()
+          activateDocumentTab(target.id)
+        }
+        return
+      }
       if (key === 's' && event.shiftKey) {
         event.preventDefault()
         void documents.saveAs()
@@ -1346,7 +1350,7 @@ function DocumentApp() {
               onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
               onOutlineSelect={selectOutline}
             />
-            <PanelResizer side="sidebar" width={sidebarWidth} min={230} max={400} onWidthChange={setSidebarWidth} />
+            <PanelResizer side="sidebar" width={sidebarWidth} min={180} max={400} onWidthChange={setSidebarWidth} />
           </>
           <div className="document-workspace">
             <DocumentTools>
@@ -1366,6 +1370,12 @@ function DocumentApp() {
                   onQueryChange={(value) => {
                     setSearchQuery(value)
                     setSearchIndex(0)
+                    // An emptied query dismisses the bar, as the upstream
+                    // toolbar search does (applyFindResult with an empty query).
+                    if (!value) {
+                      setFindOpen(false)
+                      setFindFromToolbar(false)
+                    }
                   }}
                   onPrevious={() => nextMatch(-1)}
                   onNext={() => nextMatch(1)}
@@ -1386,66 +1396,69 @@ function DocumentApp() {
                 />
               ) : null}
             </DocumentTools>
-            {viewMode === 'edit' ? (
-              <Suspense fallback={<div className="editor-loading" />}>
-                <EditorPane
-                  key={`${documents.document.id}:${documents.document.revision ?? 'memory'}`}
-                  ref={editorRef}
-                  value={documents.document.contents}
-                  locale={settings.locale}
-                  theme={resolvedTheme}
-                  fontSize={settings.editorFontSize}
-                  zoom={settings.zoom}
-                  contentWidth={settings.contentWidth}
-                  initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
-                  initialLine={pendingEditorLine ?? undefined}
-                  // Keep the find field authoritative when it is open; the
-                  // editor's initial autofocus must not steal the query focus.
-                  initialFocus={!findOpen}
-                  initialCursor={pendingEditorCursor}
-                  initialSelection={pendingEditorSelection}
-                  onInitialPositionApplied={clearPendingEditorPosition}
-                  onStateChange={documents.reportEditorState}
-                  initialFormat={pendingFormat}
-                  onInitialFormatApplied={() => setPendingFormat(null)}
-                  onChange={documents.updateContents}
-                  onPasteImage={documents.pasteImage}
-                  baseDirectory={documents.baseDirectory}
-                  workspacePath={documents.workspacePath}
-                  onRenameImage={(path) => void documents.renamePastedImage(path)}
-                  onCursorChange={(line, column) => setCursor({ line, column })}
-                  onFormattingStateChange={setFormattingState}
-                  searchQuery={searchQuery}
-                  searchIndex={searchIndex}
-                  matchCase={matchCase}
-                  searchMode={searchMode}
-                  onSearchCount={setSearchCount}
-                />
-              </Suspense>
-            ) : (
-              <PreviewPane
+            <Suspense fallback={<div className="editor-loading" aria-hidden="true" />}>
+              <EditorPane
+                key={`${documents.document.id}:${documents.document.revision ?? 'memory'}`}
+                ref={editorRef}
+                value={documents.document.contents}
                 locale={settings.locale}
-                rendered={rendered}
-                renderKey={previewRenderKey}
-                onHydrated={markPreviewHydrated}
-                documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
-                initialScrollTop={documents.document.scrollTop}
-                initialScrollFraction={pendingScrollFraction ?? undefined}
-                baseDirectory={documents.baseDirectory}
-                workspacePath={documents.workspacePath}
+                theme={resolvedTheme}
+                fontSize={settings.editorFontSize}
                 zoom={settings.zoom}
                 contentWidth={settings.contentWidth}
+                active={viewMode === 'edit'}
+                initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
+                initialLine={pendingEditorLine ?? undefined}
+                // Keep the find field authoritative when it is open; the
+                // editor's initial autofocus must not steal the query focus.
+                initialFocus={!findOpen}
+                initialCursor={pendingEditorCursor}
+                initialSelection={pendingEditorSelection}
+                onInitialPositionApplied={clearPendingEditorPosition}
+                onStateChange={documents.reportEditorState}
+                initialFormat={pendingFormat}
+                onInitialFormatApplied={() => setPendingFormat(null)}
+                onChange={documents.updateContents}
+                onPasteImage={documents.pasteImage}
+                baseDirectory={documents.baseDirectory}
+                workspacePath={documents.workspacePath}
+                onRenameImage={(path) => void documents.renamePastedImage(path)}
+                onCursorChange={(line, column) => setCursor({ line, column })}
+                onFormattingStateChange={setFormattingState}
                 searchQuery={searchQuery}
                 searchIndex={searchIndex}
                 matchCase={matchCase}
                 searchMode={searchMode}
-                onSearchCount={setSearchCount}
-                onActiveHeading={setActiveHeading}
-                onZoomChange={setZoom}
-                onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())}
-                onRenameImage={(path) => void documents.renamePastedImage(path)}
+                onSearchCount={(count) => {
+                  if (viewMode === 'edit') setSearchCount(count)
+                }}
               />
-            )}
+            </Suspense>
+            <PreviewPane
+              active={viewMode === 'preview'}
+              locale={settings.locale}
+              rendered={rendered}
+              renderKey={previewRenderKey}
+              onHydrated={markPreviewHydrated}
+              documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
+              initialScrollTop={documents.document.scrollTop}
+              initialScrollFraction={pendingScrollFraction ?? undefined}
+              baseDirectory={documents.baseDirectory}
+              workspacePath={documents.workspacePath}
+              zoom={settings.zoom}
+              contentWidth={settings.contentWidth}
+              searchQuery={searchQuery}
+              searchIndex={searchIndex}
+              matchCase={matchCase}
+              searchMode={searchMode}
+              onSearchCount={(count) => {
+                if (viewMode === 'preview') setSearchCount(count)
+              }}
+              onActiveHeading={setActiveHeading}
+              onZoomChange={setZoom}
+              onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())}
+              onRenameImage={(path) => void documents.renamePastedImage(path)}
+            />
             {viewMode === 'edit' ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
           </div>
           {inspectorVisible ? (

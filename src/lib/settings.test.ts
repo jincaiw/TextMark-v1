@@ -9,8 +9,8 @@ describe('reading typography settings', () => {
   })
 
   it('keeps the new profile version ahead of the ones it reads from', () => {
-    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v9')
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(9)
+    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v10')
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(10)
     expect(DEFAULT_SETTINGS.strictLineBreaks).toBe(false)
   })
 
@@ -19,7 +19,6 @@ describe('reading typography settings', () => {
       'sidebar',
       'navigation',
       'flexibleSpace',
-      'documentSearch',
       'openActions',
       'space',
       'themesAndSettings',
@@ -67,6 +66,23 @@ describe('reading typography settings', () => {
         'inspector',
         'share',
         'export',
+        'edit',
+        'search',
+      ],
+    ],
+    [
+      9,
+      [
+        'sidebar',
+        'navigation',
+        'flexibleSpace',
+        'documentSearch',
+        'openActions',
+        'space',
+        'themesAndSettings',
+        'space',
+        'inspector',
+        'share',
         'edit',
         'search',
       ],

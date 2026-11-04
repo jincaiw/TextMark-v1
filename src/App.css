@@ -80,7 +80,7 @@
   --document-page-width: 900px;
   --sidebar-width: 240px;
   --inspector-width: 270px;
-  --sidebar-min-width: 230px;
+  --sidebar-min-width: 180px;
   --sidebar-max-width: 400px;
   --inspector-min-width: 270px;
   --inspector-max-width: 500px;
@@ -1341,6 +1341,14 @@ select:focus-visible {
 .document-workspace > .editor-loading {
   grid-area: 1 / 1;
   min-height: 0;
+}
+.document-workspace > .pane-inactive {
+  visibility: hidden;
+  pointer-events: none;
+}
+.document-workspace > .pane-active {
+  visibility: visible;
+  z-index: 1;
 }
 .document-tools {
   position: absolute;
@@ -4768,15 +4776,15 @@ mark.search-match.active {
   padding-left: 92px;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs {
-  min-height: 36px;
+  min-height: 30px;
   align-items: center;
   gap: 2px;
-  padding: 3px 10px;
+  padding: 2px 10px;
   background: color-mix(in srgb, var(--chrome) 96%, transparent);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .document-tab {
   min-width: 130px;
-  height: 28px;
+  height: 26px;
   border: 0;
   border-radius: 6px;
   box-shadow: none;
@@ -4785,7 +4793,31 @@ mark.search-match.active {
   background: color-mix(in srgb, var(--surface) 84%, var(--hover));
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .new-tab-button {
-  margin-left: 4px;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 0 auto;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .document-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  border: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-radius: 14px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .document-tab.active {
+  background: color-mix(in srgb, var(--surface) 82%, var(--chrome));
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .tab-label {
+  padding-inline: 36px;
+  text-align: center;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .tab-close {
+  display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline button.active,
+:root[data-runtime='tauri'][data-platform='macos'] .native-file-tree .tree-row.active {
+  background: var(--hover);
+  color: var(--text);
 }
 :root[data-runtime='tauri'] .traffic-lights {
   display: none;
@@ -4908,9 +4940,6 @@ mark.search-match.active {
 }
 
 @media (max-width: 1180px) {
-  :root {
-    --sidebar-width: 250px;
-  }
   .native-toolbar {
     gap: 6px;
     padding-right: 12px;

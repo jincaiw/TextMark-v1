@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Plus, X } from 'lucide-react'
 import { t } from '../lib/i18n'
 import type { DocumentSession, Locale } from '../types'
@@ -19,14 +20,16 @@ export function DocumentTabs({
   alwaysVisible?: boolean
   onNew?: () => void
 }) {
+  const tabRefs = useRef<Array<HTMLDivElement | null>>([])
   if (sessions.length < 2 && !alwaysVisible) return null
   const moveTo = (index: number) => {
     const target = (index + sessions.length) % sessions.length
     onActivate(sessions[target].id)
+    tabRefs.current[target]?.focus()
   }
   return (
     <div
-      className={`document-tabs ${alwaysVisible ? 'native-document-tabs' : ''}`}
+      className={`document-tabs ${alwaysVisible ? 'native-document-tabs' : ''} ${sessions.length === 1 ? 'single-document-tab' : ''}`}
       role="tablist"
       aria-label="Documents"
       data-tauri-drag-region
@@ -34,6 +37,9 @@ export function DocumentTabs({
       {sessions.map((session, index) => (
         <div
           key={session.id}
+          ref={(node) => {
+            tabRefs.current[index] = node
+          }}
           className={`document-tab ${session.id === activeId ? 'active' : ''}`}
           role="tab"
           aria-selected={session.id === activeId}

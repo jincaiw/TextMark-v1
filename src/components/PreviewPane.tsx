@@ -16,6 +16,7 @@ import { scrollPreviewToFragment } from '../lib/previewNavigation'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode } from '../types'
 
 interface PreviewPaneProps {
+  active?: boolean
   rendered: RenderedMarkdown
   documentKey: string
   initialScrollTop: number
@@ -175,6 +176,7 @@ export function PreviewPane(props: PreviewPaneProps) {
   }, [props.zoom, props.onZoomChange])
 
   useEffect(() => {
+    if (props.active === false) return
     const pane = paneRef.current
     const root = containerRef.current
     if (!pane || !root) return
@@ -199,7 +201,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       pane.removeEventListener('scroll', schedule)
       cancelAnimationFrame(frame)
     }
-  }, [props.documentKey, props.rendered.html, props.onActiveHeading])
+  }, [props.active, props.documentKey, props.rendered.html, props.onActiveHeading])
 
   useEffect(() => {
     const root = containerRef.current
@@ -472,8 +474,10 @@ export function PreviewPane(props: PreviewPaneProps) {
   return (
     <section
       ref={paneRef}
-      className="preview-pane"
+      className={`preview-pane pane-${props.active === false ? 'inactive' : 'active'}`}
       aria-label="Rendered Markdown preview"
+      aria-hidden={props.active === false}
+      inert={props.active === false}
       tabIndex={0}
       onWheel={(event) => {
         if (!event.ctrlKey && !event.metaKey) return

@@ -3,13 +3,10 @@
  * that pane has finished its asynchronous work: Mermaid diagrams, local images
  * and web fonts all land in the DOM after the first paint.
  *
- * This gate answers exactly one question — "has the pane that is currently on
- * screen reported itself ready for this render key?" The word that matters is
- * *currently*. The preview pane is unmounted while the editor is showing, and a
- * render key is derived only from the document and its rendered HTML, so it is
- * identical before and after that unmount. A key remembered across the unmount
- * therefore satisfied a later wait immediately, and an edit-mode export
- * captured diagram *source* instead of the rendered SVG.
+ * This gate answers one question: has the mounted preview reported itself ready
+ * for this render key? The preview stays mounted behind the editor, so its
+ * report remains valid across view-mode switches. A changed document produces
+ * a new render key and must complete hydration before output actions proceed.
  */
 
 /** Upper bound on the wait: a broken diagram or an image that never settles

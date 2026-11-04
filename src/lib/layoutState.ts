@@ -8,8 +8,9 @@ import type { SidebarMode } from '../types'
  * 放在一处后，读写两侧共用同一份键表，新增面板不会再漏。
  */
 
-export const SIDEBAR_WIDTH_RANGE = { min: 230, max: 400, default: 260 } as const
-export const INSPECTOR_WIDTH_RANGE = { min: 270, max: 500, default: 292 } as const
+export const SIDEBAR_WIDTH_RANGE = { min: 180, max: 400, default: 240 } as const
+export const INSPECTOR_WIDTH_RANGE = { min: 270, max: 500, default: 270 } as const
+const LEGACY_SIDEBAR_WIDTH_DEFAULT = 260
 
 export const LAYOUT_STORAGE_KEYS = {
   sidebarVisible: 'textmark.sidebarVisible',
@@ -40,18 +41,23 @@ export interface LayoutStorageWriter {
 
 const clampWidth = (value: number, range: { min: number; max: number; default: number }) => Math.min(range.max, Math.max(range.min, value))
 
+export function readSidebarWidth(storage: LayoutStorageReader = localStorage): number {
+  const storedWidth = Number(storage.getItem(LAYOUT_STORAGE_KEYS.sidebarWidth))
+  const migratedWidth = storedWidth === LEGACY_SIDEBAR_WIDTH_DEFAULT ? SIDEBAR_WIDTH_RANGE.default : storedWidth
+  return clampWidth(
+    Number.isFinite(migratedWidth) && migratedWidth > 0 ? migratedWidth : SIDEBAR_WIDTH_RANGE.default,
+    SIDEBAR_WIDTH_RANGE,
+  )
+}
+
 export function readLayoutState(storage: LayoutStorageReader = localStorage): LayoutState {
   const storedSidebarMode = storage.getItem(LAYOUT_STORAGE_KEYS.sidebarMode)
-  const sidebarWidth = Number(storage.getItem(LAYOUT_STORAGE_KEYS.sidebarWidth))
   const inspectorWidth = Number(storage.getItem(LAYOUT_STORAGE_KEYS.inspectorWidth))
   return {
     // 边栏默认可见，只有显式存过 'false' 才隐藏。
     sidebarVisible: storage.getItem(LAYOUT_STORAGE_KEYS.sidebarVisible) !== 'false',
     sidebarMode: storedSidebarMode === 'files' ? 'files' : 'outline',
-    sidebarWidth: clampWidth(
-      Number.isFinite(sidebarWidth) && sidebarWidth > 0 ? sidebarWidth : SIDEBAR_WIDTH_RANGE.default,
-      SIDEBAR_WIDTH_RANGE,
-    ),
+    sidebarWidth: readSidebarWidth(storage),
     // Inspector 默认隐藏，只有显式存过 'true' 才显示。
     inspectorVisible: storage.getItem(LAYOUT_STORAGE_KEYS.inspectorVisible) === 'true',
     inspectorWidth: clampWidth(

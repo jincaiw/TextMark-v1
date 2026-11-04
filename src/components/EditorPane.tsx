@@ -34,6 +34,8 @@ export interface EditorPaneHandle {
   scrollToLine: (line: number) => void
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
+  /** Pixel gap from that source line to the editor's visible viewport top. */
+  getTopGap: () => number | null
   format: (command: FormatCommand) => void
   undo: () => boolean
   redo: () => boolean
@@ -53,6 +55,7 @@ export interface ReplaceOptions {
 }
 
 interface EditorPaneProps {
+  active?: boolean
   value: string
   locale: Locale
   theme: 'dark' | 'light'
@@ -417,6 +420,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         if (!view) return null
         return editorTopLine(view)
       },
+      getTopGap: () => {
+        const view = viewRef.current
+        if (!view) return null
+        const line = view.state.doc.line(editorTopLine(view))
+        const lineRect = view.coordsAtPos(line.from)
+        if (!lineRect) return null
+        const scroller = view.scrollDOM
+        const visibleTop = scroller.getBoundingClientRect().top + scroller.clientTop + editorOverlayHeight(view)
+        return lineRect.top - visibleTop
+      },
       scrollToLine: (line) => {
         const view = viewRef.current
         if (!view || line < 1) return
@@ -476,7 +489,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   )
 
   useEffect(() => {
-    if (!ready || !viewRef.current) return
+    if (props.active === false || !ready || !viewRef.current) return
     const view = viewRef.current
     if (props.initialLine == null && props.initialScrollFraction == null) {
       if (initialFocusRef.current) view.focus()
@@ -523,7 +536,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       onInitialPositionAppliedRef.current?.()
     })
     return () => cancelAnimationFrame(frame)
-  }, [ready, props.initialLine, props.initialScrollFraction])
+  }, [props.active, ready, props.initialLine, props.initialScrollFraction])
 
   useEffect(() => {
     if (!ready) return
@@ -536,7 +549,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
 
   const searchIndex = props.searchIndex ?? 0
   useEffect(() => {
-    if (!ready || !props.searchQuery || !viewRef.current) return
+    if (props.active === false || !ready || !props.searchQuery || !viewRef.current) return
     const view = viewRef.current
     const matches = searchMatchOffsets(view.state.doc.toString(), props.searchQuery, props.matchCase ?? false, props.searchMode)
     if (!matches.length) return
@@ -547,7 +560,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       selection: { anchor: target.index, head: target.index + target.length },
       effects: EditorView.scrollIntoView(target.index, { y: 'center' }),
     })
-  }, [ready, searchIndex, props.searchQuery, props.matchCase, props.searchMode])
+  }, [props.active, ready, searchIndex, props.searchQuery, props.matchCase, props.searchMode])
 
   useEffect(() => {
     if (ready && props.initialFormat && viewRef.current) {
@@ -557,7 +570,12 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   }, [ready, props.initialFormat])
 
   return (
-    <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
+    <section
+      className={`editor-pane content-${props.contentWidth} pane-${props.active === false ? 'inactive' : 'active'}`}
+      aria-label="Markdown editor"
+      aria-hidden={props.active === false}
+      inert={props.active === false}
+    >
       <div className="editor-page">
         {activeFence ? (
           <div className="code-fence-toolbar" role="toolbar" aria-label="Code block controls">

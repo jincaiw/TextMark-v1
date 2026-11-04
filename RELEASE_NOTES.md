@@ -1,3 +1,20 @@
+# TextMark v0.10.41
+
+TextMark 0.10.41 completes the Markdown Preview 0.0.70 desktop alignment pass. The sidebar and inspector default to the reference app's measured split-view geometry, the toolbar default matches the upstream macOS 26 arrangement, Safari-style ⌘1–⌘9 tab switching arrives as in upstream #603, and clearing the search field now dismisses the find bar as the upstream toolbar search does. The editor and preview stay mounted across view switches with pixel-accurate scroll restoration, and the macOS tab bar tightens to the reference height.
+
+TextMark 0.10.41 完成对 Markdown Preview 0.0.70 的桌面对齐：侧栏与检查器默认尺寸采用参考应用实测分栏几何，默认工具栏对齐上游 macOS 26 排列，新增上游 #603 的 Safari 式 ⌘1–⌘9 标签切换，清空搜索框即关闭查找栏（与上游工具栏搜索一致）。编辑器与预览跨视图切换保持挂载并精确恢复像素级滚动位置，macOS 标签栏高度收紧至参考应用规格。
+
+## Highlights / 主要更新
+
+- Desktop layout: sidebar defaults to 240px (migrating from the old 260px default, custom widths preserved) with the reference minimum of 180px, inspector defaults to 270px, and narrow-window breakpoints stop widening the sidebar against the reference geometry.
+- Toolbar: the default arrangement drops the optional document-search item to match the upstream macOS 26 default set; prior default layouts migrate automatically and custom arrangements are untouched.
+- Tabs: ⌘1–⌘9 switches between open document tabs (⌘9 always lands on the last tab), and macOS tab bars tighten to a 30px row with a centered single-document title.
+- Search: clearing the toolbar search or find bar now closes it and clears highlights, matching the upstream find behavior.
+- View switching: the editor and preview remain mounted behind the active pane with pixel-accurate source and preview scroll restoration, removing remount flicker.
+- Verification: the full test suite (528 tests) passes, the production build succeeds, and the macOS app launches with the aligned toolbar, tab bar, sidebar, and inspector geometry.
+
+---
+
 # TextMark v0.10.40
 
 TextMark 0.10.40 delivers the desktop toolbar improvements prepared for v0.10.38, updates vulnerable production dependencies, and aligns JavaScript Tauri packages with their Rust crate releases. DOMPurify 3.4.17, markdown-it 15.0.3, and Tauri updater 2.14.1 with patched ZIP and TLS dependencies address published advisories. The minimum supported Rust version is now 1.90.

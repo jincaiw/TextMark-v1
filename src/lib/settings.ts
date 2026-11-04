@@ -3,6 +3,7 @@ import { normalizeThemeColors } from './theme'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 export const SETTINGS_KEYS = [
+  'textmark.settings.v10',
   'textmark.settings.v9',
   'textmark.settings.v8',
   'textmark.settings.v7',
@@ -41,12 +42,11 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
 ])
 
 // Upstream (markdown-preview) default toolbar order. The AppKit-only sidebar
-// tracking separator is intentionally omitted (native macOS affordance).
+// tracking separator and optional document-search item are intentionally omitted.
 export const DEFAULT_TOOLBAR: ToolbarItem[] = [
   'sidebar',
   'navigation',
   'flexibleSpace',
-  'documentSearch',
   'openActions',
   'space',
   'themesAndSettings',
@@ -71,6 +71,22 @@ const V9_DEFAULT_TOOLBAR: ToolbarItem[] = [
   'inspector',
   'share',
   'export',
+  'edit',
+  'search',
+]
+
+// Schema v9's shipped default included the optional document-search action.
+const V10_PRIOR_DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'documentSearch',
+  'openActions',
+  'space',
+  'themesAndSettings',
+  'space',
+  'inspector',
+  'share',
   'edit',
   'search',
 ]
@@ -132,7 +148,7 @@ const V5_DEFAULT_TOOLBAR: ToolbarItem[] = [
 ]
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 9,
+  schemaVersion: 10,
   locale: 'zh-CN',
   theme: 'system',
   contentWidth: 'normal',
@@ -178,9 +194,10 @@ export function normalizeSettings(value: unknown): AppSettings {
     matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) ||
     matchesToolbar(V7_DEFAULT_TOOLBAR) ||
     matchesToolbar(V8_DEFAULT_TOOLBAR) ||
-    matchesToolbar(V9_DEFAULT_TOOLBAR)
+    matchesToolbar(V9_DEFAULT_TOOLBAR) ||
+    matchesToolbar(V10_PRIOR_DEFAULT_TOOLBAR)
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
     theme: valid(stored.theme, ['system', 'light', 'dark'], 'system'),
     contentWidth: valid(stored.contentWidth, ['normal', 'full'], 'normal'),
