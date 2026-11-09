@@ -5,7 +5,10 @@ import {
   discoverApplications,
   errorCode,
   isMacos,
+  linkDecision,
   parentDirectory,
+  rememberLinkScheme,
+  resetLinkApprovals,
   resolveSiblingPath,
   shouldUseDedicatedSettingsWindow,
   clampSessionGeometry,
@@ -98,5 +101,36 @@ describe('external application discovery', () => {
     expect(
       applications.filter((application) => application.kind === 'llm' && application.available).map((application) => application.id),
     ).toEqual(['codex', 'claude', 'chatgpt'])
+  })
+})
+
+describe('app link policy', () => {
+  const storage = () => {
+    const map = new Map<string, string>()
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+      map,
+    }
+  }
+
+  it('opens web schemes, blocks dangerous ones, and confirms custom ones', () => {
+    const store = storage()
+    expect(linkDecision('https://example.com', store)).toBe('open')
+    expect(linkDecision('mailto:a@b.c', store)).toBe('open')
+    expect(linkDecision('javascript:alert(1)', store)).toBe('blocked')
+    expect(linkDecision('file:///etc/passwd', store)).toBe('blocked')
+    expect(linkDecision('not a url', store)).toBe('blocked')
+    expect(linkDecision('obsidian://open?vault=x', store)).toBe('confirm')
+  })
+
+  it('remembering a scheme opens it until approvals reset', () => {
+    const store = storage()
+    expect(linkDecision('obsidian://open', store)).toBe('confirm')
+    rememberLinkScheme('obsidian://open', store)
+    expect(linkDecision('obsidian://open', store)).toBe('open')
+    // The generation rotation invalidates the saved approval, as upstream does.
+    resetLinkApprovals(store)
+    expect(linkDecision('obsidian://open', store)).toBe('confirm')
   })
 })

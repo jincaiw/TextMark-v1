@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, ContentWidth, DocumentFont, Locale, ThemeMode } from '../types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { AppSettings, ContentWidth, DocumentFont, LocaleSetting, ReaderLayout, ThemeMode } from '../types'
+import { resolveLocale } from '../lib/i18n'
 import { loadNativeSettings, saveNativeSettings } from '../lib/platform'
 import {
   normalizeAutoSaveInterval,
   normalizeLineHeight,
   normalizePagePadding,
+  normalizeReaderLayout,
   normalizeSettings,
   readSettings,
   SETTINGS_KEYS,
@@ -33,10 +35,14 @@ export function useSettings() {
     if (nativeLoaded) void saveNativeSettings(settings)
   }, [nativeLoaded, settings])
   const patch = useCallback((next: Partial<AppSettings>) => setSettings((current) => ({ ...current, ...next })), [])
+  // "system" (and any unknown stored value) resolves against the OS language
+  // list, mirroring the upstream System Default behavior.
+  const locale = useMemo(() => resolveLocale(settings.locale), [settings.locale])
   return {
     settings,
     patch,
-    setLocale: (locale: Locale) => patch({ locale }),
+    locale,
+    setLocale: (locale: LocaleSetting) => patch({ locale }),
     setTheme: (theme: ThemeMode) => patch({ theme }),
     setContentWidth: (contentWidth: ContentWidth) => patch({ contentWidth }),
     setZoom: (zoom: number) => patch({ zoom: Math.max(50, Math.min(300, zoom)) }),
@@ -45,6 +51,8 @@ export function useSettings() {
     setPagePaddingHorizontal: (pagePaddingHorizontal: number) =>
       patch({ pagePaddingHorizontal: normalizePagePadding(pagePaddingHorizontal) }),
     setDocumentFont: (documentFont: DocumentFont) => patch({ documentFont }),
+    setReaderLayout: (readerLayout: Partial<ReaderLayout>) =>
+      setSettings((current) => ({ ...current, readerLayout: normalizeReaderLayout({ ...current.readerLayout, ...readerLayout }) })),
     setAutoSaveIntervalMinutes: (autoSaveIntervalMinutes: number) =>
       patch({ autoSaveIntervalMinutes: normalizeAutoSaveInterval(autoSaveIntervalMinutes) }),
   }

@@ -2,15 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { normalizeThemeColors, resolvedThemePalette, THEME_PRESETS } from './theme'
 
 describe('upstream theme preset parity', () => {
-  it('ships the seven current named presets', () => {
+  it('ships the upstream nine-preset gallery in gallery order', () => {
     expect(Object.values(THEME_PRESETS).map((preset) => preset.name)).toEqual([
-      'Normal',
-      'Charcoal',
-      'Red Graphite',
-      'Dark Graphite',
-      'Solarized Light',
-      'Solarized Dark',
-      'Dracula',
+      'Original',
+      'Quiet',
+      'Paper',
+      'Bold',
+      'Calm',
+      'Focus',
+      'Graphite',
+      'Dusk',
+      'Midnight',
     ])
   })
 

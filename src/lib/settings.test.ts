@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, DEFAULT_TOOLBAR, normalizeLineHeight, normalizePagePadding, normalizeSettings, SETTINGS_KEYS } from './settings'
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_TOOLBAR,
+  normalizeLineHeight,
+  normalizePagePadding,
+  normalizeReaderLayout,
+  normalizeSettings,
+  SETTINGS_KEYS,
+} from './settings'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 describe('reading typography settings', () => {
@@ -123,9 +131,17 @@ describe('reading typography settings', () => {
   })
 
   it('falls back to the defaults for non-numeric input', () => {
-    expect(normalizeLineHeight('tall')).toBe(1.52)
-    expect(normalizeLineHeight(undefined)).toBe(1.52)
+    expect(normalizeLineHeight('tall')).toBe(1.6)
+    expect(normalizeLineHeight(undefined)).toBe(1.6)
     expect(normalizePagePadding(null)).toBe(40)
     expect(normalizePagePadding(Number.NaN)).toBe(40)
+  })
+
+  it('moves a profile that still carries the pre-1.6 default onto the upstream rhythm', () => {
+    expect(normalizeLineHeight(1.52)).toBe(1.6)
+    expect(normalizeReaderLayout({ lineSpacing: 1.52, isCustomized: false }).lineSpacing).toBe(1.6)
+    // A reader who actually chose the value keeps it.
+    expect(normalizeReaderLayout({ lineSpacing: 1.52, isCustomized: true }).lineSpacing).toBe(1.52)
+    expect(normalizeReaderLayout({ lineSpacing: 1.9, isCustomized: false }).lineSpacing).toBe(1.9)
   })
 })

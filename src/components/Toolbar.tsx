@@ -10,30 +10,38 @@ import {
   FileDown,
   FileOutput,
   FileText,
-  FilePenLine,
   FolderOpen,
-  Folder,
-  Info,
-  ListTree,
   ALargeSmall,
   Minus,
   MoreHorizontal,
-  PanelLeft,
   Pin,
   Plus,
   Printer,
   Save,
   Search,
   Settings,
-  Share,
   Sparkles,
 } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { isTauri } from '../lib/platform'
+import { isMacos, isTauri } from '../lib/platform'
+import { useFileIcons } from '../hooks/useFileIcons'
 import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
 import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, ToolbarItem, ViewMode, ThemeMode, ThemePreset } from '../types'
 import { ToolbarAppearance } from './ToolbarAppearance'
+import {
+  CopyStackIcon,
+  DocumentSearchIcon,
+  EditDiscIcon,
+  EditPencilIcon,
+  ExportPageIcon,
+  FolderGlyphIcon,
+  InfoBareIcon,
+  InfoCircleFillIcon,
+  ListIndentIcon,
+  ShareUpIcon,
+  SidebarLeadingIcon,
+} from './toolbarIcons'
 
 interface ToolbarProps {
   documentName?: string
@@ -92,19 +100,46 @@ interface ToolbarProps {
 }
 
 const SIMPLE_ACTIONS: Partial<
-  Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; action: (p: ToolbarProps) => void }>
+  Record<
+    ToolbarItem,
+    {
+      title: Parameters<typeof t>[1]
+      // The reference separates a control's accessibility description (its
+      // short name) from the tooltip sentence AppKit stores as AXHelp. WebKit
+      // maps aria-label to AXDescription and title to AXHelp, so the renderer
+      // needs both keys to reproduce the reference's AX tree.
+      help?: Parameters<typeof t>[1]
+      icon: React.ReactNode
+      action: (p: ToolbarProps) => void
+    }
+  >
 > = {
-  inspector: { title: 'getInfo', icon: <Info />, action: (p) => p.onToggleInspector() },
-  alwaysOnTop: { title: 'alwaysOnTop', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
-  share: { title: 'shareSource', icon: <Share />, action: (p) => p.onShare() },
-  edit: { title: 'edit', icon: <FilePenLine />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
-  print: { title: 'printItem', icon: <Printer />, action: (p) => p.onPrint() },
-  copy: { title: 'copyItem', icon: <Clipboard />, action: (p) => p.onCopy() },
-  export: { title: 'exportItem', icon: <FileDown />, action: (p) => p.onExport() },
-  exportPdf: { title: 'exportPdf', icon: <FileDown />, action: (p) => p.onExportPdf() },
+  inspector: {
+    title: 'inspector',
+    help: 'inspectorHelp',
+    icon: <InfoBareIcon />,
+    action: (p) => p.onToggleInspector(),
+  },
+  alwaysOnTop: { title: 'alwaysOnTop', help: 'alwaysOnTopHelp', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
+  share: { title: 'share', help: 'shareHelp', icon: <ShareUpIcon />, action: (p) => p.onShare() },
+  edit: { title: 'edit', icon: <EditPencilIcon />, action: (p) => p.onViewModeChange(p.viewMode === 'edit' ? 'preview' : 'edit') },
+  print: { title: 'printItem', help: 'printHelp', icon: <Printer />, action: (p) => p.onPrint() },
+  copy: { title: 'copyItem', help: 'copyHelp', icon: <CopyStackIcon />, action: (p) => p.onCopy() },
+  export: { title: 'exportItem', help: 'exportHelp', icon: <ExportPageIcon />, action: (p) => p.onExport() },
+  exportPdf: { title: 'exportPdf', help: 'exportPdfHelp', icon: <FileDown />, action: (p) => p.onExportPdf() },
   search: { title: 'searchItem', icon: <Search />, action: (p) => p.onSearchOpen() },
-  documentSearch: { title: 'searchDocuments', icon: <Search />, action: (p) => p.onSearchDocumentsOpen() },
+  documentSearch: {
+    title: 'searchDocuments',
+    help: 'searchDocumentsHelp',
+    icon: <DocumentSearchIcon />,
+    action: (p) => p.onSearchDocumentsOpen(),
+  },
 }
+
+// AppKit draws these items as plain bordered buttons. On macOS 26 two adjacent
+// plain buttons share one glass capsule instead of drawing a capsule each, so
+// the renderer marks them and the stylesheet merges consecutive runs.
+const CAPSULE_ITEMS = new Set<ToolbarItem>(['copy', 'inspector', 'share', 'export', 'exportPdf', 'edit', 'alwaysOnTop', 'print'])
 
 const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>
   item === 'edit' && props.viewMode === 'edit' ? ('stopEditing' as const) : fallback
@@ -181,12 +216,38 @@ export function Toolbar(props: ToolbarProps) {
   // editor for the user's configured target.
   const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget)
   const effectiveDefaultTarget = defaultEditor?.id ?? 'system'
+  // AppKit draws the split button's app tile at 20pt: the reference's icon
+  // artwork covers 16pt of that box, against 14.5pt when the same image is
+  // given the menus' 18pt slot.
+  const { icons: appIcons, requestIcon } = useFileIcons(20)
+  useEffect(() => {
+    editorApps.forEach((application) => {
+      if (application.macApp) requestIcon(application.macApp)
+    })
+  }, [editorApps, requestIcon])
+  // The real Finder icon once loaded, else the first-letter badge fallback.
+  // The system target has no app bundle to ask NSWorkspace about; it draws the
+  // same window glyph its "open with default" row uses, so the split button
+  // still shows an 18pt icon instead of a bare letter.
+  const appIconFor = (application: ExternalApplication) =>
+    application.kind === 'system' ? (
+      <AppWindow className="context-app-icon" />
+    ) : application.macApp && appIcons[application.macApp] ? (
+      <img className="context-app-icon" src={appIcons[application.macApp]} alt="" aria-hidden="true" />
+    ) : (
+      <span className="app-badge" aria-hidden="true">
+        {application.name.slice(0, 1).toUpperCase()}
+      </span>
+    )
   // Keep the user's ordered layout, including duplicate spacing items. Like
   // AppKit, navigation is absent until there is a destination in either direction.
   const toolbarItems = useMemo(
     () => props.items.filter((item) => item !== 'navigation' || props.canGoBack || props.canGoForward),
     [props.items, props.canGoBack, props.canGoForward],
   )
+  // Upstream's sidebar section (pane picker + show/hide toggle) is the toolbar's
+  // leading item; the window title is drawn after it, at the content pane's edge.
+  const leadingSidebarItem = toolbarItems[0] === 'sidebar'
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
     <>
@@ -194,9 +255,25 @@ export function Toolbar(props: ToolbarProps) {
       {props.displayMode === 'iconAndLabel' ? <span className="toolbar-label">{tx(title)}</span> : null}
     </>
   )
+  // AppKit's size item is a text label whose two CJK words are drawn at
+  // different optical sizes: 大 stands for Large and 小 for Small, so the
+  // reference's 大 ink is 12.5pt square while its 小 is 9.5. A two-character
+  // Han label splits into the large word and the small one; every other
+  // localization (including the English "Size") stays a single run.
+  const sizeLabel = tx('size')
+  const sizeGlyph = !isMacos() ? (
+    <ALargeSmall />
+  ) : /^\p{Script=Han}{2}$/u.test(sizeLabel) ? (
+    <span className="toolbar-size-glyph">
+      {sizeLabel[0]}
+      <span className="toolbar-size-glyph-small">{sizeLabel[1]}</span>
+    </span>
+  ) : (
+    <span className="toolbar-size-glyph">{sizeLabel}</span>
+  )
   const editorButtons = editorApps.map((application) => (
     <button key={application.id} onClick={() => props.onOpenWith(application.id)}>
-      <span className="app-badge">{application.name.slice(0, 1).toUpperCase()}</span>
+      {appIconFor(application)}
       <span>{application.kind === 'system' ? tx('systemDefault') : application.name}</span>
       {application.id === effectiveDefaultTarget ? <Check className="check" /> : null}
     </button>
@@ -247,15 +324,50 @@ export function Toolbar(props: ToolbarProps) {
       const available = container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
       // Track only a leading sidebar slot; never move a customized item back
       // to the front. If the whole row cannot fit, release the tracking space
-      // before overflowing actions. The 3px anchor is the 6px divider's centre.
-      const moreWidth = more?.getBoundingClientRect().width ?? 0
+      // before overflowing actions. The tracked slot runs to the content pane's
+      // edge, i.e. past the 6px split gutter.
+      // The overflow affordance is hidden while nothing overflows, so measure
+      // it with its own display forced back on; otherwise the budget would not
+      // reserve room for it once items do start to hide.
+      let moreWidth = 0
+      if (more) {
+        const previous = more.style.display
+        more.style.display = ''
+        moreWidth = more.getBoundingClientRect().width
+        more.style.display = previous
+      }
       const minimumWidths = slots.map((slot, index) => (toolbarItems[index] === 'flexibleSpace' ? 0 : slot.getBoundingClientRect().width))
       if (toolbarItems[0] === 'sidebar' && props.sidebarVisible && window.innerWidth > 700) {
-        const targetWidth = props.sidebarWidth + 3 - container.getBoundingClientRect().left
+        const targetWidth = props.sidebarWidth + 6 - container.getBoundingClientRect().left
         const required = moreWidth + minimumWidths.reduce((sum, width) => sum + width, 0) + slots.length * gap
-        if (targetWidth >= minimumWidths[0] + 10 && required + targetWidth - minimumWidths[0] <= available + 0.5) {
+        // Tracking gives the air between the picker and the toggle to the pane
+        // edge: the picker stays at the leading edge, the toggle at the trailing
+        // one, and a narrower sidebar shrinks the air rather than letting the
+        // toggle fall off the edge. So the slot only has to fit the two controls
+        // plus the tracked inset — not the 17.5pt gap of the untracked row.
+        // Reserving that whole gap put the threshold exactly on the 234pt
+        // default, so a sidebar a point narrower silently dropped tracking and
+        // parked the toggle 2.5pt short of the pane edge the reference follows.
+        const control = slots[0].querySelector<HTMLElement>('.sidebar-control')
+        const controlGap = control ? Number.parseFloat(getComputedStyle(control).columnGap) || 0 : 0
+        const trackedInset = isTauri() && isMacos() ? 7.5 : 11
+        if (targetWidth >= minimumWidths[0] - controlGap + trackedInset && required + targetWidth - minimumWidths[0] <= available + 0.5) {
           slots[0].setAttribute('data-sidebar-tracking', 'true')
           slots[0].style.width = `${targetWidth}px`
+        }
+      }
+      // Upstream draws the window title at the content pane's leading edge, not
+      // at the window's: with the sidebar open the title starts where the tab
+      // strip starts, 11pt into the pane. Measure the title with its margin
+      // cleared; a tracked leading slot already ends at the pane's edge, so the
+      // same target inset works for both arrangements.
+      const title = container.querySelector<HTMLElement>(':scope > .toolbar-document-title')
+      if (title) {
+        title.style.marginLeft = '0px'
+        if (props.sidebarVisible && isTauri() && isMacos()) {
+          const target = props.sidebarWidth + 6 + 12
+          const inset = target - title.getBoundingClientRect().left
+          if (inset > 0) title.style.marginLeft = `${inset}px`
         }
       }
       // The container has an independent grid track; hiding children must not
@@ -303,34 +415,52 @@ export function Toolbar(props: ToolbarProps) {
     props.visible,
   ])
 
+  // Consecutive plain-button items share one glass capsule on macOS 26, so each
+  // one needs to know the length of the run it belongs to and whether it opens
+  // it: the opening slot paints the whole tray as a single surface.
+  const capsuleRuns = new Map<number, { start: boolean; length: number }>()
+  for (let index = 0; index < toolbarItems.length; index += 1) {
+    if (!CAPSULE_ITEMS.has(toolbarItems[index])) continue
+    let end = index
+    while (end + 1 < toolbarItems.length && CAPSULE_ITEMS.has(toolbarItems[end + 1])) end += 1
+    const length = end - index + 1
+    for (let member = index; member <= end; member += 1) capsuleRuns.set(member, { start: member === index, length })
+    index = end
+  }
+
+  // The reference's toolbar share button opens the macOS sharing service
+  // picker directly. Keep the custom popover for browsers and the WebDriver
+  // build, where there is no native panel and the copy/toast fallback is the
+  // behaviour under test.
+  const nativeSharePicker = isTauri() && isMacos() && !import.meta.env.VITE_WDIO
+
   const renderItem = (item: ToolbarItem, index: number) => {
     const key = `${item}-${index}`
     const hidden = hiddenIndexes.includes(index)
     const hiddenStyle = hidden ? { display: 'none' as const } : undefined
+    const run = capsuleRuns.get(index)
     const slot = (node: React.ReactNode) => (
-      <span key={key} data-toolbar-item={item} style={hiddenStyle}>
+      <span
+        key={key}
+        data-toolbar-item={item}
+        data-capsule={run ? 'true' : undefined}
+        data-capsule-start={run?.start ? 'true' : undefined}
+        style={{ ...hiddenStyle, ...(run ? { '--capsule-count': String(run.length) } : null) } as React.CSSProperties}
+      >
         {node}
       </span>
     )
     if (item === 'flexibleSpace')
-      return (
-        <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle}>
-          {index === toolbarItems.indexOf('flexibleSpace') && props.documentName ? (
-            <span className="toolbar-document-title" title={props.documentName}>
-              {props.documentName}
-            </span>
-          ) : null}
-        </span>
-      )
+      return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
     if (item === 'space')
       return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-space" style={hiddenStyle} />
     if (item === 'navigation')
       return slot(
         <div className="history-buttons toolbar-navigation">
-          <button disabled={!props.canGoBack} aria-label="Back" title={tx('back')} onClick={props.onBack}>
+          <button disabled={!props.canGoBack} aria-label={tx('back')} title={tx('back')} onClick={props.onBack}>
             <ChevronLeft />
           </button>
-          <button disabled={!props.canGoForward} aria-label="Forward" title={tx('forward')} onClick={props.onForward}>
+          <button disabled={!props.canGoForward} aria-label={tx('forward')} title={tx('forward')} onClick={props.onForward}>
             <ChevronRight />
           </button>
         </div>,
@@ -338,55 +468,56 @@ export function Toolbar(props: ToolbarProps) {
     if (item === 'sidebar')
       return slot(
         <div className="sidebar-control">
-          <div className="sidebar-mode-picker" role="group" aria-label={tx('chooseSidebar')}>
-            {(['outline', 'files'] as const).map((mode) => {
-              const label = mode === 'outline' ? 'tableOfContents' : 'projectNavigator'
-              const selected = props.sidebarVisible && props.sidebarMode === mode
-              return (
-                <button
-                  key={mode}
-                  className={selected ? 'selected' : ''}
-                  title={tx(label)}
-                  aria-label={tx(label)}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    props.onSidebarModeChange(mode)
-                  }}
-                >
-                  {withLabel(mode === 'outline' ? <ListTree /> : <Folder />, label)}
-                </button>
-              )
-            })}
-          </div>
+          {/* Upstream hides the pane picker together with the sidebar; the
+              toggle is the way back and stays alone at the leading edge. */}
+          {props.sidebarVisible ? (
+            <div className="sidebar-mode-picker" role="radiogroup" aria-label={tx('chooseSidebar')}>
+              {(['outline', 'files'] as const).map((mode) => {
+                const label = mode === 'outline' ? 'sidebarTableOfContents' : 'sidebarProjectNavigator'
+                const selected = props.sidebarMode === mode
+                return (
+                  <button
+                    key={mode}
+                    className={selected ? 'selected' : ''}
+                    role="radio"
+                    title={tx(label)}
+                    aria-label={tx(label)}
+                    aria-checked={selected}
+                    onClick={() => {
+                      props.onSidebarModeChange(mode)
+                    }}
+                  >
+                    {withLabel(mode === 'outline' ? <ListIndentIcon /> : <FolderGlyphIcon />, label)}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
           <button
             className={props.sidebarVisible ? 'selected' : ''}
-            title={tx('toggleSidebar')}
-            aria-label={tx('toggleSidebar')}
-            aria-pressed={props.sidebarVisible}
+            title={tx(props.sidebarVisible ? 'hideSidebar' : 'showSidebar')}
+            aria-label={tx('sidebar')}
             onClick={props.onToggleSidebar}
           >
-            {withLabel(<PanelLeft />, 'sidebar')}
+            {withLabel(<SidebarLeadingIcon />, 'sidebar')}
           </button>
         </div>,
       )
     if (item === 'openActions') {
       const defaultEditorName = defaultEditor?.name ?? tx('systemDefault')
-      const defaultEditorTitle = `${tx('openWithDefault')}: ${defaultEditorName}`
+      // The reference's tooltip is the action sentence "Open in <app>" (its AX
+      // help). The split button has no visible text, so the app name doubles as
+      // the accessible description and the sentence as the tooltip.
+      const defaultEditorTitle = tx('openInApp').replace('%@', defaultEditorName)
       return slot(
         <div className="toolbar-group open-actions-split">
           <button
             className="open-actions-primary"
             title={defaultEditorTitle}
-            aria-label={defaultEditorTitle}
+            aria-label={defaultEditorName}
             onClick={() => props.onOpenWith(effectiveDefaultTarget)}
           >
-            {defaultEditor ? (
-              <span className="open-actions-app-badge" aria-hidden="true">
-                {defaultEditor.name.slice(0, 1).toUpperCase()}
-              </span>
-            ) : (
-              <AppWindow />
-            )}
+            {defaultEditor ? appIconFor(defaultEditor) : <AppWindow />}
           </button>
           <details className="open-with">
             <summary title={tx('openWith')} aria-label={tx('openWith')}>
@@ -397,7 +528,10 @@ export function Toolbar(props: ToolbarProps) {
                 emptyAppItem()
               ) : (
                 <>
-                  {defaultEditorButton}
+                  {/* The reference's split menu is the editor list and nothing
+                      else: its primary half already means "open with the
+                      checked editor", so a leading "open with default" row had
+                      no counterpart there and pushed every row down one. */}
                   {llmApps.length > 0 && <b>{tx('aiApps')}</b>}
                   {llmButtons}
                   {llmApps.length > 0 && editorApps.length > 0 && <hr />}
@@ -436,11 +570,11 @@ export function Toolbar(props: ToolbarProps) {
     if (item === 'zoom')
       return slot(
         <div className="toolbar-group zoom-buttons" aria-label={`${tx('zoom')} ${props.zoom}%`}>
-          <button title={tx('zoomOut')} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, -1))}>
+          <button title={tx('zoomOut')} aria-label={tx('zoomOut')} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, -1))}>
             <span>A</span>
             <Minus />
           </button>
-          <button title={tx('zoomIn')} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, 1))}>
+          <button title={tx('zoomIn')} aria-label={tx('zoomIn')} onClick={() => props.onZoomChange(nextZoomStep(props.zoom, 1))}>
             <span>A</span>
             <Plus />
           </button>
@@ -458,7 +592,12 @@ export function Toolbar(props: ToolbarProps) {
           onThemePresetChange={props.onThemePresetChange}
           onCustomizeAppearance={props.onCustomizeAppearance}
         >
-          {withLabel(<ALargeSmall />, 'themesAndSettings')}
+          {/* The reference's size item is a text label rather than an "AA"
+              glyph: AppKit's localized control reads 大小 in Chinese and Size
+              in English. Its two CJK words are drawn at different optical
+              sizes (Large and Small), so the second character takes a smaller
+              cut: the reference's 大 ink is 12.5pt square and its 小 9.5. */}
+          {withLabel(sizeGlyph, 'themesAndSettings')}
         </ToolbarAppearance>,
       )
     if (item === 'documentActions')
@@ -466,22 +605,27 @@ export function Toolbar(props: ToolbarProps) {
         <div className="toolbar-group document-actions" aria-label={tx('documentActions')}>
           <button
             className={props.inspectorVisible ? 'selected' : ''}
-            title={tx('getInfo')}
-            aria-label={tx('getInfo')}
+            title={tx('inspectorHelp')}
+            aria-label={tx('inspector')}
+            aria-pressed={props.inspectorVisible}
             onClick={props.onToggleInspector}
           >
-            {withLabel(<Info />, 'getInfo')}
+            {withLabel(props.inspectorVisible ? <InfoCircleFillIcon /> : <InfoBareIcon />, 'inspector')}
           </button>
-          <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
-            {withLabel(<Share />, 'shareSource')}
+          <button title={tx('shareHelp')} aria-label={tx('share')} onClick={props.onShare}>
+            {withLabel(<ShareUpIcon />, 'share')}
           </button>
           <button
-            className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
-            title={tx(props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
-            aria-label={tx(props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
+            className={props.viewMode === 'edit' ? 'selected' : ''}
+            title={props.viewMode === 'edit' ? tx('stopEditing') : undefined}
+            aria-label={tx('edit')}
+            aria-pressed={props.viewMode === 'edit'}
             onClick={() => props.onViewModeChange(props.viewMode === 'edit' ? 'preview' : 'edit')}
           >
-            {withLabel(<FilePenLine />, props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
+            {withLabel(
+              props.viewMode === 'edit' ? <EditDiscIcon /> : <EditPencilIcon />,
+              props.viewMode === 'edit' ? 'stopEditing' : 'edit',
+            )}
           </button>
         </div>,
       )
@@ -533,12 +677,22 @@ export function Toolbar(props: ToolbarProps) {
           />
         </div>,
       )
+    if (item === 'share' && nativeSharePicker)
+      return slot(
+        <button
+          className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''}`}
+          title={tx('shareHelp')}
+          aria-label={tx('share')}
+          onClick={props.onShare}
+        >
+          {withLabel(<ShareUpIcon />, 'share')}
+        </button>,
+      )
     if (item === 'share')
       return slot(
         <details className="toolbar-group share-menu">
-          <summary title={tx('share')} aria-label={tx('share')}>
-            {withLabel(<Share />, 'share')}
-            <ChevronDown />
+          <summary role="button" title={tx('shareHelp')} aria-label={tx('share')}>
+            {withLabel(<ShareUpIcon />, 'share')}
           </summary>
           <div className="menu-popover share-popover">
             <div className="share-document-meta">
@@ -556,7 +710,7 @@ export function Toolbar(props: ToolbarProps) {
               </div>
             </div>
             <button onClick={props.onShare}>
-              <Share />
+              <ShareUpIcon />
               {tx('shareSource')}
             </button>
             <button onClick={props.onCopy}>
@@ -578,15 +732,20 @@ export function Toolbar(props: ToolbarProps) {
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
       const title = actionTitle(item, props, simple.title)
+      // The reference's edit item carries no tooltip while previewing and only
+      // explains itself in edit mode; its description stays "Edit" throughout.
+      const help = item === 'edit' ? (props.viewMode === 'edit' ? 'stopEditing' : undefined) : simple.help
       const active =
         (item === 'inspector' && props.inspectorVisible) ||
         (item === 'edit' && props.viewMode === 'edit') ||
         (item === 'alwaysOnTop' && props.alwaysOnTop)
+      const toggle = item === 'inspector' || item === 'edit' || item === 'alwaysOnTop'
       return slot(
         <button
-          className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''} ${item === 'edit' && active ? 'edit-active' : ''}`}
-          title={tx(title)}
-          aria-label={tx(title)}
+          className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''}`}
+          title={help ? tx(help) : undefined}
+          aria-label={tx(simple.title)}
+          aria-pressed={toggle ? active : undefined}
           onClick={() => {
             if (item === 'copy') {
               props.onCopy()
@@ -595,7 +754,18 @@ export function Toolbar(props: ToolbarProps) {
             } else simple.action(props)
           }}
         >
-          {withLabel(item === 'copy' && copiedFlash ? <Check /> : simple.icon, title)}
+          {withLabel(
+            item === 'inspector' && active ? (
+              <InfoCircleFillIcon />
+            ) : item === 'edit' && active ? (
+              <EditDiscIcon />
+            ) : item === 'copy' && copiedFlash ? (
+              <Check />
+            ) : (
+              simple.icon
+            ),
+            title,
+          )}
         </button>,
       )
     }
@@ -638,8 +808,22 @@ export function Toolbar(props: ToolbarProps) {
         </div>
       </div>
       <div className="native-actions" ref={actionsRef} data-tauri-drag-region>
-        {toolbarItems.map(renderItem)}
-        <details className="more-menu">
+        {/* Upstream's leading sidebar section (the pane picker and its toggle)
+            sits in the titlebar's sidebar area, and the system draws the window
+            title after it at the content pane's leading edge. Render that first
+            item ahead of the title so the tracked slot spans the sidebar and
+            the title lands on the pane instead of over the sidebar. */}
+        {leadingSidebarItem ? renderItem(toolbarItems[0], 0) : null}
+        {/* Upstream draws the window title at the leading edge of the content
+            titlebar area, before the navigational items, rather than centred
+            in a flexible slot. */}
+        {props.documentName ? (
+          <span className="toolbar-document-title" data-tauri-drag-region title={props.documentName}>
+            {props.documentName}
+          </span>
+        ) : null}
+        {toolbarItems.map((item, index) => (leadingSidebarItem && index === 0 ? null : renderItem(item, index)))}
+        <details className="more-menu" style={overflowItems.length === 0 ? { display: 'none' } : undefined}>
           <summary title={tx('more')}>
             <MoreHorizontal />
           </summary>

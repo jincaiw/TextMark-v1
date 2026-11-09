@@ -4538,11 +4538,11 @@ dependencies = [
 
 [[package]]
 name = "textmark"
-version = "0.10.41"
+version = "0.10.42"
 dependencies = [
  "atomic-write-file",
  "base64 0.22.1",
- "core-foundation 0.10.1",
+ "block2",
  "dirs 6.0.0",
  "font8x8",
  "image",

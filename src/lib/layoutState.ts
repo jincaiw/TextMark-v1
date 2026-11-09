@@ -8,9 +8,17 @@ import type { SidebarMode } from '../types'
  * 放在一处后，读写两侧共用同一份键表，新增面板不会再漏。
  */
 
-export const SIDEBAR_WIDTH_RANGE = { min: 180, max: 400, default: 240 } as const
+// The upstream sidebar pane measures 240pt from the window edge to the divider;
+// this grid adds the 6pt drag handle after the stored width, so the seed that
+// lands the divider on 240pt is 234. The stored value is clamped to the same
+// range, so a wider user choice is kept.
+export const SIDEBAR_WIDTH_RANGE = { min: 230, max: 400, default: 234 } as const
 export const INSPECTOR_WIDTH_RANGE = { min: 270, max: 500, default: 270 } as const
 const LEGACY_SIDEBAR_WIDTH_DEFAULT = 260
+// Seed defaults from earlier builds. Untouched installs carry one of these exact
+// values, so the current seed replaces them; any other stored width is a
+// deliberate choice and stays untouched.
+const PREVIOUS_SIDEBAR_WIDTH_DEFAULTS = [240, 230] as const
 
 export const LAYOUT_STORAGE_KEYS = {
   sidebarVisible: 'textmark.sidebarVisible',
@@ -43,7 +51,10 @@ const clampWidth = (value: number, range: { min: number; max: number; default: n
 
 export function readSidebarWidth(storage: LayoutStorageReader = localStorage): number {
   const storedWidth = Number(storage.getItem(LAYOUT_STORAGE_KEYS.sidebarWidth))
-  const migratedWidth = storedWidth === LEGACY_SIDEBAR_WIDTH_DEFAULT ? SIDEBAR_WIDTH_RANGE.default : storedWidth
+  const migratedWidth =
+    storedWidth === LEGACY_SIDEBAR_WIDTH_DEFAULT || (PREVIOUS_SIDEBAR_WIDTH_DEFAULTS as readonly number[]).includes(storedWidth)
+      ? SIDEBAR_WIDTH_RANGE.default
+      : storedWidth
   return clampWidth(Number.isFinite(migratedWidth) && migratedWidth > 0 ? migratedWidth : SIDEBAR_WIDTH_RANGE.default, SIDEBAR_WIDTH_RANGE)
 }
 

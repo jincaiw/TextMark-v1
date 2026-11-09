@@ -22,7 +22,7 @@ export default defineConfig(async () => ({
     // Keep preview bootstrap small; Mermaid and editor vendors are only fetched
     // after their feature is activated.
     rolldownOptions: {
-      input: { main: 'index.html', mermaid: 'mermaid.html', preview: 'preview.html' },
+      input: { main: 'index.html', mermaid: 'mermaid.html', preview: 'preview.html', table: 'table.html' },
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return

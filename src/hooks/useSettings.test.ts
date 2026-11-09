@@ -107,15 +107,16 @@ describe('settings migration', () => {
     })
   })
   it('keeps only valid document fonts, presets, and per-scheme color overrides', () => {
+    // The pre-list "serif" option maps onto its named successor New York.
     expect(
       normalizeSettings({
         documentFont: 'serif',
-        themePreset: 'dracula',
+        themePreset: 'midnight',
         themeColors: { light: { linkColor: '#abc123', textColor: 'invalid' }, dark: { windowBackground: '#1e1e1e' } },
       }),
     ).toMatchObject({
-      documentFont: 'serif',
-      themePreset: 'dracula',
+      documentFont: 'newYork',
+      themePreset: 'midnight',
       themeColors: { light: { linkColor: '#ABC123' }, dark: { windowBackground: '#1E1E1E' } },
     })
   })

@@ -8,7 +8,7 @@ import {
   PhysicalSize,
   type Monitor,
 } from '@tauri-apps/api/window'
-import { save } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import type { AppError, AppSettings, ExternalApplication, FileNode, OpenPathRequest, StartupRequest, TextDocument } from '../types'
 
 export interface SavedPastedImage {
@@ -129,6 +129,30 @@ export async function scanFolder(path: string): Promise<FileNode[]> {
   return invoke<FileNode[]>('list_directory', { path })
 }
 
+/** The upstream navigator's createItem: an empty "Untitled.md", or a
+ * "New Folder", under a unique name in `directory`. */
+export async function createDirectoryEntry(directory: string, isDirectory: boolean, contents?: string): Promise<FileNode> {
+  return invoke<FileNode>('create_directory_entry', { directory, isDirectory, contents: contents ?? null })
+}
+
+/** Lets the reader pick files anywhere on disk and copies them into the
+ * navigator's folder (upstream "Add Files to…"). Returns the imported rows;
+ * empty outside Tauri or when the picker is cancelled. */
+export async function pickAndImportFiles(directory: string): Promise<FileNode[]> {
+  if (!isTauri()) return []
+  const selected = await open({ multiple: true })
+  if (!selected) return []
+  const paths = Array.isArray(selected) ? selected : [selected]
+  if (!paths.length) return []
+  return invoke<FileNode[]>('import_files', { directory, paths })
+}
+
+/** Renames a navigator entry in place; a file without an extension keeps
+ * `.md` (the upstream renamedURL rule). */
+export async function renameDirectoryEntry(path: string, newName: string): Promise<FileNode> {
+  return invoke<FileNode>('rename_directory_entry', { path, newName })
+}
+
 export async function loadLocalAsset(baseDir: string, relativePath: string, workspaceRoot?: string | null): Promise<string> {
   return invoke<string>('read_local_asset', { baseDir, relativePath, workspaceRoot: workspaceRoot ?? null })
 }
@@ -141,6 +165,13 @@ export async function refreshMenu(state: {
   sidebarVisible: boolean
   toolbarVisible: boolean
   alwaysOnTop: boolean
+  /** True when View ▸ Hide Tab Bar has hidden the document tab strip. */
+  tabsHidden?: boolean
+  sessionCount: number
+  /** True while the document is being edited rather than previewed. */
+  editable: boolean
+  /** True when the document differs from what is on disk. */
+  dirty: boolean
 }): Promise<void> {
   if (!isTauri()) return
   await invoke('refresh_menu', {
@@ -152,6 +183,10 @@ export async function refreshMenu(state: {
       sidebarVisible: state.sidebarVisible,
       toolbarVisible: state.toolbarVisible,
       alwaysOnTop: state.alwaysOnTop,
+      tabsHidden: state.tabsHidden ?? false,
+      sessionCount: state.sessionCount,
+      editable: state.editable,
+      dirty: state.dirty,
     },
   })
 }
@@ -164,6 +199,16 @@ export async function recordRecentFile(path: string): Promise<void> {
 export async function clearRecentFiles(): Promise<void> {
   if (!isTauri()) return
   await invoke('clear_recent_files')
+}
+
+export async function listRecentFiles(): Promise<string[]> {
+  if (!isTauri()) return []
+  try {
+    return await invoke<string[]>('list_recent_files')
+  } catch (error) {
+    console.error('list_recent_files failed', error)
+    return []
+  }
 }
 
 export async function writeExportBytes(path: string, bytes: Uint8Array): Promise<void> {
@@ -181,17 +226,58 @@ export async function saveExportFile(defaultName: string, bytes: Uint8Array, fil
 export async function discoverApplications(): Promise<ExternalApplication[]> {
   if (!isTauri())
     return [
-      { id: 'system', name: 'System Default', kind: 'system', available: true },
-      { id: 'codex', name: 'Codex', kind: 'llm', available: true },
-      { id: 'claude', name: 'Claude', kind: 'llm', available: true },
-      { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
+      { id: 'system', name: 'System Default', kind: 'system', available: true, macApp: null },
+      { id: 'codex', name: 'Codex', kind: 'llm', available: true, macApp: null },
+      { id: 'claude', name: 'Claude', kind: 'llm', available: true, macApp: null },
+      { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true, macApp: null },
     ]
   return invoke<ExternalApplication[]>('discover_applications')
 }
 
-export async function shareSourceNatively(source: string): Promise<void> {
+export async function shareSourceNatively(source: string, path?: string | null): Promise<void> {
   if (!isTauri()) throw new Error('Native sharing is unavailable')
-  await invoke('share_source', { source })
+  await invoke('share_source', { source, path: path ?? null })
+}
+
+/** Plain-text clipboard contents for Edit ▸ Paste and Match Style. Returns
+ * null outside Tauri or when the pasteboard holds no text. */
+export async function readClipboardText(): Promise<string | null> {
+  if (!isTauri()) return null
+  return invoke<string | null>('read_clipboard_text')
+}
+
+/** The Finder icon for a path as a PNG data URL, `size` points across (16 by
+ * default). Empty string outside Tauri, for missing paths, or when rendering
+ * fails — callers fall back to their generic glyph. */
+export async function fileIconDataUrl(path: string, size = 16): Promise<string> {
+  if (!isTauri()) return ''
+  return invoke<string>('file_icon_data_url', { path, size })
+}
+
+/** One SF Symbol to rasterise, sized the way AppKit sizes a toolbar symbol:
+ * a point size plus an NSFont.Weight (0 regular, 0.23 semibold). */
+export interface SfSymbolSpec {
+  name: string
+  points: number
+  weight: number
+}
+
+/** A rasterised symbol: its PNG data URL and the point size AppKit drew it at,
+ * so the mask box never rescales the glyph. */
+export interface SfSymbolImage {
+  url: string
+  width: number
+  height: number
+}
+
+/** Rasterises SF Symbols through AppKit. The reference's titlebar glyphs are
+ * system symbols, so the system draws them here too rather than approximating
+ * their outlines. Empty entries outside macOS or Tauri, where the hand-drawn
+ * fallbacks stay in place. */
+export async function sfSymbolImages(specs: SfSymbolSpec[]): Promise<SfSymbolImage[]> {
+  if (specs.length === 0) return []
+  if (!isTauri() || !isMacos()) return specs.map(() => ({ url: '', width: 0, height: 0 }))
+  return invoke<SfSymbolImage[]>('sf_symbol_data_urls', { requests: specs })
 }
 
 export async function loadNativeSettings(): Promise<unknown | null> {
@@ -366,6 +452,68 @@ export async function printCurrentWindow(): Promise<void> {
 export async function installCli(): Promise<{ ok: boolean; detail: string | null }> {
   if (!isTauri()) return { ok: false, detail: null }
   return invoke<{ ok: boolean; detail: string | null }>('install_cli')
+}
+
+// Custom app-link approvals, mirroring the upstream ExternalLinkPolicy: http,
+// https and mailto are always open, dangerous schemes are always blocked, and
+// every other scheme asks once per document surface until approved per scheme.
+// The approval key carries a generation so Reset App Link Approvals can rotate
+// the namespace — an old approval can never be silently restored.
+
+const LINK_SCHEME_GENERATION_KEY = 'textmark.linkSchemeGeneration'
+
+const BLOCKED_LINK_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file', 'about', 'blob', 'filesystem'])
+const OPEN_LINK_SCHEMES = new Set(['http', 'https', 'mailto'])
+
+const readGeneration = (storage: Pick<Storage, 'getItem'> = localStorage) => {
+  try {
+    return storage.getItem(LINK_SCHEME_GENERATION_KEY) ?? 'initial'
+  } catch {
+    return 'initial'
+  }
+}
+
+export type LinkDecision = 'blocked' | 'open' | 'confirm'
+
+export function linkDecision(url: string, storage: Pick<Storage, 'getItem'> = localStorage): LinkDecision {
+  let scheme: string | null = null
+  try {
+    scheme = new URL(url).protocol.replace(/:$/, '').toLowerCase() || null
+  } catch {
+    return 'blocked'
+  }
+  if (!scheme || BLOCKED_LINK_SCHEMES.has(scheme)) return 'blocked'
+  if (OPEN_LINK_SCHEMES.has(scheme)) return 'open'
+  try {
+    return storage.getItem(`${LINK_SCHEME_GENERATION_KEY}.${readGeneration(storage)}.${scheme}`) === 'true' ? 'open' : 'confirm'
+  } catch {
+    return 'confirm'
+  }
+}
+
+export function rememberLinkScheme(url: string, storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): void {
+  let scheme = ''
+  try {
+    scheme = new URL(url).protocol.replace(/:$/, '').toLowerCase()
+  } catch {
+    return
+  }
+  if (!scheme) return
+  try {
+    storage.setItem(`${LINK_SCHEME_GENERATION_KEY}.${readGeneration(storage)}.${scheme}`, 'true')
+  } catch {
+    /* quota or private-mode failures leave the decision session-local */
+  }
+}
+
+export function resetLinkApprovals(storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): void {
+  try {
+    // Rotate the namespace rather than clearing keys: a writer holding an old
+    // key cannot restore an approval, as upstream notes.
+    storage.setItem(LINK_SCHEME_GENERATION_KEY, crypto.randomUUID())
+  } catch {
+    /* storage unavailable; approvals stay as-is */
+  }
 }
 
 export async function setDefaultHandler(): Promise<{ ok: boolean; detail: string | null }> {

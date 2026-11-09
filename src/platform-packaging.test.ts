@@ -81,10 +81,15 @@ describe('native desktop package integration', () => {
     expect(releaseInventory).toContain('latest.json references an unsigned asset for ${platform}')
   })
 
-  it('keeps GitHub menu entries in both native menu layouts', () => {
-    for (const id of ['project-home', 'github-releases', 'report-issue']) expect(tauriLib).toContain(`"${id}"`)
+  it('matches the reference Help menu in both native menu layouts', () => {
     expect(tauriLib).toContain('SubmenuBuilder::new(app, "TextMark")')
     expect(tauriLib).toContain('SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })')
+    // The reference's Help menu holds only the help book and the release notes;
+    // the GitHub and diagnostics links live in the About pane instead.
+    expect(tauriLib).not.toContain('"project-home"')
+    expect(tauriLib).not.toContain('"report-issue"')
+    expect(tauriLib).toContain('.item(&help_item)')
+    expect(tauriLib).toContain('.item(&whats_new)')
   })
 
   it('publishes both Universal and Apple Silicon macOS DMGs', () => {

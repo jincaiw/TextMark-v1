@@ -32,6 +32,12 @@ describe('upstream MarkdownHTML rendering parity', () => {
     expect(html.match(/<div class="md-source-blank-line(?:\s|")/g)).toHaveLength(2)
     expect(html.match(/md-source-blank-line-final/g)).toHaveLength(1)
   })
+  it('preserves the blank line a list leaves before the next block', () => {
+    for (const source of ['- a\n- b\n\nTail.', '1. a\n2. b\n\nTail.']) {
+      const html = renderMarkdown(source).html
+      expect(html).toMatch(/md-source-blank-line-final[^>]*><\/div>\s*<p>/)
+    }
+  })
   it('preserves an inline tab with an explicit tab span', () => expect(renderMarkdown('alpha\tbeta').html).toContain('md-inline-tab'))
   it('keeps standalone indented code as a code block', () => expect(renderMarkdown('    const value = 1').html).toContain('<pre'))
   it('keeps deep list nesting', () => {

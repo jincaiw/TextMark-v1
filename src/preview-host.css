@@ -38,7 +38,10 @@ body {
   padding: var(--document-page-padding, 32px 40px 48px);
   color: var(--document-text);
   font-size: var(--document-font-size, 15px);
-  line-height: var(--document-line-height, 1.52);
+  font-weight: var(--mdp-body-weight, 400);
+  line-height: var(--mdp-line-height, var(--document-line-height, 1.52));
+  letter-spacing: var(--mdp-letter-spacing, normal);
+  word-spacing: var(--mdp-word-spacing, normal);
   overflow-wrap: anywhere;
 }
 .markdown-body h1,
@@ -188,6 +191,43 @@ body {
   min-width: 100%;
   padding: 0;
   background: transparent;
+}
+.markdown-body .md-table-wrap {
+  position: relative;
+  margin: 1.2em 0;
+}
+.markdown-body .md-table-wrap > .md-table-scroll {
+  margin: 0;
+}
+.markdown-body .md-table-actions {
+  position: absolute;
+  z-index: 1;
+  top: -10px;
+  inset-inline-end: 8px;
+  height: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+.markdown-body .md-table-expand {
+  min-width: 26px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--document-grid);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.markdown-body .md-table-wrap:hover .md-table-expand,
+.markdown-body .md-table-expand:focus-visible {
+  opacity: 1;
+}
+.markdown-body.textmark-exporting .md-table-actions {
+  display: none;
 }
 .markdown-body .md-table-scroll {
   width: 100%;

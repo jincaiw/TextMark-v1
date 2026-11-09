@@ -209,6 +209,8 @@ function makeRenderer(strictLineBreaks = false) {
 
   md.core.ruler.after('block', 'textmark_blank_lines', (state) => {
     const output: typeof state.tokens = []
+    const sourceLines = state.src.split('\n')
+    const isBlankLine = (line: number) => (sourceLines[line] ?? '').trim() === ''
     let previousEnd = 0
     for (const token of state.tokens) {
       if (token.level === 0 && token.map && token.nesting !== -1) {
@@ -221,7 +223,12 @@ function makeRenderer(strictLineBreaks = false) {
           if (blankIndex === gap - 1) blank.attrSet('class', 'md-source-blank-line-final')
           output.push(blank)
         }
-        previousEnd = Math.max(previousEnd, token.map[1])
+        // A list container's map runs on over the blank lines that follow it,
+        // unlike a paragraph or heading. Trimming them keeps the authored
+        // separation before the next block visible instead of folding it in.
+        let end = token.map[1]
+        while (end > token.map[0] && isBlankLine(end - 1)) end -= 1
+        previousEnd = Math.max(previousEnd, end)
       }
       output.push(token)
     }

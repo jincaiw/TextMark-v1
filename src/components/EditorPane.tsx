@@ -2,7 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { tags } from '@lezer/highlight'
 import { EditorView } from '@codemirror/view'
 import { Check, Copy, WrapText } from 'lucide-react'
 import { indentLess, indentMore, redo, undo } from '@codemirror/commands'
@@ -21,9 +23,20 @@ import {
 import { clampScrollFraction } from '../lib/scrollFraction'
 import { caretToOffset } from '../lib/readingPosition'
 import { loadLocalAsset } from '../lib/platform'
+import { openTableWindow } from '../lib/tableWindow'
 import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
 import { t } from '../lib/i18n'
-import type { ContentWidth, EditorFormattingState, EditorSessionState, FormatCommand, Locale, SearchMode } from '../types'
+import type {
+  ContentWidth,
+  DocumentFont,
+  EditorFormattingState,
+  EditorSessionState,
+  FormatCommand,
+  Locale,
+  SearchMode,
+  ThemeColors,
+  ThemePreset,
+} from '../types'
 import { editorFormattingStateFromSource } from '../lib/editorFormattingState'
 
 export interface EditorPaneHandle {
@@ -42,6 +55,14 @@ export interface EditorPaneHandle {
   scrollBy: (pixels: number) => void
   scrollToEdge: (end: boolean) => void
   insertLink: (label: string, destination: string) => void
+  /** Inserts plain text at the caret, replacing the selection. */
+  insertText: (text: string) => void
+  /** Deletes the selection, as Edit ▸ Delete does. */
+  deleteSelection: () => void
+  selectionText: () => string
+  /** Applies AppKit's text-case commands to the selection. */
+  transformSelection: (kind: 'upper' | 'lower' | 'capitalize') => void
+  scrollToSelection: () => void
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
   getScrollFraction: () => number
@@ -54,6 +75,51 @@ export interface ReplaceOptions {
   mode?: SearchMode
 }
 
+/**
+ * Code token palette, mirroring the reading view's `--hl-*` tokens (see
+ * `code-theme.css`). Upstream (Markdown Preview 0.0.71) shares one palette
+ * between preview and editor, so a fenced block keeps the same colors in both.
+ * Untagged identifiers keep the surrounding text color, as in the preview.
+ */
+const codeHighlight = HighlightStyle.define([
+  {
+    tag: [
+      tags.keyword,
+      tags.modifier,
+      tags.controlKeyword,
+      tags.operatorKeyword,
+      tags.definitionKeyword,
+      tags.moduleKeyword,
+      tags.self,
+      tags.literal,
+      tags.bool,
+      tags.null,
+      tags.atom,
+      // highlight.js files markup tag names under `.hljs-name`, which its
+      // theme colors like a keyword.
+      tags.tagName,
+    ],
+    color: 'var(--hl-keyword)',
+  },
+  { tag: [tags.typeName, tags.namespace], color: 'var(--hl-type)' },
+  { tag: [tags.className, tags.definition(tags.className)], color: 'var(--hl-declaration)' },
+  {
+    tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.definition(tags.function(tags.variableName))],
+    color: 'var(--hl-function)',
+  },
+  { tag: [tags.number, tags.integer, tags.float, tags.character], color: 'var(--hl-number)' },
+  {
+    tag: [tags.string, tags.special(tags.string), tags.regexp, tags.docString, tags.attributeValue],
+    color: 'var(--hl-string)',
+  },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--hl-comment)' },
+  { tag: tags.attributeName, color: 'var(--hl-attribute)' },
+  { tag: [tags.meta, tags.macroName, tags.processingInstruction], color: 'var(--hl-preprocessor)' },
+  { tag: [tags.link, tags.url], color: 'var(--hl-url)' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strong, fontWeight: '600' },
+])
+
 interface EditorPaneProps {
   active?: boolean
   value: string
@@ -62,6 +128,9 @@ interface EditorPaneProps {
   fontSize: number
   zoom: number
   contentWidth: ContentWidth
+  documentFont?: DocumentFont
+  themePreset?: ThemePreset
+  themeColors?: ThemeColors
   /** Scroll fraction (0–1) to restore when entering edit mode from the preview. */
   initialScrollFraction?: number
   /** Source line to reveal when entering edit mode. Takes precedence over the
@@ -270,7 +339,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     view.dom.querySelectorAll<HTMLElement>('.cm-md-code-card').forEach((card) => {
       const codeLine = card.querySelector<HTMLElement>('.cm-md-code-line')
       const fenceFrom = Number(codeLine?.dataset.codeFenceFrom)
-      card.classList.toggle('cm-md-code-card-wrapped', !unwrapped.has(fenceFrom))
+      const wrapped = !unwrapped.has(fenceFrom)
+      card.classList.toggle('cm-md-code-card-wrapped', wrapped)
+      card.querySelector<HTMLButtonElement>('.cm-md-code-action[data-code-action="wrap"]')?.setAttribute('aria-pressed', String(wrapped))
     })
   }
   const activeFenceUnwrapped = Boolean(activeFence && unwrappedFences.has(activeFence.from))
@@ -317,6 +388,37 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       }),
     [],
   )
+  // The decoration extension is created once, so its card-header controls read
+  // their labels through this ref instead of freezing the locale of the first
+  // render.
+  const codeCardLabelsRef = useRef<() => { wrap: string; unwrap: string; copy: string; copied: string }>(() => ({
+    wrap: 'Wrap code',
+    unwrap: 'Unwrap code',
+    copy: 'Copy code',
+    copied: 'Copied',
+  }))
+  codeCardLabelsRef.current = () => ({
+    wrap: t(props.locale, 'wrapCode'),
+    unwrap: t(props.locale, 'unwrapCode'),
+    copy: t(props.locale, 'copyCode'),
+    copied: t(props.locale, 'copied'),
+  })
+  // Same pattern for the table widget: its expand title follows the locale and
+  // its window inherits the document appearance without rebuilding the editor.
+  const tableLabelsRef = useRef<() => string>(() => 'Expand table')
+  tableLabelsRef.current = () => t(props.locale, 'expandTable')
+  const tableAppearanceRef = useRef({
+    documentFont: props.documentFont,
+    themePreset: props.themePreset,
+    themeColors: props.themeColors,
+  })
+  tableAppearanceRef.current = {
+    documentFont: props.documentFont,
+    themePreset: props.themePreset,
+    themeColors: props.themeColors,
+  }
+  const openTableRef = useRef<(table: HTMLTableElement) => void>(() => {})
+  openTableRef.current = (table) => openTableWindow(table, props.locale, undefined, tableAppearanceRef.current)
   const imagePreviewExtension = useMemo(
     () =>
       createEditorMarkdownDecorations({
@@ -326,6 +428,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           return loadLocalAsset(context.baseDirectory, path, context.workspacePath).catch(() => null)
         },
         onRenameImage: (path) => imageContextRef.current.onRenameImage?.(path),
+        onToggleCodeWrap: (fenceFrom) =>
+          setUnwrappedFences((current) => {
+            const next = new Set(current)
+            if (next.has(fenceFrom)) next.delete(fenceFrom)
+            else next.add(fenceFrom)
+            return next
+          }),
+        codeCardLabels: () => codeCardLabelsRef.current(),
+        expandTableLabel: () => tableLabelsRef.current(),
+        onExpandTable: (table) => openTableRef.current(table),
       }),
     [],
   )
@@ -478,6 +590,58 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         })
         view.focus()
       },
+      insertText: (text) => {
+        const view = viewRef.current
+        if (!view || !text) return
+        const selection = view.state.selection.main
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: text },
+          selection: { anchor: selection.from + text.length },
+          scrollIntoView: true,
+        })
+        view.focus()
+      },
+      deleteSelection: () => {
+        const view = viewRef.current
+        if (!view) return
+        const selection = view.state.selection.main
+        if (selection.empty) return
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: '' },
+          selection: { anchor: selection.from },
+        })
+        view.focus()
+      },
+      selectionText: () => {
+        const view = viewRef.current
+        if (!view) return ''
+        const selection = view.state.selection.main
+        return view.state.sliceDoc(selection.from, selection.to)
+      },
+      transformSelection: (kind) => {
+        const view = viewRef.current
+        if (!view) return
+        const selection = view.state.selection.main
+        const selected = view.state.sliceDoc(selection.from, selection.to)
+        if (!selected) return
+        const text =
+          kind === 'upper'
+            ? selected.toLocaleUpperCase()
+            : kind === 'lower'
+              ? selected.toLocaleLowerCase()
+              : selected.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase())
+        if (text === selected) return
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: text },
+          selection: { anchor: selection.from, head: selection.from + text.length },
+        })
+        view.focus()
+      },
+      scrollToSelection: () => {
+        const view = viewRef.current
+        if (!view) return
+        view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })
+      },
       getScrollFraction: () => {
         const dom = viewRef.current?.scrollDOM
         if (!dom || dom.scrollHeight <= dom.clientHeight) return 0
@@ -523,10 +687,19 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           (line) => view.state.doc.line(line).to,
           view.state.doc.lines,
         )
+        // The document's first line is the one anchor that must not be aligned
+        // to the viewport's top edge: CodeMirror measures that alignment against
+        // the canvas inset, which is still the 54pt fallback on this frame
+        // (`--document-tools-height` arrives a frame later), so `start` parked
+        // the canvas 51px down and the whole document sat too high once the
+        // inset settled. Scroll zero is the same reading position the preview's
+        // own anchor maps to, and it survives the inset change.
+        const anchorAtDocumentStart = target === 1
         view.dispatch({
           selection: { anchor: restoredAnchor ?? lineStart, head: restoredHead ?? restoredAnchor ?? lineStart },
-          effects: EditorView.scrollIntoView(lineStart, { y: 'start' }),
+          effects: anchorAtDocumentStart ? [] : EditorView.scrollIntoView(lineStart, { y: 'start' }),
         })
+        if (anchorAtDocumentStart) view.scrollDOM.scrollTop = 0
       } else {
         const fraction = clampScrollFraction(props.initialScrollFraction ?? 0)
         const dom = view.scrollDOM
@@ -643,6 +816,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
           theme={props.theme === 'dark' ? oneDark : 'light'}
           extensions={[
             markdown({ codeLanguages: languages }),
+            syntaxHighlighting(codeHighlight),
             editorHeadings,
             imagePreviewExtension,
             imagePasteExtension,

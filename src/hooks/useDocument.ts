@@ -469,7 +469,9 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
         // The native window label is intentionally new on every restore, but
         // the session manifest must keep using its stable logical window ID.
         windowIdRef.current = restoreWindowId
-        const manifest = await loadSessionManifest()
+        // An unreadable manifest must not fail startup: the window simply
+        // opens empty instead of reporting an I/O error.
+        const manifest = await loadSessionManifest().catch(() => null)
         const restoredWindow = sessionWindowById(manifest, restoreWindowId)
         if (restoredWindow) {
           await restoreWindowGeometry(restoredWindow.geometry)
@@ -500,7 +502,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
             }
           }
         } else {
-          const manifest = await loadSessionManifest()
+          const manifest = await loadSessionManifest().catch(() => null)
           const currentWindow = sessionWindowById(manifest, windowIdRef.current)
           const mainWindow = sessionWindowById(manifest, 'main')
           if (currentWindow) {
@@ -510,14 +512,26 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
             await restoreWindowGeometry(mainWindow.geometry)
             await restoreSessionWindow(mainWindow)
             for (const window of manifest?.windows ?? []) {
-              if (window.windowId !== 'main' && window.documents.length) await openSessionWindow(window)
+              if (window.windowId !== 'main' && window.documents.length) {
+                // Restoring a window whose document was moved or deleted is
+                // best-effort: the other windows must still come back, and a
+                // stale entry must not surface as an I/O error on launch.
+                try {
+                  await openSessionWindow(window)
+                } catch {
+                  // Drop the stale window from the restored set.
+                  await removeSessionWindow(window.windowId).catch(() => undefined)
+                }
+              }
             }
           }
         }
       }
       sessionRestoreDoneRef.current = true
       await enqueueOpenPathDrain()
-    })().catch(showError)
+    })().catch((error) => {
+      showError(error)
+    })
   }, [applyDocument, enqueueOpenPathDrain, openDocumentsInTabs, openFolderPath, restoreSessionWindow, showError])
 
   useEffect(() => {
@@ -884,6 +898,13 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     [activeId, locale, sessions],
   )
 
+  const closeAllSessions = useCallback(() => {
+    if (sessions.some((session) => session.dirty) && !window.confirm(messages[locale].closeDirty)) return
+    const blank = makeSession({ path: null, name: 'README.md', contents: '' })
+    setSessions([blank])
+    setActiveId(blank.id)
+  }, [locale, sessions])
+
   const restorePendingDraft = useCallback(() => {
     if (!pendingDraft) return
     setSessions((current) =>
@@ -956,6 +977,7 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     discardPendingDraft,
     activate,
     closeSession,
+    closeAllSessions,
     newDocument,
     revertDocument,
     resolveExternal,
@@ -978,5 +1000,10 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     saveFile,
     saveAs,
     saveSession,
+    /** Re-scans the workspace tree (after navigator create/rename). */
+    refreshFiles: useCallback(async () => {
+      if (!workspacePath) return
+      setFiles(await scanFolder(workspacePath))
+    }, [workspacePath]),
   }
 }

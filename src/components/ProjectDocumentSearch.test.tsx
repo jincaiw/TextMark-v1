@@ -48,6 +48,7 @@ describe('ProjectDocumentSearch', () => {
           activePath="/project/notes/Design.md"
           locale="en"
           onOpenCurrent={onOpenCurrent}
+          onOpenPath={onOpenCurrent}
           onOpenInTab={onOpenInTab}
           onOpenInWindow={onOpenInWindow}
           onOpenFolder={onOpenFolder}

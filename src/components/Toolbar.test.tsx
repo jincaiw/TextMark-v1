@@ -5,6 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { t } from '../lib/i18n'
 import { Toolbar } from './Toolbar'
 
+const platformFlags = vi.hoisted(() => ({ native: false }))
+
+// The share item switches between the macOS native picker (Tauri) and the
+// custom popover. Mock the platform probe so both branches are reachable in
+// jsdom without a running Tauri shell.
+vi.mock('../lib/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/platform')>()
+  return { ...actual, isTauri: () => platformFlags.native, isMacos: () => platformFlags.native }
+})
+
 type ToolbarProps = ComponentProps<typeof Toolbar>
 
 const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
@@ -71,6 +81,7 @@ describe('Toolbar', () => {
   let resizeCallbacks: Set<() => void>
 
   beforeEach(() => {
+    platformFlags.native = false
     vi.useFakeTimers()
     containerWidth = 1000
     paddingLeft = 0
@@ -98,6 +109,12 @@ describe('Toolbar', () => {
         style.columnGap = '4px'
         style.paddingLeft = `${paddingLeft}px`
         style.paddingRight = `${paddingRight}px`
+        return style
+      }
+      if (element.classList.contains('sidebar-control')) {
+        // 未跟踪时取景器与开关之间的间距；跟踪状态下 CSS 会把它归零。
+        const style = document.createElement('div').style
+        style.columnGap = '17.5px'
         return style
       }
       return getStyle(element)
@@ -200,11 +217,16 @@ describe('Toolbar', () => {
     expect(host.querySelector('.toolbar-navigation')).toBeNull()
   })
 
-  it('将文稿名限制在首个弹性空位内，避免覆盖工具栏操作', () => {
+  it('把文稿名放在工具栏前导位置，而不是弹性空位内', () => {
     render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'flexibleSpace', 'openActions', 'search'] }))
-    expect(host.querySelector('.toolbar-flexible-space .toolbar-document-title')?.textContent).toBe('A long document name.md')
+    const actions = host.querySelector('.native-actions') as HTMLElement
+    // Upstream draws the window title at the leading edge of the content
+    // titlebar area, before the navigational items.
+    expect(actions.firstElementChild?.classList.contains('toolbar-document-title')).toBe(true)
+    expect(actions.firstElementChild?.textContent).toBe('A long document name.md')
+    expect(host.querySelector('.toolbar-flexible-space .toolbar-document-title')).toBeNull()
 
-    render(makeProps({ documentName: 'A long document name.md', items: ['navigation', 'openActions', 'search'] }))
+    render(makeProps({ documentName: undefined, items: ['navigation', 'search'] }))
     expect(host.querySelector('.toolbar-document-title')).toBeNull()
   })
 
@@ -237,18 +259,26 @@ describe('Toolbar', () => {
   it.each([
     { sidebarVisible: false, sidebarMode: 'outline' as const },
     { sidebarVisible: false, sidebarMode: 'files' as const },
+  ])('边栏隐藏时 %j 只保留开关，模式选择器随边栏一起隐藏', (state) => {
+    render(makeProps({ items: ['sidebar'], ...state }))
+    // Upstream hides the pane picker with the sidebar; the toggle stays.
+    expect(host.querySelector('[role="radiogroup"][aria-label="Choose sidebar mode"]')).toBeNull()
+    expect(element('button[aria-label="Sidebar"]').classList.contains('selected')).toBe(false)
+  })
+
+  it.each([
     { sidebarVisible: true, sidebarMode: 'outline' as const },
     { sidebarVisible: true, sidebarMode: 'files' as const },
   ])('边栏状态 %j 的 pressed 正确，模式按钮不额外切换边栏', (state) => {
     const props = makeProps({ items: ['sidebar'], ...state })
     render(props)
-    const group = element('[role="group"][aria-label="Choose sidebar mode"]')
-    const outline = element<HTMLButtonElement>('button[aria-label="Outline"]', group)
-    const files = element<HTMLButtonElement>('button[aria-label="Folders"]', group)
+    const group = element('[role="radiogroup"][aria-label="Choose sidebar mode"]')
+    const outline = element<HTMLButtonElement>('button[aria-label="Table of Contents"]', group)
+    const files = element<HTMLButtonElement>('button[aria-label="Project Navigator"]', group)
     expect(group.querySelectorAll('button')).toHaveLength(2)
-    expect(element('button[aria-label="Toggle Sidebar"]').getAttribute('aria-pressed')).toBe(String(state.sidebarVisible))
-    expect(outline.getAttribute('aria-pressed')).toBe(String(state.sidebarVisible && state.sidebarMode === 'outline'))
-    expect(files.getAttribute('aria-pressed')).toBe(String(state.sidebarVisible && state.sidebarMode === 'files'))
+    expect(element('button[aria-label="Sidebar"]').classList.contains('selected')).toBe(state.sidebarVisible)
+    expect(outline.getAttribute('aria-checked')).toBe(String(state.sidebarMode === 'outline'))
+    expect(files.getAttribute('aria-checked')).toBe(String(state.sidebarMode === 'files'))
 
     click(outline)
     click(files)
@@ -259,10 +289,10 @@ describe('Toolbar', () => {
 
     // 模拟 App 父回调更新受控 props；模式按钮本身不负责额外 toggle。
     render({ ...props, sidebarVisible: true, sidebarMode: 'files' })
-    expect(outline.getAttribute('aria-pressed')).toBe('false')
-    expect(files.getAttribute('aria-pressed')).toBe('true')
-    const toggle = element<HTMLButtonElement>('button[aria-label="Toggle Sidebar"]')
-    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(outline.getAttribute('aria-checked')).toBe('false')
+    expect(files.getAttribute('aria-checked')).toBe('true')
+    const toggle = element<HTMLButtonElement>('button[aria-label="Sidebar"]')
+    expect(toggle.classList.contains('selected')).toBe(true)
     click(toggle)
     expect(props.onToggleSidebar).toHaveBeenCalledTimes(1)
     expect(props.onSidebarModeChange).toHaveBeenCalledTimes(2)
@@ -272,7 +302,7 @@ describe('Toolbar', () => {
     const props = makeProps({ locale, items: ['themesAndSettings', 'search'] })
     render(props)
     const summary = element<HTMLElement>('[data-toolbar-item="themesAndSettings"] summary')
-    expect(summary.title).toBe(t(locale, 'themesAndSettings'))
+    expect(summary.title).toBe(t(locale, 'themesHelp'))
     expect(summary.querySelector('svg.lucide-a-large-small')).not.toBeNull()
     expect(summary.querySelector('.toolbar-label')).toBeNull()
     const menu = element<HTMLDetailsElement>('.themes-and-settings')
@@ -320,13 +350,27 @@ describe('Toolbar', () => {
       ],
     })
     render(props)
-    const openActions = element<HTMLDetailsElement>('[data-toolbar-item="openActions"] details')
-    const defaultButton = Array.from(openActions.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes(t(props.locale, 'openWithDefault')),
-    )
-    expect(defaultButton).toBeDefined()
-    click(defaultButton!)
+    // 与参考实现的分体按钮一致：主键就是“用已选编辑器打开”，菜单里只列编辑器。
+    const defaultButton = element<HTMLButtonElement>('.open-actions-primary')
+    click(defaultButton)
     expect(props.onOpenWith).toHaveBeenCalledExactlyOnceWith('system')
+  })
+
+  it('系统默认目标在分体按钮上画窗口图符，而不是未成形的字母', () => {
+    const props = makeProps({
+      items: ['openActions'],
+      defaultOpenTarget: 'system',
+      applications: [
+        { id: 'system', name: 'System Default', kind: 'system', available: true },
+        { id: 'vscode', name: 'Visual Studio Code', kind: 'editor', available: true },
+      ],
+    })
+    render(props)
+    // 系统目标没有 app bundle，取不到 NSWorkspace 图标；退回 `.app-badge`
+    // 只会得到裸字母，因为该类的样式写死在菜单容器里。工具栏改用窗口图符。
+    const primary = element<HTMLButtonElement>('.open-actions-primary')
+    expect(primary.querySelector('svg')).not.toBeNull()
+    expect(primary.querySelector('.app-badge')).toBeNull()
   })
 
   it('未知或不可用的默认目标安全回退系统默认，并标记有效目标', () => {
@@ -340,11 +384,7 @@ describe('Toolbar', () => {
     })
     render(props)
     const openActions = element<HTMLDetailsElement>('[data-toolbar-item="openActions"] details')
-    const defaultButton = Array.from(openActions.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes(t(props.locale, 'openWithDefault')),
-    )
-    expect(defaultButton).toBeDefined()
-    click(defaultButton!)
+    click(element<HTMLButtonElement>('.open-actions-primary'))
     expect(props.onOpenWith).toHaveBeenCalledExactlyOnceWith('system')
     const systemChoice = Array.from(openActions.querySelectorAll('button')).find((button) =>
       button.textContent?.includes(t(props.locale, 'systemDefault')),
@@ -371,6 +411,17 @@ describe('Toolbar', () => {
     expect(props.onToggleInspector).toHaveBeenCalledOnce()
   })
 
+  it('macOS Tauri 上 Share 直接打开原生选择器，不再展开自定义弹层', () => {
+    platformFlags.native = true
+    const props = makeProps({ items: ['share'] })
+    render(props)
+    expect(host.querySelector('.share-menu')).toBeNull()
+    const share = element<HTMLButtonElement>('.native-actions > [data-toolbar-item="share"] button')
+    expect(share.getAttribute('aria-label')).toBe(t(props.locale, 'share'))
+    click(share)
+    expect(props.onShare).toHaveBeenCalledOnce()
+  })
+
   it.each(['preview', 'edit'] as const)('documentActions 溢出后保留 info/share/edit 回调（%s 模式）', (viewMode) => {
     containerWidth = 28
     const props = makeProps({ items: ['documentActions'], viewMode })
@@ -379,8 +430,8 @@ describe('Toolbar', () => {
     const more = element<HTMLDetailsElement>('.more-menu')
     click(element('summary', more))
     expect(more.open).toBe(true)
-    const editTitle = t(props.locale, viewMode === 'edit' ? 'stopEditing' : 'edit')
-    const labels = [t(props.locale, 'getInfo'), t(props.locale, 'shareSource'), editTitle]
+    const editTitle = t(props.locale, 'edit')
+    const labels = [t(props.locale, 'inspector'), t(props.locale, 'share'), editTitle]
     const buttons = labels.map((label) => {
       const button = Array.from(more.querySelectorAll<HTMLButtonElement>('.toolbar-overflow-controls button')).find(
         (candidate) => candidate.getAttribute('aria-label') === label,
@@ -443,8 +494,8 @@ describe('Toolbar', () => {
     resize(176)
     expect(visibleItems()).toEqual(props.items)
     expect(slots().every((slot) => slot.style.display === '')).toBe(true)
-    expect(element('.more-menu').textContent).not.toContain(t(props.locale, 'getInfo'))
-    expect(element('.more-menu').textContent).not.toContain(t(props.locale, 'shareSource'))
+    expect(element('.more-menu').textContent).not.toContain(t(props.locale, 'inspector'))
+    expect(element('.more-menu').textContent).not.toContain(t(props.locale, 'share'))
     expect(element('.more-menu').textContent).not.toContain(t(props.locale, 'edit'))
   })
 
@@ -456,14 +507,14 @@ describe('Toolbar', () => {
 
     expect(visibleItems()).toEqual(['search'])
     const more = element<HTMLDetailsElement>('.more-menu')
-    expect(more.textContent).toContain(t(props.locale, 'getInfo'))
-    expect(more.textContent).toContain(t(props.locale, 'shareSource'))
+    expect(more.textContent).toContain(t(props.locale, 'inspector'))
+    expect(more.textContent).toContain(t(props.locale, 'share'))
     expect(more.textContent).not.toContain(t(props.locale, 'searchItem'))
 
     resize(250)
     expect(visibleItems()).toEqual(props.items)
-    expect(more.textContent).not.toContain(t(props.locale, 'getInfo'))
-    expect(more.textContent).not.toContain(t(props.locale, 'shareSource'))
+    expect(more.textContent).not.toContain(t(props.locale, 'inspector'))
+    expect(more.textContent).not.toContain(t(props.locale, 'share'))
   })
 
   it('首位侧栏跟随宽度，关闭与重新打开不残留旧宽度', () => {
@@ -471,14 +522,31 @@ describe('Toolbar', () => {
     render(props)
     const sidebar = slots()[0]
     expect(sidebar.dataset.sidebarTracking).toBe('true')
-    expect(sidebar.style.width).toBe('243px')
+    // The tracked slot runs to the content pane's edge, past the 6px gutter.
+    expect(sidebar.style.width).toBe('246px')
     render({ ...props, sidebarWidth: 400 })
-    expect(sidebar.style.width).toBe('403px')
+    expect(sidebar.style.width).toBe('406px')
     render({ ...props, sidebarVisible: false })
     expect(sidebar.dataset.sidebarTracking).toBeUndefined()
     expect(sidebar.style.width).toBe('')
     render({ ...props, sidebarWidth: 320 })
-    expect(sidebar.style.width).toBe('323px')
+    expect(sidebar.style.width).toBe('326px')
+  })
+
+  it('侧栏变窄时仍按内容区边缘锚定，不退回取景器后的固定空位', () => {
+    // 取景器 + 17.5pt 间距 + 开关 = 240 的自然槽宽，跟随宽度 246 只比它宽 6pt。
+    // 跟随只需要容纳两个控件加 7.5pt 内缩（240 − 17.5 + 11 = 233.5），
+    // 而旧判定要求 240 + 10 = 250，于是这一档会静默丢掉跟随，把开关停在
+    // 取景器后 17.5pt 处，比按边缘锚定偏 2.5pt。
+    itemWidths = { sidebar: 240 }
+    const props = makeProps({
+      items: ['sidebar', 'flexibleSpace', 'search'],
+      sidebarVisible: true,
+      sidebarWidth: 240,
+    })
+    render(props)
+    expect(slots()[0].dataset.sidebarTracking).toBe('true')
+    expect(slots()[0].style.width).toBe('246px')
   })
 
   it('紧凑回退先释放跟随留白，放大后恢复，保留尾部搜索', () => {

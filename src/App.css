@@ -7,15 +7,52 @@
   -webkit-font-smoothing: antialiased;
   /* Brand / chrome palette */
   --accent: #0a84ff;
+  /* The reference's active toggle discs sample at #006FFF in light mode; the
+     WebView composites its sRGB declaration down one green step, so #007aff
+     lands the sampled value. */
+  --toolbar-active-fill: #007aff;
+  /* Hovering a selected action darkens its disc by ten levels: the reference's
+     fill samples rgb(0 101 245) there, and this WebView composites a
+     declaration one green step down, so rgb(0 111 245) lands the sample. */
+  --toolbar-active-fill-hover: #0070f6;
   --window: rgba(250, 250, 252, 0.96);
   --chrome: rgba(248, 248, 250, 0.92);
   --sidebar: rgba(244, 244, 246, 0.94);
   --surface: #fff;
   --text: #202124;
   --muted: #73757b;
+  /* AppKit's secondaryLabelColor as the source list paints it: the reference's
+     file-name header samples at 136 over this sidebar material, while WebKit
+     renders text a touch darker than its nominal value, hence #939393. */
+  --sidebar-secondary: #939393;
   --border: rgba(60, 60, 67, 0.17);
   --hover: rgba(60, 60, 67, 0.08);
   --selected: rgba(10, 132, 255, 0.11);
+  /* Inspector surfaces: the reference lays its summary out as rounded cards
+     (#E7E6E5 over the #EEEEED sidebar material) with 36.75pt rows, black
+     labels and secondaryLabel values. The segmented tray is a recessed well,
+     not a lighter card: a white 0.5pt ring over a #EDECEB interior that falls
+     away from the material at both ends. */
+  --inspector-card: rgba(0, 0, 0, 0.031);
+  --inspector-row-value: rgba(0, 0, 0, 0.41);
+  --inspector-separator: rgba(0, 0, 0, 0.045);
+  --inspector-tray: linear-gradient(
+    180deg,
+    #f7f6f5 0%,
+    #f5f4f3 5%,
+    #f1f0ef 12%,
+    #eeedec 26%,
+    #eeedec 40%,
+    #f0efee 53%,
+    #f0f0f0 67%,
+    #f1f0ef 88%,
+    #fcfbfb 95%,
+    #f7f6f5 100%
+  );
+  --inspector-segment: rgba(0, 0, 0, 0.096);
+  --inspector-reveal: rgba(0, 0, 0, 0.44);
+  --inspector-tray-border: rgba(0, 0, 0, 0.145);
+  --inspector-tray-ring: rgba(255, 255, 255, 0.95);
   /* Semantic status colors */
   --danger: #d73737;
   --positive: #32c759;
@@ -40,8 +77,15 @@
   --document-text: #1d1d1f;
   --document-secondary: #6e6e73;
   --document-link: #0066cc;
+  /* The edit-mode page keeps its own link blue (upstream EditorHTML), one step
+     brighter than the reader's #0066cc. */
+  --editor-link: #0068da;
   --document-fill: #f5f5f7;
   --document-grid: #d2d2d7;
+  /* Upstream's code tray is a neutral fill with a hairline edge, not a step
+     of the text colour: #f9f9f9 inside #f0f0f0. */
+  --document-code-bg: #f9f9f9;
+  --document-code-border: #f0f0f0;
   /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
@@ -89,15 +133,26 @@
 :root[data-theme='dark'] {
   color: #f2f2f4;
   background: #1e1f22;
+  --toolbar-active-fill: #0a84ff;
+  --toolbar-active-fill-hover: #0a7af5;
   --window: rgba(35, 36, 39, 0.97);
   --chrome: rgba(42, 43, 47, 0.94);
   --sidebar: rgba(39, 40, 44, 0.96);
   --surface: #202124;
   --text: #f2f2f4;
   --muted: #a7a7ad;
+  --sidebar-secondary: #a7a7ad;
   --border: rgba(255, 255, 255, 0.13);
   --hover: rgba(255, 255, 255, 0.08);
   --selected: rgba(10, 132, 255, 0.26);
+  --inspector-card: rgba(255, 255, 255, 0.045);
+  --inspector-row-value: rgba(255, 255, 255, 0.45);
+  --inspector-separator: rgba(255, 255, 255, 0.09);
+  --inspector-tray: rgba(255, 255, 255, 0.06);
+  --inspector-segment: rgba(255, 255, 255, 0.15);
+  --inspector-reveal: rgba(255, 255, 255, 0.3);
+  --inspector-tray-border: rgba(255, 255, 255, 0.12);
+  --inspector-tray-ring: rgba(255, 255, 255, 0.14);
   --alert-note: #58a6ff;
   --alert-tip: #3fb950;
   --alert-important: #d2a8ff;
@@ -107,8 +162,11 @@
   --document-text: #f5f5f7;
   --document-secondary: #86868b;
   --document-link: #2997ff;
+  --editor-link: #419cff;
   --document-fill: #2a2828;
   --document-grid: #424245;
+  --document-code-bg: #262626;
+  --document-code-border: #323232;
 }
 
 * {
@@ -209,7 +267,9 @@ select:focus-visible {
   color: var(--accent);
 }
 .toolbar-leading-actions svg,
-.toolbar-leading-actions .sidebar-control svg {
+.toolbar-leading-actions .sf-glyph,
+.toolbar-leading-actions .sidebar-control svg,
+.toolbar-leading-actions .sidebar-control .sf-glyph {
   width: 16px;
   height: 16px;
   stroke-width: 1.7;
@@ -331,7 +391,7 @@ select:focus-visible {
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   padding: 0;
 }
@@ -340,9 +400,6 @@ select:focus-visible {
 }
 /* The trailing border tracks the centre of the document's 6px divider.
    This is an enhancement of the leading configured item, not a fixed group. */
-.native-actions:has(> [data-sidebar-tracking='true']) {
-  justify-content: flex-start;
-}
 .native-actions > [data-sidebar-tracking='true'] {
   border-right: 1px solid var(--border);
   padding-right: 10px;
@@ -442,17 +499,20 @@ select:focus-visible {
   min-width: 0;
 }
 .toolbar-document-title {
-  /* Keep the title inside its flexible toolbar slot. Absolute positioning here
-     let it escape the slot and overlap the first action at half-window widths. */
-  display: block;
-  width: 100%;
+  /* Upstream draws the window title at the leading edge of the content
+     titlebar area, ahead of the navigational items. It stays in the row's
+     flow — absolute positioning let it escape its slot and overlap the first
+     action at half-window widths — and shrinks with an ellipsis instead. */
+  flex: 0 1 auto;
+  max-width: 240px;
   min-width: 0;
+  display: block;
   overflow: hidden;
   color: var(--text);
   opacity: 0.58;
   font-size: 13px;
   font-weight: 600;
-  text-align: center;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -491,11 +551,8 @@ select:focus-visible {
   background: var(--selected);
   color: var(--accent);
 }
-.toolbar-item-button.edit-active {
-  background: var(--accent);
-  color: white;
-}
-.toolbar-item-button svg {
+.toolbar-item-button svg,
+.toolbar-item-button .sf-glyph {
   width: 16px;
   height: 16px;
   stroke-width: 1.7;
@@ -570,7 +627,11 @@ select:focus-visible {
   padding: 0;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
-.open-actions-app-badge {
+/* `.app-badge` is only styled inside `.menu-popover`, so an editor whose icon
+ * has not loaded yet drew a bare 13pt letter in the split button where the
+ * reference keeps an 18pt icon. Give the toolbar the same tile the menus use. */
+.open-actions-app-badge,
+.open-actions-split .app-badge {
   width: 18px;
   height: 18px;
   display: inline-grid;
@@ -782,7 +843,8 @@ select:focus-visible {
 .menu-popover button:disabled {
   opacity: 0.5;
 }
-.menu-popover button svg {
+.menu-popover button svg,
+.menu-popover button .sf-glyph {
   width: 16px;
   height: 16px;
 }
@@ -808,6 +870,16 @@ select:focus-visible {
 .menu-popover button:hover .app-badge {
   background: rgba(255, 255, 255, 0.28);
 }
+/* Real macOS app icon (NSWorkspace Finder icon) inside menus; keeps the
+ * 18px badge slot so layout is identical whether the image or the
+ * first-letter fallback renders. */
+.context-app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  object-fit: contain;
+}
 .menu-popover button.menu-empty {
   color: var(--muted);
   cursor: default;
@@ -817,6 +889,59 @@ select:focus-visible {
   margin: 4px 0;
   border: 0;
   border-top: 1px solid var(--border);
+}
+/* The reference's split-button menu is a native NSMenu: 24pt rows, a
+ * content-fit panel (160.5pt for the widest label there), a leading check
+ * column and no icons. The base popover is a 230pt card of 34pt rows with
+ * 18pt app icons, so the macOS split menu overrides the whole card. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover {
+  /* NSMenu hangs 8.5pt under the capsule; the details box already ends at the
+     capsule's bottom edge, so this only trims the 1.5pt the first row sat low
+     against the reference capture. */
+  top: calc(100% - 1.5px);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  gap: 0;
+  padding: 4px 0;
+  border-radius: 10px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover b {
+  padding: 0 26px 0 30.5px;
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 24px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover hr {
+  width: auto;
+  margin: 5px 6px 5px 30.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover button {
+  position: relative;
+  width: auto;
+  margin: 0 5px;
+  height: 24px;
+  gap: 0;
+  padding: 0 31px 0 25.5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+/* NSMenu reserves the leading column for the check mark and draws plain
+ * labels, so the app artwork the generic popover carries is dropped here. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover button > svg:not(.check),
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover button > img,
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover button > .app-badge {
+  display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split .menu-popover button .check {
+  position: absolute;
+  left: 11px;
+  margin: 0;
+  width: 12px;
+  height: 12px;
+  color: inherit;
 }
 .sidebar-menu {
   width: 190px;
@@ -975,6 +1100,17 @@ select:focus-visible {
   overflow: auto;
   padding: 4px 6px 8px;
 }
+.project-search-heading {
+  margin: 6px 4px 2px;
+  padding: 0;
+  color: var(--secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: left;
+}
+.project-search-heading:first-child {
+  margin-top: 2px;
+}
 .project-search-results > button {
   width: 100%;
   min-height: 40px;
@@ -1065,6 +1201,105 @@ select:focus-visible {
   padding: 0;
   color: var(--accent);
   font-size: inherit;
+}
+/* View ▸ Show All Tabs. The reference's overview covers the window with a
+   translucent sheet; the same glass treatment as the project palette keeps the
+   two overlays consistent. */
+.document-overview-backdrop {
+  position: fixed;
+  z-index: 118;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  background: color-mix(in srgb, #000 18%, transparent);
+}
+.document-overview {
+  width: min(760px, 100%);
+  max-height: min(560px, 78vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text);
+  box-shadow: 0 18px 48px #0005;
+  backdrop-filter: saturate(1.35) blur(18px);
+}
+.document-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.document-overview-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.document-overview-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+}
+.document-overview-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.document-overview-close svg {
+  width: 16px;
+  height: 16px;
+}
+.document-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  overflow: auto;
+  padding: 16px 18px 20px;
+}
+.document-overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.document-overview-card:hover {
+  background: var(--hover);
+}
+.document-overview-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.document-overview-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-overview-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .find-stack-left,
 .find-stack-right {
@@ -1199,6 +1434,33 @@ select:focus-visible {
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
 }
+/* Upstream's split view runs the whole window height, so the sidebar and its
+   drag handle sit beside the tab strip rather than below it. */
+.workspace-stack.with-sidebar {
+  grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
+}
+.workspace-stack.with-sidebar > .native-sidebar {
+  /* Span the drag handle too: the pane is one 240pt surface, and the handle
+     only claims the last 6pt as a target. */
+  grid-column: 1 / 3;
+  grid-row: 1 / -1;
+}
+.workspace-stack.with-sidebar > .panel-resizer-sidebar {
+  grid-column: 2;
+  grid-row: 1 / -1;
+}
+.workspace-stack.with-sidebar > .document-tabs {
+  grid-column: 3;
+  grid-row: 1;
+}
+.workspace-stack.with-sidebar > .document-shell {
+  grid-column: 3;
+  grid-row: 2;
+}
+.workspace-stack:not(.with-sidebar) > .native-sidebar,
+.workspace-stack:not(.with-sidebar) > .panel-resizer-sidebar {
+  display: none;
+}
 .document-tabs {
   min-width: 0;
   display: flex;
@@ -1289,18 +1551,8 @@ select:focus-visible {
 .document-tab .tab-close svg {
   width: 13px;
 }
-.document-shell.with-sidebar {
-  grid-template-columns: var(--sidebar-width) 6px minmax(420px, 1fr);
-}
 .document-shell.with-inspector {
   grid-template-columns: minmax(420px, 1fr) 6px var(--inspector-width);
-}
-.document-shell.with-sidebar.with-inspector {
-  grid-template-columns: var(--sidebar-width) 6px minmax(420px, 1fr) 6px var(--inspector-width);
-}
-.document-shell:not(.with-sidebar) > .native-sidebar,
-.document-shell:not(.with-sidebar) > .panel-resizer-sidebar {
-  display: none;
 }
 .panel-resizer {
   position: relative;
@@ -1361,10 +1613,10 @@ select:focus-visible {
 .document-tools .formatting-toolbar {
   width: max-content;
   max-width: calc(100% - 24px);
-  margin: 4px 12px 0 auto;
-  gap: 8px;
+  margin: 7px 13.5px 0 auto;
+  gap: 7.5px;
   padding: 0;
-  min-height: 32px;
+  min-height: 29px;
   flex-shrink: 0;
   overflow: visible;
   border: 0;
@@ -1372,21 +1624,124 @@ select:focus-visible {
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+  /* Upstream's pills draw their glyphs in the label colour, not the secondary
+     one. */
+  color: #000;
+}
+:root[data-theme='dark'] .document-tools .formatting-toolbar {
+  color: var(--text);
 }
 .document-tools .formatting-toolbar > * {
   flex-shrink: 0;
 }
+/* Upstream's formatting pills are 29pt capsules on a near-white material with
+   a 0.5pt rim and an almost invisible shadow. Their widths come from SwiftUI
+   frames rather than their icons, so each pill is fixed to the measured frame;
+   the shared style keeps the ordering a future icon change cannot drift. */
 .document-tools .formatting-group {
+  position: relative;
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 29px;
   gap: 0;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--chrome) 90%, transparent);
-  box-shadow: 0 3px 12px color-mix(in srgb, #000 10%, transparent);
-  backdrop-filter: blur(20px) saturate(1.25);
+  padding: 0;
+  border: 0.5px solid color-mix(in srgb, var(--text) 25%, transparent);
+  border-top-color: color-mix(in srgb, var(--text) 6.5%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 999px;
+  /* The material reads 253 at the rim, 249 through the body and 251 at the
+     base. */
+  background: linear-gradient(180deg, #fdfdfd 0%, #f9f9f9 30%, #f9f9f9 55%, #fbfbfb 100%);
+  /* The reference's shadow sits only under the capsule: about 1% under the
+     body with no horizontal bleed into the 7.5pt gaps, so the spread is pulled
+     in sideways and the blur left to fade vertically. */
+  box-shadow: 0 5px 10px -6px rgba(0, 0, 0, 0.035);
+  color: inherit;
+}
+:root[data-theme='dark'] .document-tools .formatting-group {
+  background: color-mix(in srgb, #fff 7%, var(--window));
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.28),
+    0 8px 14px rgba(0, 0, 0, 0.16);
+}
+.document-tools .formatting-style-group {
+  width: 70.5px;
+}
+.document-tools .formatting-text-group {
+  width: 108.5px;
+}
+.document-tools .formatting-link-menu {
+  width: 28.5px;
+}
+.document-tools .formatting-list-menu {
+  width: 54.5px;
+}
+.document-tools .formatting-more-menu {
+  width: 52.5px;
+}
+.document-tools .formatting-style-group .formatting-heading {
+  width: 100%;
+  height: 100%;
+  padding: 0 26px 0 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.document-tools .formatting-heading-chevron {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  pointer-events: none;
+  color: inherit;
+}
+.document-tools .formatting-text-group button {
+  flex: 1 1 0;
+  width: auto;
+  height: 100%;
+  color: inherit;
+}
+.document-tools .formatting-text-group button svg {
+  width: 12.5px;
+  height: 12.5px;
+  stroke-width: 2.6;
+  /* The reference's three letterforms sit half a point above the capsule's
+     optical centre; the grid centring lands ours one device pixel low. */
+  position: relative;
+  top: -0.5px;
+}
+/* Upstream draws the bold glyph as a solid letterform; the outline icon needs
+   a heavier stroke to reach the same ink, and the italic glyph is narrower
+   than the outline's square box. The bold B is drawn a touch oversized in the
+   outline set (18pt of ink where the reference has 16), so it is taken down a
+   tenth; the italic I is a point and a half short of the reference's 19, which
+   the vertical stretch makes up without widening the stem. */
+.document-tools .formatting-text-group button:nth-of-type(1) svg {
+  stroke-width: 2.95;
+  transform: scale(0.9);
+}
+.document-tools .formatting-text-group button:nth-of-type(2) svg {
+  width: 10px;
+  height: 11.5px;
+  transform: scaleY(1.12);
+}
+/* Upstream's strikethrough glyph runs wider than the outline icon's square
+   box; stretched here to the reference's 11pt ink width at the same height.
+   Its bar is a hairline in the reference, thinner than the letterform strokes
+   that share the outline icon. */
+.document-tools .formatting-text-group button:nth-of-type(3) svg {
+  width: 16px;
+}
+.document-tools .formatting-text-group button:nth-of-type(3) svg line {
+  stroke-width: 1.3;
 }
 .document-tools .formatting-group > span {
   width: 1px;
@@ -1398,13 +1753,15 @@ select:focus-visible {
   position: relative;
 }
 .document-tools .formatting-menu > summary {
-  height: 28px;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 0 5px;
+  padding: 0;
   list-style: none;
-  color: var(--muted);
+  color: inherit;
   cursor: pointer;
 }
 .document-tools .formatting-menu > summary::-webkit-details-marker {
@@ -1413,17 +1770,35 @@ select:focus-visible {
 .document-tools .formatting-menu > summary svg:first-child {
   width: 15px;
   height: 15px;
+  stroke-width: 2;
 }
-.document-tools .formatting-menu > summary svg:last-child {
+/* The chevron is the summary's second glyph; the item before it keeps its own
+   size, and a single-glyph summary (the link) is sized by the rule above. */
+.document-tools .formatting-menu > summary svg + svg {
   width: 12px;
   height: 12px;
+  stroke-width: 1.7;
+  position: relative;
+  top: 0.5px;
+}
+.document-tools .formatting-link-menu > summary svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+/* The list and plus glyphs carry more weight than the chain link's outline. */
+.document-tools .formatting-list-menu > summary svg:first-child {
+  stroke-width: 2.3;
+}
+.document-tools .formatting-more-menu > summary svg:first-child {
+  stroke-width: 2.45;
 }
 .document-tools .formatting-menu[open] > summary,
 .document-tools .formatting-menu > summary:hover {
   color: var(--text);
 }
 .document-tools .formatting-link-menu > summary[aria-pressed='true'] {
-  border-radius: 7px;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
 }
@@ -1554,10 +1929,152 @@ select:focus-visible {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 38px minmax(0, 1fr);
+  grid-template-rows: 38px minmax(0, 1fr) auto;
   border-right: 1px solid var(--border);
-  background: var(--sidebar);
+  background: var(--sidebar-material, var(--sidebar));
   overflow: hidden;
+}
+/* Navigator filter bar: a round add button plus a capsule filter field with a
+   recent-files toggle, mirroring the upstream ProjectNavigatorFilterBar. */
+.sidebar-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+.sidebar-filter-add {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.sidebar-filter-add:hover {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+/* The upstream "+" is a capsule button with a small add menu beside the
+   filter field (ProjectNavigatorFilterBar). */
+.sidebar-add-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.sidebar-add-menu {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  z-index: 40;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background, var(--panel, #fff));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--foreground);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-add-menu button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.sidebar-add-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.sidebar-add-menu hr {
+  margin: 4px 6px;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+/* Inline rename editor inside a tree row. */
+.tree-rename-field {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--accent, #3b82f6);
+  border-radius: 4px;
+  background: var(--background, #fff);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.sidebar-filter-field {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--muted);
+}
+.sidebar-filter-field:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent, var(--foreground)) 35%, transparent);
+  outline-offset: -1px;
+}
+.sidebar-filter-field svg {
+  flex: 0 0 auto;
+}
+.sidebar-filter-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+}
+.sidebar-filter-field input:focus {
+  outline: none;
+}
+.sidebar-filter-field input::placeholder {
+  color: var(--muted);
+}
+.sidebar-filter-recent {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sidebar-filter-recent.on {
+  color: var(--accent, var(--foreground));
+  background: color-mix(in srgb, var(--accent, var(--foreground)) 14%, transparent);
+}
+.sidebar-filter-empty {
+  padding: 16px 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .sidebar-section-title {
   display: flex;
@@ -1571,7 +2088,7 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
+  color: var(--sidebar-secondary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1581,13 +2098,43 @@ select:focus-visible {
   overflow: auto;
   padding: 2px 10px 16px;
 }
+/* Outline mode has no header row: the list itself owns the sidebar's top
+   edge and must span the template's 38px header row instead of being sized
+   by it. */
+.native-sidebar > .native-outline {
+  grid-row: 1 / -1;
+}
+.native-outline .outline-title-row {
+  /* Upstream TitleItem: the document name as the outline's first row,
+     12pt semibold in the secondary label color, scrolling with the list. */
+  height: 30px;
+  padding: 4.5px 0 4px 15px;
+  overflow: hidden;
+  color: var(--sidebar-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .native-outline .outline-row {
   display: flex;
   align-items: stretch;
+  /* Upstream selects the whole TOC row, chevron gutter included, not just the
+     label button. */
+  border-radius: var(--radius-md);
+}
+.native-outline .outline-row:hover {
+  background: var(--hover);
+}
+.native-outline .outline-row.active {
+  background: var(--selected);
 }
 .native-outline .outline-disclosure {
-  flex: 0 0 24px;
-  width: 24px;
+  /* The source-list gutter: leaves reserve the same width so a level's
+     headings line up whether or not they are expandable. */
+  flex: 0 0 20px;
+  width: 20px;
   min-height: 30px;
   padding: 0;
   justify-content: center;
@@ -1599,6 +2146,10 @@ select:focus-visible {
   align-items: center;
   gap: 3px;
   padding-right: 8px;
+  /* The source list centres its text a hair above the row box; the extra
+     bottom inset lands the label and the disclosure on the same line as the
+     reference's rows. */
+  padding-bottom: 3px;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
@@ -1608,11 +2159,7 @@ select:focus-visible {
   cursor: pointer;
 }
 .native-outline button:hover {
-  background: var(--hover);
-}
-.native-outline button.active {
-  background: var(--selected);
-  color: var(--accent);
+  background: transparent;
 }
 .native-outline button svg {
   width: 13px;
@@ -1634,7 +2181,7 @@ select:focus-visible {
 }
 .tree-row {
   width: 100%;
-  height: 30px;
+  height: 24px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1656,9 +2203,21 @@ select:focus-visible {
 }
 .tree-row svg {
   flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: var(--muted);
+}
+.tree-row .tree-disclosure {
+  width: 12px;
+  height: 12px;
+}
+/* Real file icon (NSWorkspace Finder icon) in navigator rows; same 16px slot
+ * as the lucide glyph so rows don't shift when the data URL lands. */
+.tree-row .tree-file-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 .themes-and-settings {
   position: relative;
@@ -1893,225 +2452,189 @@ select:focus-visible {
   cursor: pointer;
 }
 
+/* Inspector — the reference shows a two-segment tray and rounded summary
+   cards, with no header title, close button or pane footer. */
 .inspector-panel {
   min-width: 0;
   min-height: 0;
-  padding: 0 18px 28px;
-  border-left: 1px solid var(--border);
-  background: var(--sidebar);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  /* The reference's inspector is drawn on the same system sidebar material
+     as the source list; the theme's window colour is not involved. */
+  background: var(--sidebar-material, var(--sidebar));
+  overflow: hidden;
 }
 .inspector-panel header {
-  height: 48px;
+  flex: 0 0 auto;
+  /* The reference's pane boundary sits half a point left of ours, so the tray's
+     11.5pt inset puts its outline on the same columns (1583–2076 at 2×). */
+  padding: 9px 11.5px 0;
+}
+.inspector-panel .inspector-segmented {
+  width: 100%;
+  height: 29px;
+  display: flex;
+  /* Upstream's well is a capsule, not a rounded rectangle: the ends are true
+     semicircles. The selection is inset a point and a half at the sides and
+     sits flush with the well's top and bottom, so the padding is asymmetric. */
+  padding: 2.5px 1.5px;
+  border-radius: 999px;
+  background: var(--inspector-tray);
+  /* The outline is a hairline all round; the bright inner edge only runs along
+     the top and bottom, where it fades out around the capsule's ends. */
+  box-shadow:
+    inset 0 0 0 0.5px var(--inspector-tray-border),
+    inset 0 0.75px 0 var(--inspector-tray-ring),
+    inset 0 -1px 0 var(--inspector-tray-ring);
+}
+.inspector-panel .inspector-segmented button {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+/* SwiftUI sizes the two segments by their symbols' intrinsic widths, and the
+   page symbol is the wider of the pair; the divider therefore lands just right
+   of the halfway mark rather than on it. */
+.inspector-panel .inspector-segmented button:first-child {
+  flex-grow: 1.046;
+}
+.inspector-panel .inspector-segmented button svg {
+  width: 16px;
+  height: 16px;
+  /* Both symbols sit half a point above the segment's optical centre. */
+  position: relative;
+  top: -0.5px;
+}
+/* The page symbol's artwork carries more bearing on its right than its left,
+   so its ink sits a point and a half inside the segment's centre. */
+.inspector-panel .inspector-segmented button:first-child svg {
+  transform: translateX(-2px);
+}
+.inspector-panel .inspector-segmented button.active::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  /* The selection's right edge stops a half point short of the well's end while
+     its left edge meets the divider flush. */
+  inset: 0 1px 0 0;
+  border-radius: 999px;
+  background: var(--inspector-segment);
+}
+.inspector-tab {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.inspector-sections {
+  display: grid;
+  gap: 10px;
+  padding: 15.5px 10px 20px;
+}
+.inspector-card {
+  border-radius: 12px;
+  background: var(--inspector-card);
+  overflow: hidden;
+}
+.inspector-row {
+  min-height: 36.75px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  padding: 0 11px;
+  font-size: 13px;
 }
-.inspector-panel header strong {
-  font-size: var(--text-md);
+.inspector-row + .inspector-row {
+  position: relative;
 }
-.inspector-panel header button {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  cursor: pointer;
+.inspector-row + .inspector-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 0.5px;
+  background: var(--inspector-separator);
 }
-.inspector-panel header svg {
-  width: 16px;
-}
-.inspector-panel header .inspector-segmented {
+.inspector-row-label {
+  flex: 0 1 auto;
   min-width: 0;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--muted) 10%, transparent);
-  overflow-x: auto;
-}
-.inspector-panel header .inspector-segmented button {
-  flex: 0 0 auto;
-  width: auto;
-  height: var(--control-h-sm);
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
   color: var(--text);
+  white-space: nowrap;
 }
-.inspector-panel header .inspector-segmented button svg {
-  width: 14px;
-  height: 14px;
-}
-.inspector-panel header .inspector-segmented button.active {
-  background: var(--surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  color: var(--accent);
-}
-.inspector-tab {
-  padding-top: 12px;
-}
-.inspector-file {
+.inspector-row-value {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 18px 0;
+  gap: 6px;
+  justify-content: flex-end;
+  color: var(--inspector-row-value);
+  text-align: right;
 }
-.inspector-file > svg {
-  width: 34px;
-  height: 34px;
-  color: var(--accent);
-}
-.inspector-file div {
+.inspector-row-value > code {
+  display: block;
   min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-.inspector-file strong,
-.inspector-file span {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: inherit;
 }
-.inspector-file span {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.inspector-panel dl {
-  margin: 0;
-}
-.inspector-panel dl > div {
+.inspector-reveal {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
-  gap: var(--space-2);
-  padding: 6px 0;
-  font-size: var(--text-sm);
-}
-.inspector-panel dt {
-  color: var(--muted);
-}
-.inspector-panel dd {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.reveal-button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin: 14px 0;
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--inspector-reveal);
+  color: #fff;
   cursor: pointer;
 }
-.reveal-button svg {
-  width: 15px;
+.inspector-reveal svg {
+  width: 9px;
+  height: 9px;
 }
-.inspector-panel h3 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 20px 0 8px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-  font-size: var(--text-sm);
-}
-.inspector-panel h3 svg {
-  width: 15px;
-}
-.frontmatter-list > div {
-  grid-template-columns: 92px minmax(0, 1fr) !important;
-}
-.inspector-empty {
-  margin: 18px 0;
-  color: var(--muted);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-.inspector-outline,
-.inspector-link-list {
+.inspector-card-date {
+  padding: 11px 11px 9px;
   display: grid;
   gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: 13px;
+  line-height: 19px;
 }
-.inspector-outline button,
-.inspector-link-list li {
-  min-width: 0;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  font-size: var(--text-sm);
+.inspector-date-value {
+  color: var(--inspector-row-value);
+  text-align: right;
 }
-.inspector-outline button:hover {
-  background: var(--hover);
-}
-.inspector-outline .outline-level-2 {
-  padding-left: 20px;
-}
-.inspector-outline .outline-level-3 {
-  padding-left: 32px;
-}
-.inspector-outline .outline-level-4,
-.inspector-outline .outline-level-5,
-.inspector-outline .outline-level-6 {
-  padding-left: 44px;
-}
-.inspector-link-list li {
-  overflow-wrap: anywhere;
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-}
-.inspector-chip-list {
+.inspector-tab-properties {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 4px;
+  flex-direction: column;
 }
-.inspector-chip-list span {
-  padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-  font-size: var(--text-xs);
+.inspector-empty {
+  margin: auto;
+  color: var(--sidebar-secondary);
+  font-size: 13px;
+  /* The reference's empty properties view centres its label 33.5pt below the
+     middle of the tab body: its content view carries a 67pt top inset. */
+  transform: translateY(33.5px);
 }
-.inspector-location {
-  display: grid;
-  gap: 7px;
-}
-.inspector-location code {
-  overflow-wrap: anywhere;
+.inspector-selected-suffix {
+  margin-left: 4px;
   color: var(--muted);
-  font-size: var(--text-xs);
-}
-.inspector-location span {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.inspector-location button {
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--accent);
-  cursor: pointer;
   font-size: var(--text-xs);
 }
 
@@ -2203,10 +2726,13 @@ select:focus-visible {
   align-content: start;
   overflow-x: auto;
   overflow-y: hidden;
-  margin-block: 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 6px;
-  background: var(--document-fill);
+  /* The reading surface owns the card's frame: a 12pt gap above it, the 0.5pt
+     code border and the 16pt continuous corner. */
+  margin: 12px 0 0;
+  padding-bottom: 16px;
+  border: 0.5px solid var(--document-code-border);
+  border-radius: 16px;
+  background: var(--document-code-bg);
 }
 .editor-pane .cm-md-code-card-wrapped {
   grid-template-columns: minmax(0, 1fr);
@@ -2221,9 +2747,19 @@ select:focus-visible {
   width: auto;
   min-width: 100cqw;
   box-sizing: border-box;
-  padding-inline: 14px;
+  padding-inline: 16px;
   border: 0;
   background: transparent;
+}
+.editor-pane .cm-line.cm-md-code-line {
+  /* The tray's own typography: 0.9em code on a 1.3em line box rounded to whole
+     pixels, exactly as the reading surface sets it inside `pre code.hljs`. */
+  font-size: 0.9em;
+  line-height: round(1.3em, 1px);
+}
+/* The reading surface's tray starts 8pt under the header. */
+.editor-pane .cm-line.cm-md-code-fence + .cm-line.cm-md-code-line {
+  padding-top: 8px;
 }
 .editor-pane .cm-line.cm-md-code-line {
   white-space: pre-wrap;
@@ -2233,7 +2769,26 @@ select:focus-visible {
 .editor-pane .cm-line.cm-md-code-fence {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
-.editor-pane .cm-line.cm-md-code-fence:not(.cm-md-code-fence-editing) {
+/* The opening fence line is the card's header. The reading surface draws the
+   language 8pt under the card's edge in a 28pt row, 16pt from the left and the
+   action pill 10pt from the right; the canvas hides the fence symbols and
+   lets the header widget ride on that row. */
+.editor-pane .cm-line.cm-md-code-fence:not(.cm-md-code-fence-editing):not(.cm-md-code-fence-close) {
+  box-sizing: border-box;
+  width: 100cqw;
+  min-width: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 0 16px;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 14px;
+  color: transparent;
+  background: transparent;
+}
+.editor-pane .cm-line.cm-md-code-fence-close:not(.cm-md-code-fence-editing) {
   height: 0;
   min-height: 0;
   padding-block: 0;
@@ -2242,6 +2797,55 @@ select:focus-visible {
   line-height: 0;
   color: transparent;
   background: transparent;
+}
+.editor-pane .cm-md-code-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  color: var(--document-secondary);
+  font-size: 11px;
+  line-height: 14px;
+}
+.editor-pane .cm-md-code-language {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-pane .cm-md-code-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin: -2px -4px -2px 0;
+  padding: 3.5px;
+  border: 0.5px solid color-mix(in srgb, var(--document-text) 12%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--document-text) 4%, transparent);
+}
+.editor-pane .cm-md-code-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--document-text);
+  cursor: pointer;
+  font: inherit;
+}
+.editor-pane .cm-md-code-action:hover {
+  background: color-mix(in srgb, var(--document-text) 10%, transparent);
+}
+.editor-pane .cm-md-code-action svg {
+  width: 14px;
+  height: 14px;
 }
 .editor-pane .cm-md-code-card-wrapped .cm-line.cm-md-code-line:not(.cm-md-code-nowrap) {
   width: 100%;
@@ -2275,21 +2879,47 @@ select:focus-visible {
 }
 .editor-pane .cm-scroller {
   overflow: auto;
-  padding-inline: var(--document-page-padding-horizontal, 40px);
   font-family: var(--document-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif);
-  line-height: var(--document-line-height, 1.52);
+  line-height: var(--document-line-height, 1.6);
 }
 .editor-pane .cm-content {
   width: 100%;
   max-width: var(--document-page-width, 900px);
   margin: 0 auto;
-  padding: calc(32px + var(--document-tools-height, 0px)) 0 48px;
+  /* The tools overlay already reserves the reference's top inset: its bar
+     floats over the editor's first 36pt, and the reference's content starts
+     exactly under that bar — at the same page-top inset the preview uses
+     (32pt page plus the app's 6pt clearance). Without tools the canvas keeps
+     the plain 54pt inset. */
+  padding-block: max(var(--document-tools-height, 54px), calc(var(--document-page-padding-top, 32px) + var(--mdp-page-top-clearance, 0px)))
+    48px;
+  /* The editing canvas shares the preview's page inset exactly, so the column
+     starts and ends where the preview's does and a paragraph breaks on the
+     same word in both modes. */
+  padding-inline: calc(var(--mdp-page-padding, var(--document-page-padding-horizontal, 40px)) + var(--mdp-page-inset, 0px));
   caret-color: var(--accent);
   font-family: inherit;
   overflow-wrap: break-word;
+  /* The reference's editing canvas breaks lines exactly like its rendered
+     page: `pretty` moves the tail word down rather than leaving a short last
+     line. Without it the first paragraph fits one more glyph per line and
+     every following line drifts; `balance` levels the whole block and is far
+     off. WebKit's balancing still splits this page's last two lines a glyph
+     apart from the reference (it drops 首 to the tail where the reference
+     keeps it on line 2); line 1 and the ink positions match pixel for pixel,
+     so the remaining delta is the engine's balancing model, not our metrics. */
+  text-wrap: pretty;
 }
 .editor-pane.content-full .cm-content {
   max-width: none;
+}
+/* CodeMirror pads every line 6pt left and 2pt right so a caret at either end is
+   not clipped. The canvas already sits inside the page inset, so that padding
+   would push the column 4pt off the preview's and narrow it by 8pt; the canvas
+   owns the gutter instead. Block widgets are children of `.cm-content`, not of a
+   line, so this also keeps them flush with the text column. */
+.editor-pane .cm-line {
+  padding-inline: 0;
 }
 .editor-pane .cm-focused {
   outline: 0;
@@ -2416,20 +3046,26 @@ select:focus-visible {
 .editor-pane .cm-md-list-marker:not(.cm-md-source-revealed) span {
   color: transparent !important;
 }
+/* A list owns a 2.1em gutter in the reading surface, and its bullet is a
+   0.4em disc of the link colour sitting 1.15em before the item text. The
+   canvas keeps the source's own indent inside that gutter and draws the same
+   disc on the marker span, so an item starts on the preview's column. */
+.editor-pane .cm-line.cm-md-list {
+  /* The gutter belongs to the list, so wrapped rows align with the item text
+     while the marker hangs in the gutter, exactly as the rendering does. */
+  padding-inline-start: 2.1em;
+  text-indent: -0.7em;
+}
 .editor-pane .cm-md-list-marker::after {
-  content: '•';
+  content: '';
   position: absolute;
-  inset: 0;
-  color: var(--document-text);
-  font-size: 1.25em;
-  line-height: 1.2;
-  opacity: 0.88;
-}
-.editor-pane .cm-md-list-depth-1::after {
-  content: '◦';
-}
-.editor-pane .cm-md-list-depth-2::after {
-  content: '▪';
+  inset-inline-start: -0.45em;
+  top: 50%;
+  width: 0.4em;
+  height: 0.4em;
+  border-radius: 50%;
+  background: var(--document-link);
+  transform: translateY(-50%);
 }
 .editor-pane .cm-line.cm-md-task .cm-md-list-marker::after {
   display: none;
@@ -2439,7 +3075,15 @@ select:focus-visible {
   color: transparent !important;
   font-size: 0;
 }
+/* Ordered numbers are right-aligned inside the gutter so "9." and "10." share
+   one text column, as the rendering does. */
+.editor-pane .cm-line.cm-md-list:has(.cm-md-list-ordered-marker) {
+  text-indent: -1.733em;
+}
 .editor-pane .cm-md-list-ordered-marker {
+  display: inline-block;
+  width: 1.4em;
+  text-align: right;
   color: var(--muted);
   opacity: 1;
 }
@@ -2502,6 +3146,28 @@ select:focus-visible {
 .editor-pane .cm-md-details-body > :last-child {
   margin-bottom: 0;
 }
+/* A preview widget borrows the reading surface's content styles, but it is a
+   block on the canvas, not a page: the page padding, the column width and
+   CodeMirror's break-spaces all belong outside it. Leaving them on inset the
+   widget by the page padding and turned the newlines in its markup into empty
+   text rows three lines tall. */
+.editor-pane
+  :is(
+    .cm-md-quote-preview,
+    .cm-md-definition-list-preview,
+    .cm-md-details-body,
+    .cm-md-html-block-preview,
+    .cm-md-toc-preview
+  ).markdown-body {
+  padding: 0;
+  white-space: normal;
+}
+/* The table keeps the reading surface's box, whose 28pt first row holds the
+   expand affordance, and none of the page's own padding. */
+.editor-pane .cm-md-table-preview.markdown-body {
+  padding: 28px 0 0;
+  white-space: normal;
+}
 .editor-pane .cm-md-html-block-preview {
   box-sizing: border-box;
   width: 100%;
@@ -2515,10 +3181,27 @@ select:focus-visible {
 }
 .editor-pane .cm-md-table-preview {
   box-sizing: border-box;
-  width: 100%;
-  margin: 16px 0;
+  position: relative;
+  /* Shrink to the table so the expand affordance sits at the table's edge,
+     not the column's, as on the reading surface. */
+  width: fit-content;
+  max-width: 100%;
+  /* The reading surface wraps every table in a 24pt-spaced box whose 28pt
+     first row holds the expand affordance (invisible until the pointer or
+     keyboard reaches the table). The widget reproduces the box, not just the
+     table, so the rows land on the same line as the preview's. */
+  margin: 24px 0 0;
+  padding-top: 28px;
+}
+/* The editor's table widget is a plain grid upstream, not a read-mode table:
+   it carries no column-resize divider in its header row. */
+.editor-pane .cm-md-table-preview .md-table-scroll > table > thead th::after,
+.editor-pane .cm-md-table-preview .md-table-wrap > table > thead th::after {
+  content: none;
 }
 .editor-pane .cm-md-table-preview .md-table-scroll {
+  width: fit-content;
+  max-width: 100%;
   margin-top: 0;
 }
 .editor-pane .cm-md-definition-list-preview {
@@ -2573,73 +3256,28 @@ select:focus-visible {
   color: var(--text-secondary, #656d76);
   font-size: 0.9em;
 }
+/* A quote block is replaced in place by the reading surface's own rendering, so
+   the widget resets only the page box: the blockquote keeps the preview's
+   padding, bar and line box, and the widget itself carries the block's outer
+   gap — the preview's 18pt blockquote margin — because a replaced block has no
+   line to carry it. */
 .editor-pane .cm-md-quote-preview {
   box-sizing: border-box;
   width: 100%;
   max-width: none;
   min-height: 0;
-  margin: 0;
+  margin: 18px 0 0;
   padding: 0;
   font-size: inherit;
-  line-height: 1.45;
 }
-.editor-pane .cm-md-quote-preview :is(p, ul, ol, pre, blockquote, .markdown-alert) {
-  margin: 0 !important;
-}
-.editor-pane .cm-md-quote-preview :is(p, ul, ol, pre, blockquote, .markdown-alert) + :is(p, ul, ol, pre, blockquote, .markdown-alert) {
-  margin-top: 0.42em !important;
-}
-.editor-pane .cm-md-quote-preview > :first-child,
-.editor-pane .cm-md-quote-preview :is(blockquote, .markdown-alert) > :first-child {
+.editor-pane .cm-md-quote-preview > :first-child {
   margin-top: 0 !important;
-}
-.editor-pane .cm-md-quote-preview > :last-child,
-.editor-pane .cm-md-quote-preview :is(blockquote, .markdown-alert) > :last-child {
-  margin-bottom: 0 !important;
-}
-.editor-pane .cm-md-quote-preview blockquote {
-  padding-block: 0;
-  padding-inline-start: 0.72em;
-}
-.editor-pane .cm-md-quote-preview blockquote blockquote {
-  margin-inline-start: 0.45em;
-}
-.editor-pane .cm-md-quote-preview :is(ul, ol) {
-  padding-left: 1.45em;
-}
-.editor-pane .cm-md-quote-preview li {
-  margin-top: 0 !important;
-}
-.editor-pane .cm-md-quote-preview pre {
-  padding: 0.55em 0.75em;
-  border: 1px solid color-mix(in srgb, var(--document-grid) 72%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--document-fill) 62%, transparent);
-}
-.editor-pane .cm-md-quote-preview .markdown-alert {
-  margin-top: 0;
-  padding: 6px 12px;
-  border-radius: 0;
-  background: transparent;
-}
-.editor-pane .cm-md-quote-preview .markdown-alert > :last-child {
-  margin-bottom: 0 !important;
-}
-.editor-pane .cm-md-quote-preview .markdown-alert-title {
-  margin-bottom: 4px !important;
 }
 .cm-md-quote-preview .md-source-blank-line {
   display: none;
 }
 .cm-md-quote-preview .md-source-blank-line-final {
   display: none;
-}
-.cm-md-quote-preview p {
-  margin: 0 0 0.32em !important;
-  line-height: 1.45;
-}
-.cm-md-quote-preview > :last-child {
-  margin-bottom: 0;
 }
 /* Editor headings follow the preview's minor-third scale (upstream parity). */
 .editor-pane .cm-md-h1,
@@ -2648,40 +3286,39 @@ select:focus-visible {
 .editor-pane .cm-md-h4,
 .editor-pane .cm-md-h5,
 .editor-pane .cm-md-h6 {
-  line-height: 1.18;
+  line-height: 1.25;
   padding-top: 0.9em;
   font-weight: 600;
   letter-spacing: -0.012em;
 }
+/* The reference sets its heading scale in rem on a 16px root — 1.875/1.6/1.25
+   rem, i.e. 30/25.6/20px — rather than as a ratio of the 15px body size. The
+   30px H1 caps at 43 device px and the 25.6px H2 inks 98 device px per four
+   CJK glyphs, both matching the reference at this window size. */
 .editor-pane .cm-md-h1 {
-  font-size: 1.802em;
+  font-size: 30px;
   font-weight: 700;
   padding-top: 0.45em;
 }
-.editor-pane .cm-md-h1,
 .editor-pane .cm-md-h2 {
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid color-mix(in srgb, var(--document-grid) 72%, transparent);
-}
-.editor-pane .cm-md-h2 {
-  font-size: 1.602em;
-  line-height: 1.06;
+  font-size: 25.6px;
+  line-height: 1.25;
 }
 .editor-pane .cm-md-h3 {
-  font-size: 1.424em;
-  line-height: 1.07;
+  font-size: 20px;
+  line-height: 1.25;
 }
 .editor-pane .cm-md-h4 {
   font-size: 1.266em;
-  line-height: 1.08;
+  line-height: 1.25;
 }
 .editor-pane .cm-md-h5 {
   font-size: 1.125em;
-  line-height: 1.09;
+  line-height: 1.25;
 }
 .editor-pane .cm-md-h6 {
   font-size: 1em;
-  line-height: 1.24;
+  line-height: 1.25;
 }
 .editor-pane .cm-line.cm-md-setext-marker:not(.cm-md-source-revealed) {
   box-sizing: border-box;
@@ -2700,16 +3337,27 @@ select:focus-visible {
   font-size: 0 !important;
   line-height: 0 !important;
 }
-.editor-pane .cm-line.cm-md-blank-line-collapsed {
+/* The last blank of a run is the compact spacer the preview draws; every blank
+   above it keeps the full source line height, exactly as the preview's own
+   blank divs do, so authored separation between blocks survives. */
+.editor-pane .cm-line.cm-md-blank-line {
   box-sizing: border-box;
-  height: 0 !important;
+  height: 4px !important;
   min-height: 0 !important;
   margin: 0 !important;
   padding-block: 0 !important;
   border: 0 !important;
   overflow: hidden;
-  font-size: 0 !important;
-  line-height: 0 !important;
+  line-height: 4px !important;
+}
+.editor-pane .cm-line.cm-md-blank-line-kept {
+  box-sizing: border-box;
+  height: var(--document-source-line-height, 24px) !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding-block: 0 !important;
+  border: 0 !important;
+  overflow: hidden;
 }
 .editor-pane .cm-line:is(.cm-md-h1, .cm-md-h2, .cm-md-h3, .cm-md-h4, .cm-md-h5, .cm-md-h6) span {
   text-decoration: none !important;
@@ -2957,10 +3605,15 @@ select:focus-visible {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }
-.editor-pane .cm-md-list {
-  color: var(--text);
+/* Preview list items own a 3pt `listItemSpacing` between them, and the first
+   item inherits only the list's own 12pt top margin. */
+.editor-pane .cm-line.cm-md-list {
+  padding-top: 3px;
 }
-.editor-pane .cm-md-task {
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-list {
+  padding-top: 12px;
+}
+.editor-pane .cm-line.cm-md-task {
   color: var(--muted);
 }
 .editor-pane .cm-md-inline-code {
@@ -3007,7 +3660,7 @@ select:focus-visible {
   -webkit-box-decoration-break: clone;
 }
 .editor-pane .cm-md-link {
-  color: var(--document-link);
+  color: var(--editor-link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -3029,7 +3682,7 @@ select:focus-visible {
   padding: 0 0.1em;
   border: 0;
   background: transparent;
-  color: var(--document-link);
+  color: var(--editor-link);
   font-family: inherit;
   font-size: 0.72em;
   line-height: 1;
@@ -3056,14 +3709,21 @@ select:focus-visible {
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
-/* A visible source blank already owns the gap before the heading. */
-.editor-pane .cm-md-h1.cm-md-heading-after-blank,
-.editor-pane .cm-md-h2.cm-md-heading-after-blank,
-.editor-pane .cm-md-h3.cm-md-heading-after-blank,
-.editor-pane .cm-md-h4.cm-md-heading-after-blank,
-.editor-pane .cm-md-h5.cm-md-heading-after-blank,
-.editor-pane .cm-md-h6.cm-md-heading-after-blank {
-  padding-top: 2px;
+/* The preview's blank line collapses to a 4pt spacer and each following block
+   owns the gap: a heading gets the preview's `--document-source-line-height`
+   margin and every other block its 12pt top margin. The editor reproduces that
+   with the same adjacency rule, so a blank line's contribution stays 4pt no
+   matter how tall the block that follows it is. */
+.editor-pane .cm-line.cm-md-blank-line + .cm-line {
+  padding-top: 12px;
+}
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h1,
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h2,
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h3,
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h4,
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h5,
+.editor-pane .cm-line.cm-md-blank-line + .cm-md-h6 {
+  padding-top: 24px;
 }
 .editor-status {
   position: absolute;
@@ -3081,13 +3741,35 @@ select:focus-visible {
   max-width: var(--document-page-width, 900px);
   min-height: 100%;
   margin: 0 auto;
-  padding: var(--document-page-padding, 32px 40px 48px);
+  padding: var(--mdp-page-padding, var(--document-page-padding, 32px 40px 48px));
+  /* Upstream keeps the page top on its own track: the app adds clearance for
+     its floating controls above the document, the exported page does not. */
+  padding-top: calc((var(--document-page-padding-top, 32px) + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1));
+  /* Upstream puts the reader's page padding on the body and the reader
+     margins on the column: 40px of page padding plus the margin inset, not
+     half of it. */
+  padding-inline: calc(var(--mdp-page-padding, var(--document-page-padding-horizontal, 40px)) + var(--mdp-page-inset, 0px))
+    calc(var(--mdp-page-padding, var(--document-page-padding-horizontal, 40px)) + var(--mdp-page-inset, 0px));
   color: var(--document-text);
   font-family: var(--document-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif);
   font-size: var(--document-font-size, 15px);
-  line-height: var(--document-line-height, 1.52);
+  font-weight: var(--mdp-body-weight, 400);
+  line-height: var(--mdp-line-height, var(--document-line-height, 1.6));
+  letter-spacing: var(--mdp-letter-spacing, normal);
+  word-spacing: var(--mdp-word-spacing, normal);
+  /* Upstream bodyTextRenderingCSS: the same faces and metrics, and `pretty`
+     breaks wrapped lines the way the reference does (no orphan tail word). */
+  text-rendering: optimizeLegibility;
+  text-wrap: pretty;
   overflow-wrap: break-word;
   tab-size: 4;
+}
+/* Upstream's document hairlines read the system separator and quaternary
+   label, which resolve from the current appearance instead of the app chrome's
+   #d2d2d7 separators. Exported pages keep the print palette. */
+.markdown-body:not(.textmark-exporting) {
+  --document-grid: -apple-system-separator;
+  --document-quote-border: -apple-system-quaternary-label;
 }
 .markdown-body.content-full {
   width: 100%;
@@ -3103,39 +3785,36 @@ select:focus-visible {
 .markdown-body h5,
 .markdown-body h6 {
   scroll-margin-top: 24px;
-  margin: 1.72em 0 0;
+  /* Upstream: one top-only gap for every block, so the next block's own top
+     margin is the space below a heading (margins do not collapse in the flex
+     column). 0.5em resolves against the heading's own size, as it does there. */
+  margin: calc(0.6rem + 0.5em) 0 0;
   color: var(--document-text);
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.012em;
+  line-height: 1.25;
 }
+/* System title scale as ratios of the 15px body, straight from upstream:
+   Large Title 26, Title 1 22, Title 2 17, Title 3 15, Headline 13, Sub 11. */
 .markdown-body h1 {
-  margin-top: 0.72em;
-  font-size: 1.82em;
-  font-weight: 700;
+  font-size: 2em;
 }
 .markdown-body h2 {
-  font-size: 1.58em;
-  line-height: 1.1;
+  font-size: 1.692em;
 }
 .markdown-body h3 {
-  font-size: 1.4em;
-  line-height: 1.12;
+  font-size: 1.308em;
 }
 .markdown-body h4 {
-  font-size: 1.266em;
-  line-height: 1.08;
+  font-size: 1.154em;
 }
 .markdown-body h5 {
-  font-size: 1.125em;
-  line-height: 1.09;
+  font-size: 1em;
 }
 .markdown-body h6 {
-  font-size: 1em;
-  line-height: 1.24;
+  font-size: 0.846em;
 }
 .markdown-body .md-source-blank-line {
-  height: var(--document-source-line-height, 22.8px);
+  height: var(--document-source-line-height, 24px);
 }
 .markdown-body .md-source-blank-line-final {
   height: 4px;
@@ -3150,13 +3829,14 @@ select:focus-visible {
 .markdown-body .md-source-blank-line-final + h4,
 .markdown-body .md-source-blank-line-final + h5,
 .markdown-body .md-source-blank-line-final + h6 {
-  margin-top: var(--document-source-line-height, 22.8px);
+  margin-top: var(--document-source-line-height, 24px);
 }
 .markdown-body p {
-  margin: 14px 0 0;
+  /* bodyFontSize × 0.8, as upstream. */
+  margin: 12px 0 0;
 }
 .markdown-body strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 .markdown-body mark {
   padding: 0 0.16em;
@@ -3190,8 +3870,11 @@ select:focus-visible {
 }
 .markdown-body ul,
 .markdown-body ol {
-  margin: 14px 0 0;
-  padding-left: 1.55em;
+  /* Each list owns its own gutter, as upstream: a nested list never inherits
+     the wider gutter of a long ordered list around it. */
+  margin: 12px 0 0;
+  padding-inline-start: 2.1em;
+  padding-inline-end: 0;
 }
 .markdown-body dl {
   margin: 14px 0 0;
@@ -3212,9 +3895,17 @@ select:focus-visible {
   margin-bottom: 0;
 }
 .markdown-body li {
-  margin-top: 5px;
+  /* listItemSpacing = bodyFontSize × 0.2, as upstream. */
+  margin-top: 3px;
 }
 .markdown-body li:first-child {
+  margin-top: 0;
+}
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 3px;
+}
+.markdown-body li > p:first-child {
   margin-top: 0;
 }
 .markdown-body ul > li {
@@ -3226,11 +3917,13 @@ select:focus-visible {
 .markdown-body ul > li:not(.task-list-item)::before {
   content: '';
   position: absolute;
-  inset-inline-start: -0.9em;
-  top: 0.56em;
+  /* --mdp-list-gap (0.75em) + the 0.4em circle: the bullet sits one list gap
+     before the text, and its centre lands on the first line's centre. */
+  inset-inline-start: calc(-0.75em - 0.4em);
+  top: calc(0.5lh - 0.2em);
   width: 0;
   height: 0;
-  border: 0.2em solid var(--document-text);
+  border: 0.2em solid var(--document-link);
   border-radius: 50%;
 }
 .markdown-body a {
@@ -3247,17 +3940,26 @@ select:focus-visible {
   background: var(--document-grid);
 }
 .markdown-body blockquote {
+  position: relative;
   margin: 18px 0 0;
-  padding: 2px 0 2px 14px;
-  border-inline-start: 4px solid color-mix(in srgb, var(--document-secondary) 38%, transparent);
+  /* quoteSpacing = bodyFontSize × 1.2; the bar is painted, not a border on the
+     box, so it keeps its 999px cap and stops 0.4em short of each edge. */
+  padding: 0.4em 1em;
+  padding-inline-start: 1.5em;
+  padding-inline-start: round(1.5em, 1px);
   color: var(--document-secondary);
 }
-.markdown-body blockquote blockquote {
-  margin-top: 12px;
-  margin-inline-start: 8px;
-  border-inline-start-color: color-mix(in srgb, var(--document-secondary) 24%, transparent);
+.markdown-body blockquote::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0.3em;
+  top: 0.4em;
+  bottom: 0.4em;
+  border-inline-start: 4px solid var(--document-quote-border, color-mix(in srgb, var(--document-secondary) 24%, transparent));
+  border-radius: 999px;
+  pointer-events: none;
 }
-.markdown-body blockquote p:first-child {
+.markdown-body blockquote > *:first-child {
   margin-top: 0;
 }
 .markdown-body blockquote p:last-child {
@@ -3280,23 +3982,68 @@ select:focus-visible {
 .markdown-body details > :last-child {
   margin-bottom: 0;
 }
+.markdown-body .md-table-wrap {
+  position: relative;
+  /* largeBlockSpacing = bodyFontSize × 1.6, as upstream. */
+  margin: 24px 0 0;
+  /* Upstream shrinks the wrap to the table so the Expand button sits at the
+     table's edge, not the column's. */
+  width: fit-content;
+  max-width: 100%;
+  padding-top: 28px;
+}
+.markdown-body .md-table-wrap > .md-table-scroll {
+  margin: 0;
+}
+.markdown-body .md-table-actions {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  inset-inline-end: 0;
+  height: 28px;
+  display: flex;
+  justify-content: flex-end;
+}
+.markdown-body .md-table-expand {
+  appearance: none;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--document-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.markdown-body .md-table-expand:hover {
+  background: var(--document-fill);
+  color: var(--document-text);
+}
+.markdown-body .md-table-expand:focus-visible {
+  outline: none;
+}
+.markdown-body.textmark-exporting .md-table-actions {
+  display: none;
+}
 .markdown-body .md-table-scroll {
   width: 100%;
-  margin: 20px 0 0;
+  margin: 24px 0 0;
+  max-width: 100%;
   overflow-x: auto;
-  border-radius: calc(var(--radius-md) + 1px);
 }
 .markdown-body table {
-  width: 100%;
-  min-width: max-content;
+  /* Upstream's table is a hairline row grid, not a card: no outer border, no
+     header fill, and the rows themselves are the only rules. */
   margin: 0;
-  border: 1px solid var(--document-grid);
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0;
   border-spacing: 0;
-  border-collapse: separate;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--surface);
-  font-size: 0.92em;
+  border-collapse: collapse;
+  background: transparent;
+  font-size: inherit;
 }
 .markdown-body.textmark-exporting {
   margin: 0;
@@ -3325,22 +4072,40 @@ select:focus-visible {
 }
 .markdown-body th,
 .markdown-body td {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 0;
-  border-inline-end: 1px solid var(--document-grid);
-  border-block-end: 1px solid var(--document-grid);
+  border-top: 1px solid var(--document-grid);
+  border-bottom: 1px solid var(--document-grid);
   text-align: start;
-}
-.markdown-body tr > :last-child {
-  border-inline-end: 0;
-}
-.markdown-body tbody > tr:last-child > td,
-.markdown-body tr:last-child > th {
-  border-block-end: 0;
+  vertical-align: top;
 }
 .markdown-body th {
-  background: color-mix(in srgb, var(--document-fill) 68%, transparent);
   font-weight: 600;
+}
+/* Upstream marks each column edge with a short divider in the header row, so
+   the reader can see where columns split; the last edge stays bare. */
+@media screen {
+  .markdown-body .md-table-wrap > table > thead th,
+  .markdown-body .md-table-scroll > table > thead th {
+    position: relative;
+  }
+  .markdown-body .md-table-wrap > table > thead th::after,
+  .markdown-body .md-table-scroll > table > thead th::after {
+    content: '';
+    position: absolute;
+    inset-inline-end: 0;
+    top: 25%;
+    bottom: 25%;
+    border-inline-end: 1px solid transparent;
+  }
+  .markdown-body .md-table-wrap > table > thead th:not(:last-child)::after,
+  .markdown-body .md-table-scroll > table > thead th:not(:last-child)::after {
+    border-color: var(--document-grid);
+  }
+}
+.markdown-body.textmark-exporting .md-table-wrap > table > thead th::after,
+.markdown-body.textmark-exporting .md-table-scroll > table > thead th::after {
+  content: none;
 }
 .markdown-body th.md-table-align-left,
 .markdown-body td.md-table-align-left {
@@ -3360,36 +4125,53 @@ select:focus-visible {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 .markdown-body code {
-  padding: 0.18em 0.42em;
-  border-radius: var(--radius-sm);
-  background: var(--document-fill);
+  /* Upstream: 0.9em on an 0.15em/0.3em chip inside a 5pt radius hairline. */
+  padding: 0.15em 0.3em;
+  border: 0.5px solid var(--document-code-border);
+  border-radius: 5px;
+  background: var(--document-code-bg);
   color: var(--document-text);
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: var(--document-code-font-size, 0.88em);
-  font-size: 0.88em;
+  font-size: var(--document-code-font-size, 0.9em);
 }
 .markdown-body pre {
   position: relative;
 }
 .markdown-body pre.hljs {
-  margin: 16px 0 0;
-  padding: 12px 14px;
-  border-radius: var(--radius-lg);
+  margin: 12px 0 0;
+  padding: 16px;
+  border: 0.5px solid var(--document-code-border);
+  border-radius: 8px;
   overflow: auto;
-  background: var(--document-fill);
+  background: var(--document-code-bg);
   color: var(--document-text);
-  line-height: 1.45;
+  line-height: 1.3;
   white-space: pre;
   overflow-wrap: normal;
   word-break: keep-all;
 }
-.markdown-body pre code {
+/*
+ * highlight.js's theme stylesheet ships `pre code.hljs{padding:1em}` (and
+ * `code.hljs{padding:3px 5px}`). It loads after this file and outranks a plain
+ * `pre code` reset, so the tray grew an extra 1em inset on every side. Both
+ * selectors are repeated here at a higher specificity: the card owns the
+ * inset, and the code's own line box is 1.3em of *its* size, rounded to whole
+ * pixels the way upstream does (18px at the default 15px document size).
+ */
+.markdown-body pre code,
+.markdown-body pre.hljs code.hljs {
   display: block;
   width: max-content;
   min-width: 100%;
   padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: inherit;
+  font-size: var(--document-code-font-size, 0.9em);
+  line-height: 1.35;
+  line-height: round(1.3em, 1px);
 }
 .copy-code-button {
   position: absolute;
@@ -3410,58 +4192,80 @@ pre:hover .copy-code-button {
 .md-code-card {
   margin: 12px 0 0;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 15px;
-  background: var(--document-fill);
+  border: 0.5px solid var(--document-code-border);
+  border-radius: 16px;
+  background: var(--document-code-bg);
 }
 .md-code-card-header {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 9px 4px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.md-code-language {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: lowercase;
-}
-.md-code-actions {
+  /* Upstream's header is 28pt of content under 8pt of padding, so the action
+     pill can hang 2pt above and below the row it sits in. */
+  box-sizing: content-box;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 8px 10px 0 16px;
+  color: var(--document-secondary);
+  font-size: 11px;
+  line-height: 14px;
+}
+.md-code-language {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-code-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin: -2px -4px -2px 0;
+  padding: 3.5px;
+  border: 0.5px solid color-mix(in srgb, var(--document-text) 12%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--document-text) 4%, transparent);
+  /* The reference draws these as a native glass pill that appears on hover;
+     keep the same quiet header until the pointer or keyboard arrives. */
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.md-code-card:hover .md-code-actions,
+.md-code-card:focus-within .md-code-actions {
+  opacity: 1;
 }
 .md-code-action {
-  min-width: 28px;
-  height: 26px;
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  padding: 0 7px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   background: transparent;
-  color: var(--muted);
+  color: var(--document-text);
   cursor: pointer;
   font: inherit;
 }
-.md-code-action:hover,
+.md-code-action:hover {
+  background: color-mix(in srgb, var(--document-text) 10%, transparent);
+}
 .md-code-action:focus-visible {
-  outline: 0;
-  background: var(--hover);
-  color: var(--text);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .md-code-action svg {
   width: 14px;
   height: 14px;
 }
 .md-code-card pre.hljs {
+  /* Inside the card the tray owns the edge: 8pt under the header, 16pt around
+     the code. */
   margin: 0;
+  padding: 8px 16px 16px;
   border: 0;
   border-radius: 0;
 }
@@ -3474,11 +4278,24 @@ pre:hover .copy-code-button {
   word-break: break-word;
 }
 .markdown-body img {
-  display: block;
+  /* Upstream keeps an image inline so it follows the text, including explicit
+     HTML alignment; the paragraph supplies the gap when there is one. */
+  display: inline-block;
   max-width: 100%;
-  height: auto;
-  margin: 16px auto 0;
+  margin: 12px 0 0;
   border-radius: var(--radius-md);
+}
+/* GitHub-style <img width height> keeps its authored size. */
+.markdown-body img:not([width]):not([height]) {
+  height: auto;
+}
+.markdown-body p img {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.35em 0 0;
+}
+.markdown-body p > img:only-child {
+  margin: 0;
 }
 .markdown-body img.asset-error {
   min-height: 80px;
@@ -3874,6 +4691,12 @@ mark.search-match.active {
   background: var(--accent);
   color: white;
 }
+.project-context-menu button svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  opacity: 0.75;
+}
 .project-context-menu button:disabled {
   opacity: 0.5;
   cursor: default;
@@ -3917,6 +4740,39 @@ mark.search-match.active {
 .context-submenu:hover .context-submenu-panel {
   display: grid;
 }
+.context-submenu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--control-h-md);
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.context-submenu-panel button:hover {
+  background: var(--accent);
+  color: white;
+}
+.context-app-icon-fallback {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--muted);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.context-submenu-panel button:hover .context-app-icon-fallback {
+  background: rgba(255, 255, 255, 0.28);
+}
 
 .toast {
   position: fixed;
@@ -3931,6 +4787,95 @@ mark.search-match.active {
   box-shadow: var(--shadow-toast);
   font-size: var(--text-sm);
   backdrop-filter: blur(12px);
+}
+/* Bottom-trailing update capsule, mirroring the upstream UpdatePill: one
+   40px glass pill with the status line and a trailing action button. */
+.update-pill {
+  position: fixed;
+  z-index: 118;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px 0 14px;
+  border-radius: 20px;
+  background: var(--toast-bg);
+  color: white;
+  box-shadow: var(--shadow-toast);
+  font-size: var(--text-sm);
+  backdrop-filter: blur(12px);
+}
+.update-pill.enter {
+  animation: update-pill-enter 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes update-pill-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.update-pill svg {
+  flex: 0 0 auto;
+}
+.update-pill.accent svg {
+  color: var(--accent);
+}
+.update-pill.warning svg {
+  color: #ff9f0a;
+}
+.update-pill-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.update-pill-action {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.update-pill-action:hover {
+  filter: brightness(1.1);
+}
+.update-pill-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.update-pill-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.14);
+}
+.update-pill .spin {
+  animation: update-pill-spin 0.9s linear infinite;
+}
+@keyframes update-pill-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .dialog-backdrop {
   position: fixed;
@@ -4115,6 +5060,106 @@ mark.search-match.active {
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
 }
+/* The live reading sample from the upstream ThemeSamplePage: an "Aa" in the
+ * reading face over prose set with the look's spacing and margins, cut off
+ * by a fade at the bottom. */
+.theme-sample-page {
+  overflow: hidden;
+  padding: 2px 0 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.theme-sample-title {
+  display: block;
+  padding: 10px 28px 6px;
+  font-size: 30px;
+  line-height: 1.1;
+}
+.theme-sample-prose {
+  max-height: 96px;
+  font-size: 14px;
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+.appearance-section-picker {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.appearance-section-picker button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.appearance-section-picker button.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.appearance-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.appearance-section > label:has(input[type='range']:disabled) {
+  opacity: 0.55;
+}
+.appearance-reset-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+}
+.appearance-reset-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: #c0392b;
+  cursor: pointer;
+}
+.appearance-reset-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.appearance-reset-row svg {
+  width: 13px;
+  height: 13px;
+}
+.settings-advanced-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 40%) 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-advanced-row > div {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.settings-advanced-row button {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-advanced-row button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
 .theme-colors > strong {
   font-size: var(--text-md);
 }
@@ -4202,6 +5247,27 @@ mark.search-match.active {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
+/* Per-slot rows with Light/Dark wells side by side, mirroring the upstream
+ * ThemeSettingsView layout. */
+.theme-color-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  font-size: var(--text-xs);
+}
+.theme-color-row.theme-color-head span {
+  color: var(--muted);
+}
+.theme-color-row input[type='color'] {
+  width: 100%;
+  height: 27px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
 .theme-colors legend {
   padding: 0 4px;
   color: var(--muted);
@@ -4236,6 +5302,112 @@ mark.search-match.active {
 .settings-about span,
 .settings-about small {
   color: var(--muted);
+}
+.settings-version {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: pointer;
+}
+.settings-version:focus-visible {
+  outline: 2px solid var(--accent, #2997ff);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.settings-about-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.settings-about-links button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent, #0a84ff);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.settings-about-links button:hover {
+  text-decoration: underline;
+}
+.settings-caption {
+  color: var(--muted);
+  font-size: 12px;
+}
+.privacy-info-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin-left: 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.privacy-info-button svg {
+  width: 13px;
+  height: 13px;
+}
+.privacy-info-button:hover,
+.privacy-info-button[aria-expanded='true'] {
+  color: var(--accent, #2997ff);
+}
+.privacy-detail-popover {
+  margin: 4px 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+  font-size: 12px;
+  color: var(--muted);
+}
+.privacy-detail-popover p {
+  margin: 0 0 6px;
+}
+.privacy-detail-popover ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.privacy-detail-popover li {
+  margin: 3px 0;
+}
+.settings-support-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+  font-size: 12px;
+}
+.settings-support-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.settings-support-actions button:not(.settings-support-dismiss) {
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--accent, #2997ff);
+  background: var(--accent, #2997ff);
+  color: #fff;
+  cursor: pointer;
+}
+.settings-support-dismiss {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.settings-support-dismiss svg {
+  width: 13px;
+  height: 13px;
 }
 .settings-window-shell {
   background: var(--window);
@@ -4350,9 +5522,54 @@ mark.search-match.active {
   color: var(--muted);
   font-size: var(--text-md);
 }
+.whats-new-releases {
+  display: grid;
+  gap: 22px;
+  margin: 0 0 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.whats-new-release h3 {
+  margin: 0 0 4px;
+  font-size: var(--text-lg);
+}
+.whats-new-release-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.whats-new-release-meta code {
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+.whats-new-release-intro {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.whats-new-release ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.whats-new-loading {
+  margin: 0;
+  color: var(--muted);
+}
 .whats-new-dialog footer {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+}
+.whats-new-dialog footer button.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .whats-new-dialog button.primary {
   border-color: var(--accent);
@@ -4773,18 +5990,89 @@ mark.search-match.active {
   padding-right: 150px;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-toolbar {
-  padding-left: 92px;
+  padding-left: 89.5px;
+  /* Upstream's pane picker's glass begins at 95.5pt: 89.5pt of traffic-light
+     reservation, the 4pt column gap and the tray's own 2pt leading margin. (The
+     92pt reservation it used to carry left the tray 2.5pt wide of the
+     reference.) The reference's last ring ends at 992pt in a 1000pt window; our
+     0.5pt rim lands its antialiased edge half a point inside the declared box,
+     so the box ends at 992.5pt. */
+  padding-right: 7.5px;
+  column-gap: 4px;
+  /* The reference's transparent titlebar runs into the tab field with no rule
+     between them; only the tab strip's own hairline separates it from the page. */
+  border-bottom: 0;
+}
+/* Upstream's sidebar is a system sidebar material: one neutral step away from
+   the window background, against the white document pane. The theme only owns
+   the document palette, so the material is the measured system tone rather
+   than a step derived from the window colour. AppKit paints the system sidebar
+   at 237,237,236, but the WebView's compositor takes three levels off the
+   midtone on this display (white stays 255, so it is a tint and not a gamma
+   shift), so the declared tone sits three levels above the target and the
+   screen capture lands on the reference's 237. */
+:root[data-runtime='tauri'][data-platform='macos'] {
+  --sidebar-material: rgb(240 240 239);
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] {
+  --sidebar-material: rgb(40 41 44);
+}
+/* The material runs up through the titlebar: upstream's transparent titlebar
+   shows the sidebar behind it at the same tone as the sidebar body, while the
+   rest of the row stays window chrome. */
+:root[data-runtime='tauri'][data-platform='macos'] .app-shell[data-sidebar-visible='true'] .native-toolbar {
+  background: linear-gradient(
+    to right,
+    var(--sidebar-material) 0 calc(var(--sidebar-width) + 6px),
+    color-mix(in srgb, var(--chrome) 92%, transparent) calc(var(--sidebar-width) + 6px)
+  );
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs {
   min-height: 30px;
   align-items: center;
   gap: 2px;
-  padding: 2px 10px;
+  /* Upstream puts the 28pt tab field flush under the titlebar and leaves 8pt
+     under it before the page area starts. Its divider is a 0.5pt hairline, so
+     the document begins one device pixel higher than a 1px rule allows. */
+  padding: 0 8px 8px;
+  border-bottom-width: 0.5px;
+  /* The reference's tab-strip divider is an opaque step below the page: 212
+     over white, i.e. the label colour at 19%. The theme's 17% border mix read
+     233 against it. */
+  border-bottom-color: color-mix(in srgb, var(--text) 19%, transparent);
   background: color-mix(in srgb, var(--chrome) 96%, transparent);
+}
+/* The reference draws its pane separators one per pane: the page's is 212 over
+   white, but above the inspector the same row is a lighter 218 over the panel
+   material. The strip's own hairline spans both panes, so the inspector's
+   lighter figure is laid over its last half point. */
+:root[data-runtime='tauri'][data-platform='macos'] .workspace-stack:has(> .document-tabs) > .document-shell.with-inspector {
+  position: relative;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .workspace-stack:has(> .document-tabs) > .document-shell.with-inspector::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: -0.5px;
+  right: 0;
+  width: var(--inspector-width);
+  height: 0.5px;
+  background: color-mix(in srgb, var(--text) 8.5%, var(--sidebar-material, var(--sidebar)));
+  pointer-events: none;
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .workspace-stack:has(> .document-tabs)
+  > .document-shell.with-inspector::before {
+  background: color-mix(in srgb, var(--text) 18%, var(--sidebar-material, var(--sidebar)));
+}
+/* Upstream's split divider is the sidebar material meeting the white page: no
+   separate rule line, and the drag handle lives in the pane's last 6pt. */
+:root[data-runtime='tauri'][data-platform='macos'] .workspace-stack.with-sidebar > .native-sidebar {
+  border-right: 0;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs .document-tab {
   min-width: 130px;
-  height: 26px;
+  height: 28px;
   border: 0;
   border-radius: 6px;
   box-shadow: none;
@@ -4797,27 +6085,960 @@ mark.search-match.active {
   height: 26px;
   margin: 0 0 0 auto;
 }
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab {
+  position: relative;
+}
+/* The reference field's rim is 2pt thick: a 220 hairline on its outer edge
+   wrapping the 232 body. A single border cannot hold both tones, so the
+   hairline is the border and the body is an inset ring just inside it. The
+   ring starts at the padding box (0.5pt in) and covers 1.5pt, which puts the
+   two tones side by side across the same 2pt the reference uses. */
+:root[data-runtime='tauri'][data-platform='macos'] {
+  --tab-field-rim: rgb(0 0 0 / 0.125);
+  --tab-field-rim-inner: rgb(0 0 0 / 0.082);
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] {
+  --tab-field-rim: rgb(255 255 255 / 0.1);
+  --tab-field-rim-inner: rgb(255 255 255 / 0.08);
+}
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .document-tab {
   flex: 1 1 auto;
   min-width: 0;
   max-width: none;
-  border: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border: 0.5px solid var(--tab-field-rim);
   border-radius: 14px;
+  box-shadow: inset 0 0 0 1.5px var(--tab-field-rim-inner);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .document-tab.active {
-  background: color-mix(in srgb, var(--surface) 82%, var(--chrome));
+  /* The reference's field fill is 254 against the page's 255. Mixing the chrome
+     into the surface leaves 255 because both are white once premultiplied, so
+     the single level of shade comes from the border tone instead. */
+  background: color-mix(in srgb, var(--surface) 97%, var(--border));
 }
+/* The reference centers the document name on the *pane*, not on the pill: its
+   field runs the full strip width and the plus button floats over its right
+   end, so the label is centered across the strip's own box. 11px is the
+   measured size (ink width 170 device for this name against 184 at 12px). */
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .tab-label {
-  padding-inline: 36px;
-  text-align: center;
+  position: absolute;
+  inset: 0 0 8px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  /* The reference's name reads as a soft label: its darkest pixel samples at
+     76, between body text (#202124, which overshoots to 0 here) and the muted
+     tone (104). A 75% text mix lands on the same 76 at this size. */
+  color: color-mix(in srgb, var(--text) 75%, var(--surface));
+  font-size: 11px;
+}
+/* Upstream's "new document" control is a 28pt ringed circle: 248 fill, a 0.5pt
+   stroke that samples at 192, and a black glyph. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .new-tab-button {
+  width: 28px;
+  height: 28px;
+  margin: 0 0 0 2px;
+  border: 0.5px solid color-mix(in srgb, var(--text) 26%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 98%, var(--text));
+  color: var(--text);
+}
+/* The reference's plus is a 10.5pt ink cross: the 24-unit glyph scaled to
+   17.5pt draws 10.2pt from 5 to 19, which its AA rows round to the same box. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .new-tab-button svg {
+  width: 17.5px;
+  height: 17.5px;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .tab-close {
   display: none;
 }
-:root[data-runtime='tauri'][data-platform='macos'] .native-outline button.active,
+/* Upstream's titlebar controls are macOS 26 glass capsules: a 37pt round-ended
+   tray whose translucent fill samples 243 over the sidebar's 237 and 251 over
+   the page's white. Glyphs are pure black, not the label tone, and the
+   single-action items are 37pt circles. The tray's rim is not one tone: along
+   its top and bottom edges the material's specular line leaves only a whisper
+   (235 over the fill's 249), while the rounded ends carry the full refraction
+   edge. The ends are a hairline and not a gradient: at mid-height the tangent
+   column reads 191 and the very next column is already 249. */
+:root[data-runtime='tauri'][data-platform='macos'] {
+  --toolbar-capsule-height: 37px;
+  /* AppKit's fixed toolbar items sit 7.5pt apart edge to edge. Our capsule rim
+     is a 0.5pt border inside the box, so the ink reads half a point wider than
+     the declared gap; 7px of flex gap lands the ink at the reference's 7.5. */
+  --toolbar-item-gap: 7px;
+  /* AppKit's titlebar glass is a translucent neutral, not white, and it lets
+     more of its backdrop through than a flat 55% fill allows: sampled over the
+     sidebar it spans 241..248 while over the page it spans 249..254, an eight
+     level spread that a 55% fill compresses to six. Solved from both anchors
+     the fill is 253 at 50% (254 over white, 245.5 over the sidebar's 238), with
+     the sheen carrying the rest of each row's tone. */
+  --toolbar-capsule-fill: rgb(253 253 253 / 0.5);
+  /* The rim is one device pixel wide at every point of the boundary, never two:
+     along the long edges it carries the specular tone (217 over the glass) and
+     the rounded ends read darker because the refraction edge there is a second,
+     stronger hairline (191 at mid-height, the very next column already back to
+     the 249 fill). That second band is painted inside the same half point by
+     --toolbar-capsule-edge — see the background-origin below — rather than
+     beside it, so the rim stays a hairline instead of doubling in width. */
+  --toolbar-capsule-rim: rgb(0 0 0 / 0.11);
+  --toolbar-capsule-edge:
+    linear-gradient(90deg, rgb(0 0 0 / 0.215) 0 0.5px, rgb(0 0 0 / 0) 0.5px),
+    linear-gradient(270deg, rgb(0 0 0 / 0.215) 0 0.5px, rgb(0 0 0 / 0) 0.5px);
+  /* The glass' edge is weaker over the page than over the sidebar's tint: the
+     reference's rim samples 235 along the top and 232 along the bottom over
+     white against 217 and 213 over the sidebar, and its rounded ends read 193
+     there against 174 here. A single black alpha cannot bend that far — the
+     fixed 11% above would put the page rim at 223 — so the capsules right of
+     the title carry a lighter set of the same three layers. */
+  --toolbar-capsule-rim-page: rgb(0 0 0 / 0.064);
+  --toolbar-capsule-rim-page-bottom: rgb(0 0 0 / 0.076);
+  --toolbar-capsule-edge-page:
+    linear-gradient(90deg, rgb(0 0 0 / 0.19) 0 0.5px, rgb(0 0 0 / 0) 0.5px),
+    linear-gradient(270deg, rgb(0 0 0 / 0.19) 0 0.5px, rgb(0 0 0 / 0) 0.5px);
+  /* The reference's capsules also carry a specular sheen, sampled down a
+     capsule's centre line over both backdrops: a one-point white line under
+     each rim (255 and 253 at this display), a dark band across the upper third
+     (249 over the page, 241 over the sidebar) and a lighter lower half (rising
+     to 254/246). Each row's overlay is solved from that pair of samples
+     against the 50% fill above, so the picker reads within half a level of the
+     reference at every row rather than only at the extremes. */
+  --toolbar-capsule-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 1) 0%,
+    rgb(255 255 255 / 1) 2.6%,
+    rgb(253 253 253 / 0.529) 3.3%,
+    rgb(246 246 246 / 0.216) 7%,
+    rgb(240 240 240 / 0.216) 11.3%,
+    rgb(231 231 231 / 0.176) 15.5%,
+    rgb(220 220 220 / 0.137) 19.7%,
+    rgb(169 169 169 / 0.059) 23.9%,
+    rgb(169 169 169 / 0.059) 28.2%,
+    rgb(169 169 169 / 0.059) 32.4%,
+    rgb(210 210 210 / 0.098) 36.6%,
+    rgb(197 197 197 / 0.059) 40.8%,
+    rgb(214 214 214 / 0.059) 45.1%,
+    rgb(221 221 221 / 0.059) 49.3%,
+    rgb(227 227 227 / 0.059) 53.5%,
+    rgb(235 235 235 / 0.059) 57.7%,
+    rgb(248 248 248 / 0.176) 62%,
+    rgb(248 248 248 / 0.176) 66.2%,
+    rgb(254 254 254 / 0.059) 70.4%,
+    rgb(254 254 254 / 0.059) 74.6%,
+    rgb(248 248 248 / 0.176) 78.9%,
+    rgb(248 248 248 / 0.176) 83.1%,
+    rgb(249 249 249 / 0.216) 87.3%,
+    rgb(249 249 249 / 0.255) 91.5%,
+    rgb(251 251 251 / 0.333) 95.8%,
+    rgb(255 255 255 / 0.48) 97.2%,
+    rgb(255 255 255 / 0.92) 98%,
+    rgb(255 255 255 / 1) 100%
+  );
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions {
+  /* The leading content edge is upstream's 96pt: 92pt of traffic-light
+     reservation plus the 4pt gap that replaces the base 7.5pt column gap.
+     Between titlebar items AppKit leaves 7.5pt of air (the reference's pill
+     ends at 756 and the next capsule starts at 763.5); see --toolbar-item-gap
+     for the half point our rim's inner border costs. */
+  gap: var(--toolbar-item-gap);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > .toolbar-space[data-toolbar-item] {
+  /* AppKit's NSToolbarSpace distributes its extra width into the flexible
+     items, so next to a flexibleSpace it contributes nothing at all: the
+     reference's fixed items sit 7.5pt apart with or without one. Leaving the
+     slot in the flow would add a second 7.5pt gap around it. */
+  display: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item] {
+  display: flex;
+  align-items: center;
+}
+/* macOS 26 merges adjacent plain-button items onto one glass capsule: the
+   reference's copy/inspector/share/export/edit run is a single tray with no
+   internal rims, and only the run's outer ends stay round. The opening slot
+   paints the whole tray in one layer so the translucent fill and its sheen are
+   never composited twice, and each following segment is pulled back over one
+   column gap. AppKit gives each segment the item's full 37pt square, so the
+   five-item run is 185pt across: it opens at the reference's 763.5pt and
+   closes at its 948.5pt, with its fill spanning 185pt. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] {
+  position: relative;
+  isolation: isolate;
+  width: 37px;
+  height: var(--toolbar-capsule-height);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'][data-capsule-start='true']::before {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--capsule-count, 1) * 37px);
+  border: 0.5px solid var(--toolbar-capsule-rim);
+  /* The reference's bottom rim samples 214 against the top rim's 216: the
+     specular line inside the lower edge throws one extra level of shade. */
+  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-radius: 999px;
+  background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
+  /* The ends' second hairline is drawn *in* the rim's half point, not beside
+     it: AppKit's tangent column is a single device pixel at the darker tone,
+     so the gradient layer takes the border box as its origin while the sheen
+     keeps the padding box (its specular line starts inside the rim). */
+  background-origin: padding-box, border-box, border-box;
+  background-repeat: no-repeat;
+  /* Below the capsules the reference carries a wide, very light shadow: 252
+     under the glass' full width against the page's 255, easing to 253 by 5.5pt
+     down and gone 3pt outside each rounded end. Solving that against the white
+     gives a 2% shadow with a 10pt offset and a spread that pulls it inside the
+     capsule, so it never tints the gaps between items. */
+  box-shadow: 0 10px 10px -8px rgb(0 0 0 / 0.02);
+  pointer-events: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-item-button,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-group {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-group > summary {
+  width: 100%;
+  padding: 0;
+}
+/* Hovering a plain action lights a grey pill inside the tray. The reference
+   darkens its glass to 96% of its tone (249 samples 239, 253 samples 243) over
+   a 28pt-tall capsule. The pill's width follows the symbol's own image frame
+   rather than the item: 30pt for the copy, share and export glyphs, 31.5 for
+   the pencil's wider box. AppKit centres it on the item and lets it sit inside
+   the tray's round ends. The pill is a 96% white plate blended with
+   plus-darker, which subtracts exactly ten levels from every channel beneath
+   it (the reference's 249 samples 239, its 89 ink samples 79 and its 252 glass
+   samples 242) and so darkens the glyph's antialias ink too, the way the
+   reference's highlight does. A selected item keeps its accent disc with no
+   pill over it: its hover darkens the disc itself instead. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-item-button,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-group {
+  position: relative;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-item-button::after,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-group::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--toolbar-hover-pill-width, 30px);
+  height: 28px;
+  border-radius: 999px;
+  background: rgb(246 246 246);
+  mix-blend-mode: plus-darker;
+  opacity: 0;
+  transform: translate(-50%, -50%) translateX(var(--toolbar-hover-pill-x, 0px));
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-capsule='true']
+  > .toolbar-item-button:hover:not(.selected)::after,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] > .toolbar-group:hover::after {
+  opacity: 1;
+}
+/* The pill follows the item's own optical centre, which AppKit shifts with the
+   symbol's alignment rect: the copy symbol sits 1.5pt right of its slot, share
+   0.5 left, export 1.5 left and the pencil 1.75 left, all measured on the
+   frontmost reference at 1050x977. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='copy'] > .toolbar-item-button {
+  --toolbar-hover-pill-width: 31px;
+  --toolbar-hover-pill-x: 1.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] > .toolbar-item-button {
+  --toolbar-hover-pill-x: -0.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] > .toolbar-item-button {
+  --toolbar-hover-pill-x: -1.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='edit'] > .toolbar-item-button {
+  --toolbar-hover-pill-width: 31.5px;
+  --toolbar-hover-pill-x: -1.75px;
+}
+/* A selected action does not take the pill: AppKit darkens the selection
+   ellipse itself by the same ten levels (its blue samples rgb(0 111 255) at
+   rest and rgb(0 101 245) under the pointer) and draws the knocked-out symbol
+   after it, so the white i keeps its exact tone while the disc steps down.
+   Stepping the fill is the only way to leave the symbol alone. */
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-capsule='true']
+  > .toolbar-item-button.selected:hover
+  .info-circle-fill
+  ellipse,
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-capsule='true']
+  > .toolbar-item-button.selected:hover
+  .edit-disc
+  ellipse {
+  fill: var(--toolbar-active-fill-hover);
+}
+/* Each following segment is pulled over exactly one column gap, so the run's
+   flow width stays the five 37pt squares with no air between them and the
+   opening slot's 185pt tray covers it edge to edge. The pull is the gap token
+   rather than a literal: if the two drift apart the tray overhangs the run and
+   eats the air before the search item. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] + [data-capsule='true'] {
+  margin-left: calc(-1 * var(--toolbar-item-gap));
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] svg,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'] .sf-glyph {
+  width: 22px;
+  height: 22px;
+  /* AppKit strokes the 22pt action symbols at 1.5pt. These paths live on a
+     24pt grid drawn into a 22pt box, so the rendered stroke is 22/24 of the
+     declared value: 1.64 draws the reference's 1.5pt (3 device pixels). */
+  stroke-width: 1.64;
+}
+/* SF Symbols are rasterised natively and applied as a mask over the button's
+   own text colour, so a symbol inherits every state colour the hand-drawn
+   fallback did. The mask keeps the raster's aspect inside the box the SVG used,
+   which leaves the surrounding layout untouched. */
+.sf-glyph {
+  display: inline-block;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 50% 50%;
+  mask-position: 50% 50%;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.info-circle-fill,
+.edit-disc {
+  position: relative;
+  display: inline-block;
+}
+.info-circle-fill > .disc-mark,
+.edit-disc > .disc-mark {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 22px;
+  height: 22px;
+}
+/* A selected disc knocks its symbol out of the accent fill, so the mask is
+   painted with the reference's knocked-out tone rather than the button's text
+   colour (which the capsule sets to the accent). */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] .info-circle-fill > .disc-mark {
+  background-color: rgb(241 255 255);
+  /* The reference's i sits half a device pixel above and right of the flex
+     centre; the mask's own AA rows are what make the offset visible. */
+  transform: translate(0.25px, -0.5px);
+}
+/* Per-symbol offsets. AppKit positions each titlebar symbol by its alignment
+   rect rather than by centring its ink, so the copies, info, share and pencil
+   glyphs do not share one optical centre. These are the residual offsets
+   between our flex-centred draw and the frontmost reference at 1050x977,
+   measured on the ink's bounding box in device pixels. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='copy'] svg,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='copy'] .sf-glyph {
+  transform: translate(1.8px, -0.65px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] > .toolbar-item-button > svg {
+  transform: translate(0.5px, -1.15px);
+}
+/* The active inspector disc is 30 by 28pt — wider than the 22pt capsule
+   symbols sharing this row. The element is 29pt tall with the disc centred in
+   it so the viewBox gives the ellipse's antialias rows room to paint. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] .info-circle-fill {
+  width: 30px;
+  height: 29px;
+  transform: translate(0.5px, -0.15px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] svg,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] .sf-glyph {
+  transform: translate(-0.5px, -2.4px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] svg,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] .sf-glyph {
+  transform: translate(-3.25px, 1px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='edit'] > .toolbar-item-button > svg {
+  /* The pencil's strokes are lighter than the 1.5pt action symbols beside it:
+     the reference's walls measure about 1.25pt across, which is 1.37 units on
+     this 24-unit grid (22/24 of the declared value reaches the screen). */
+  stroke-width: 1.37;
+  transform: translate(-2.1px, 0.4px);
+}
+/* The selected edit toggle is the pencil's 22pt glyph knocked out of the
+   accent ellipse AppKit draws behind it; the ellipse is 31.5 by 28pt, wider
+   than the capsule symbols it sits between. The element is 29pt tall with the
+   disc centred in it so the viewBox gives the ellipse's antialias rows room to
+   paint. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='edit'] .edit-disc {
+  width: 31.5px;
+  height: 29px;
+  /* The disc's own vertical offset: AppKit centres it on the toolbar row, half
+     a device pixel above the pencil's alignment rect. */
+  transform: translate(-2.1px, -0.1px);
+}
+/* Per-symbol alignment offsets are calibrated against the reference captured
+   with the window frontmost; the baseline below is the Flex-centred result. */
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-item-button,
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button,
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control summary,
+:root[data-runtime='tauri'][data-platform='macos'] .history-buttons,
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group,
+:root[data-runtime='tauri'][data-platform='macos'] .document-search,
+:root[data-runtime='tauri'][data-platform='macos'] .more-menu > summary {
+  height: var(--toolbar-capsule-height);
+  border: 0.5px solid var(--toolbar-capsule-rim);
+  /* The reference's bottom rim samples 214 against the top rim's 216: the
+     specular line inside the lower edge throws one extra level of shade. */
+  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-radius: 999px;
+  background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
+  background-origin: padding-box, border-box, border-box;
+  background-repeat: no-repeat;
+  /* Below the capsules the reference carries a wide, very light shadow: 252
+     under the glass' full width against the page's 255, easing to 253 by 5.5pt
+     down and gone 3pt outside each rounded end. Solving that against the white
+     gives a 2% shadow with a 10pt offset and a spread that pulls it inside the
+     capsule, so it never tints the gaps between items. */
+  box-shadow: 0 10px 10px -8px rgb(0 0 0 / 0.02);
+  color: #000;
+}
+/* Everything in the actions row sits over the page's white, so it takes the
+   lighter rim and refraction ends; the sidebar's picker and toggle keep the
+   tinted tones above. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-capsule='true'][data-capsule-start='true']::before,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions .toolbar-item-button,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions .toolbar-group,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions .document-search,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions .history-buttons,
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions .more-menu > summary {
+  border-color: var(--toolbar-capsule-rim-page);
+  border-bottom-color: var(--toolbar-capsule-rim-page-bottom);
+  background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge-page), var(--toolbar-capsule-fill);
+  background-origin: padding-box, border-box, border-box;
+  background-repeat: no-repeat;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-item-button,
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button,
+:root[data-runtime='tauri'][data-platform='macos'] .document-search,
+:root[data-runtime='tauri'][data-platform='macos'] .more-menu > summary {
+  width: var(--toolbar-capsule-height);
+  padding: 0;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group button,
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group summary {
+  height: calc(var(--toolbar-capsule-height) - 1px);
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #000;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group button:first-child {
+  border-radius: 999px 0 0 999px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group button:last-child,
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group summary:last-child {
+  border-radius: 0 999px 999px 0;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-group svg,
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-item-button svg,
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control svg,
+:root[data-runtime='tauri'][data-platform='macos'] .history-buttons svg,
+:root[data-runtime='tauri'][data-platform='macos'] .more-menu svg {
+  color: #000;
+  stroke-width: 1.64;
+}
+/* The titlebar picker is a two-segment tray: 82.5pt wide, 37pt tall. AppKit's
+   NSSegmentedControl has no gap between its segments: the two share a 40.25pt
+   pitch (the reference's indent and folder glyphs sit 40.25pt apart), so the
+   tray is 80.5pt of segments plus a point of rim and padding per side. Its
+   selection is a 36 by 27.5pt pill centred in the segment, which is 2.125pt
+   narrower than the segment on each side. The control itself hangs half a point
+   right of the glass: the leading inset carries the point of padding, the
+   trailing one only the rim. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker {
+  height: var(--toolbar-capsule-height);
+  gap: 0;
+  /* The tray's glass begins at 95.5pt, not at the row's 93.5pt content edge:
+     the reference leaves two points of air between the traffic-light
+     reservation and the tray, while the toggle is anchored to the other end of
+     the slot. The margin moves only the tray; the tracked slot keeps its
+     width, so the title that follows the slot does not move. */
+  margin-left: 2px;
+  padding: 0.5px 0.5px 0.5px 1px;
+  border: 0.5px solid var(--toolbar-capsule-rim);
+  /* The reference's bottom rim samples 214 against the top rim's 216: the
+     specular line inside the lower edge throws one extra level of shade. */
+  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-radius: 999px;
+  background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
+  background-origin: padding-box, border-box, border-box;
+  background-repeat: no-repeat;
+  /* Below the capsules the reference carries a wide, very light shadow: 252
+     under the glass' full width against the page's 255, easing to 253 by 5.5pt
+     down and gone 3pt outside each rounded end. Solving that against the white
+     gives a 2% shadow with a 10pt offset and a spread that pulls it inside the
+     capsule, so it never tints the gaps between items. */
+  box-shadow: 0 10px 10px -8px rgb(0 0 0 / 0.02);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button {
+  position: relative;
+  width: 40.25px;
+  min-width: 40.25px;
+  height: 35px;
+  border-radius: 9px;
+  background: transparent;
+  color: #000;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button::before {
+  content: '';
+  position: absolute;
+  /* The selection is a 36 by 27.5pt pill centred in its 40.25pt segment: the
+     reference's highlight spans 97-133pt and 12.1-39.6pt, 3.5pt inside the
+     segment vertically and 2.125pt horizontally, with a half-height radius so
+     both ends are round. */
+  inset: 3.75px 2.125px;
+  border-radius: 13.75px;
+  background: transparent;
+  pointer-events: none;
+}
+/* A hovered segment lights a pill that is not the selection's: the reference's
+   hover spans 35 by 28pt (280-350 by 24-80 device pixels), centred in the
+   40.25pt segment, and darkens every tone under it by ten levels, its symbol's
+   ink included, while the selection keeps the 36 by 27.5pt shape drawn above.
+   The 96% white plate blended with plus-darker subtracts exactly those ten
+   levels (249 samples 239, 89 ink samples 79). */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 35px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgb(246 246 246);
+  mix-blend-mode: plus-darker;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button:hover:not(.selected)::after {
+  opacity: 1;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button.selected,
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button.selected:hover {
+  background: transparent;
+}
+/* The selection pill is centred in its segment, as AppKit centres it: with the
+   tray on the reference's half-point grid (see the tray's margin) no segment
+   offset is needed, and the indent's ink and the pill both centre on 116.75pt. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button.selected::before {
+  background: rgb(0 0 0 / 0.09);
+}
+/* Hovering the open segment darkens its selection pill and every tone on it by
+   ten levels, exactly as the unselected hover darkens the tray (the
+   reference's pill samples 212 over 222 and its label 79 over 89), so the same
+   overlay paints the same footprint over the pill instead of the hover pill. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button.selected::after {
+  inset: 3.75px 2.125px;
+  width: auto;
+  height: auto;
+  border-radius: 13.75px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button.selected:hover::after {
+  opacity: 1;
+}
+/* The leading picker's symbols are drawn on a 24pt grid and rendered at 24pt so
+   one SVG unit is one point: AppKit's indent, folder and sidebar glyphs all fill
+   about 85% of that box. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control button svg {
+  width: 24px;
+  height: 24px;
+  /* The picker's symbols are the small optical size: AppKit strokes them at
+     1.5pt, noticeably thinner than the 22pt action glyphs beside the search. */
+  stroke-width: 1.5;
+}
+/* The picker's two symbols are not drawn at the same optical origin: the
+   reference's indent sits a quarter point right of the segment's centre and the
+   folder half a point left of it, three quarters of a point low. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button:first-child svg {
+  transform: translate(0.25px, 0.5px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button:nth-child(2) svg {
+  transform: translate(0, 0.75px);
+}
+/* AppKit centres a symbol by its alignment rect, so the folder's ink rides half
+   a point lower than the indent's in the same tray. The indent's own top edge
+   already matches, so only the folder takes the offset, and the standalone
+   sidebar toggle sits a touch left of its button's middle. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control {
+  /* With the sidebar open the control spans its tracked slot and space-between
+     anchors the toggle to the pane edge (the reference's ring closes at 232pt,
+     7.5pt before the pane starts at 240pt), leaving 18pt of air after the
+     picker's 178pt edge. This gap is the untracked spacing, where the toggle
+     follows the picker directly; the tray's two points of leading margin are
+     subtracted here so the toggle keeps its place when the slot is released. */
+  gap: 15.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button {
+  /* AppKit's toggle is a 37pt circle like every other capsule in the row: its
+     rim hairline sits at 195.5 and 232.5pt, so the tracked slot's right edge
+     plus the 7.5pt padding anchors it and 37px of width lands the left edge on
+     the same half-point grid, keeping both rim columns one device pixel. */
+  width: 37px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button.selected {
+  /* The toggle keeps its glass capsule while the sidebar is open: the
+     reference's selected toggle still shows the fill (242 over a 237 backdrop),
+     so only the accent label the generic rule would add is dropped here. */
+  color: #000;
+}
+/* A hovered toggle lights its whole capsule rather than a tray's 28pt pill: the
+   reference darkens every tone inside the 0.5pt rim by ten levels over the full
+   interior (its fill 242 samples 232 and its symbol's 124 ink 114) and leaves
+   the rim itself at 172. The 96% white plate blended with plus-darker subtracts
+   exactly those ten levels, so the highlighted symbol darkens with the fill.
+   The plate is 36 by 36pt, centred in the 37pt button so it stops half a point
+   inside the rim on every side and keeps both rim hairline columns at their
+   rest tone. The selection does not spare it: a selected toggle takes the same
+   wash. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button {
+  position: relative;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgb(246 246 246);
+  mix-blend-mode: plus-darker;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button:hover::after {
+  opacity: 1;
+}
+/* Upstream's split open menu is one 73.5pt capsule: a 37pt tile segment, a
+   36pt chevron segment and the 0.5pt group rim on each side, with the divider
+   on their shared edge. AppKit centres the app tile 19pt from the leading edge
+   and the chevron 17.5pt after the divider (the reference's icon box and
+   chevron measured at 653.5 and 688.75pt). */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary {
+  width: 37px;
+  padding: 0;
+  border-radius: 999px 0 0 999px;
+}
+/* AppKit gives the tile's app icon a 20pt box, not the 18pt slot the menu rows
+   use: the reference's VS Code squircle covers 16pt there against 14.5pt in
+   the same artwork at 18. The screenshot also puts the glyph's centre half a
+   point right of the segment's, the same offset the hover pill carries. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary > .context-app-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4.5px;
+  transform: translateX(0.5px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary {
+  /* AppKit does not centre the chevron in its half: it sits 17.5pt after the
+     divider, 1.5pt leading of the segment's middle. The divider is not a border
+     here: the reference draws a 1pt, 20pt-tall separator centred on the halves'
+     boundary, so it is painted by the pseudo-element below and the padding
+     carries the point of border this rule used to have. */
+  width: 36px;
+  padding: 0 0 0 10.75px;
+  justify-content: flex-start;
+  border-radius: 0 999px 999px 0;
+}
+/* The split's separator is deeper than the capsule rim (the reference's 249
+   glass samples 197 on the rule) and stops 8.5pt short of the capsule's ends,
+   where a full-height border would run edge to edge. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1px;
+  height: 20px;
+  border-radius: 0.5px;
+  background: rgb(0 0 0 / 0.2);
+  transform: translateY(-50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary > svg:last-child {
+  /* The reference's chevron ink is 9 by 5pt; at the 13pt default it draws 8. */
+  width: 15.8px;
+  /* Its ink also rides half a point below the segment's centre line. */
+  transform: translate(-0.9px, 0.5px);
+}
+/* Upstream's split lights a pill inside whichever half is hovered: 32pt wide on
+   the app tile and 30 on the chevron, both 28pt tall and centred on their own
+   segment. Unlike the capsule run, AppKit does not paint these inside one tray
+   layer: it drops the separator between the halves while either is hovered (the
+   reference's rule at 591.5pt goes from 197 to the glass' own 252), so the two
+   pills read as separate highlights. The pill is the same 96% white plate
+   blended with plus-darker as the capsule's, so it subtracts the reference's
+   ten levels from the glass and the symbol's ink alike. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary,
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary {
+  position: relative;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary::after,
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgb(246 246 246);
+  mix-blend-mode: plus-darker;
+  opacity: 0;
+  transform: translate(-50%, -50%) translateX(var(--toolbar-hover-pill-x, 0px));
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary::after {
+  width: 30px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary:hover::after,
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary:hover::after {
+  opacity: 1;
+}
+/* The tile's pill sits half a point right of its segment's middle, the chevron's
+   exactly on its own. */
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary {
+  --toolbar-hover-pill-x: 0.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split:has(> .open-actions-primary:hover) > .open-with summary::before,
+:root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-with summary:hover::before {
+  opacity: 0;
+}
+/* Upstream's search item is an NSSearchField that is always open rather than a
+   button that expands: the reference draws a 167.5pt pill whose magnifier ink
+   starts 11.5pt in and whose "在文稿中搜索" placeholder begins 33pt in. The
+   field's trailing inset is the toolbar's 7.5pt. */
+:root[data-runtime='tauri'][data-platform='macos'] .document-search {
+  width: 167.5px;
+  gap: 6px;
+  padding: 0 9.5px;
+  justify-content: flex-start;
+  overflow: hidden;
+  cursor: text;
+  transition: none;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .document-search .search-trigger {
+  flex: 0 0 15.5px;
+  width: 15.5px;
+  height: var(--toolbar-capsule-height);
+  cursor: text;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .document-search svg {
+  /* The field's magnifier is the 13pt search symbol: 12.5pt of ink, stroked at
+     1.5pt, so it is a touch smaller than the 22pt action glyphs. */
+  width: 14.75px;
+  height: 14.75px;
+  stroke-width: 1.64;
+  transform: translate(-0.5px, -0.25px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .document-search input,
+:root[data-runtime='tauri'][data-platform='macos'] .document-search.is-expanded input,
+:root[data-runtime='tauri'][data-platform='macos'] .document-search:focus-within input {
+  width: 100%;
+  flex: 1 1 auto;
+  opacity: 1;
+  font-size: 13px;
+  cursor: text;
+  /* NSSearchField draws its placeholder half a point above the line box's
+     baseline because the field's own text rect is inset for its border. */
+  position: relative;
+  top: -0.25px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .document-search input::placeholder {
+  /* NSSearchField's placeholder grey: full-coverage strokes sample 126. */
+  color: #7e7e7e;
+}
+/* The single-action search item is the same 37pt circle as the find capsule:
+   AppKit gives every plain titlebar button the same square footprint. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='documentSearch'] > .toolbar-item-button {
+  width: 37px;
+}
+/* `doc.text.magnifyingglass` is the taller symbol in the row: AppKit draws its
+   page-plus-lens at the same 22pt optical size as the merged run's actions, so
+   it needs the box they use rather than the 16pt default of a lone button. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='documentSearch'] svg {
+  width: 22.5px;
+  height: 22.5px;
+}
+/* The rasterised mask sits half a device pixel below the traced path's centre. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='documentSearch'] .sf-glyph {
+  transform: translateY(0.25px);
+}
+/* The size item is AppKit's localized text control: 41pt wide with 大小
+   centred in it, the label's ink measuring 23 by 13pt in the reference. The
+   summary is a shrink-to-fit flex item, so the centring belongs on the
+   details rather than on the summary's text alignment. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='themesAndSettings'] > .themes-and-settings {
+  width: 41px;
+  justify-content: center;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-size-glyph {
+  display: inline-block;
+  /* The label is drawn in the system CJK face: 14px puts the reference's 大
+     ink at 12.5pt square, where 13.5px draws 12 and 13px draws 11.5. The line
+     box sits 0.75pt below the reference's, which centres the ink on 25.5pt. */
+  /* Relative positioning rather than a transform: the size label also has a
+     layout box inside the 41pt control, and the release webview ignores a
+     transform on the label's inline-block root. */
+  position: relative;
+  left: 0;
+  top: -1.25px;
+  font-size: 14px;
+  /* AppKit draws the label in the medium system weight: the reference's
+     strokes are heavier and a point taller than the regular cut's ink. */
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* The reference's second word is a smaller cut of the same face on the same
+   baseline: its 小 ink measures 9.5pt against the 大's 12.5. */
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-size-glyph-small {
+  /* Inline-block so the baseline nudge below applies; the two words share one
+     baseline, and the reference's small cut hangs half a point lower. */
+  display: inline-block;
+  transform: translateY(1.25px);
+  font-size: 10.5px;
+}
+/* The size control is AppKit's pop-up button: hovering lights its whole
+   interior rather than a 28pt capsule — the reference's hover spans 40 by
+   34pt (635.5-675.5 by 9-42.5pt), one point inside the control's 37pt capsule
+   and its rim. The summary fills the 41pt control so the hover covers the
+   label's whole box, and the pill rides its negative layer above the capsule
+   fill. The 4.5% black composites to the reference's 96% tone. */
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-toolbar-item='themesAndSettings']
+  > .themes-and-settings
+  > summary {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  justify-content: center;
+}
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-toolbar-item='themesAndSettings']
+  > .themes-and-settings
+  > summary::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgb(246 246 246);
+  mix-blend-mode: plus-darker;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+:root[data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-toolbar-item='themesAndSettings']
+  > .themes-and-settings
+  > summary:hover::after {
+  opacity: 1;
+}
+/* The window title is a 15pt semibold secondary label: the reference's ink is
+   236 device wide for this name and its darkest pixel samples at 77, which is
+   black at 70% over white. Its box starts 11pt into the pane. */
+:root[data-runtime='tauri'][data-platform='macos'] .toolbar-document-title {
+  color: #000;
+  opacity: 0.7;
+  font-size: 15px;
+  font-weight: 600;
+}
+/* The tracked leading slot ends at the pane's edge (sidebar plus its 6pt split
+   gutter) and leaves 7.5pt before the toggle: the reference's ring closes at
+   232pt against a pane that starts at 240pt, and the button's 0.5pt rim reads
+   half a point inside its box, so the box ends at 232.5pt. No rule is drawn:
+   the sidebar material already meets the page there. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-sidebar-tracking='true'] {
+  border-right: 0;
+  padding-right: 7.5px;
+}
+/* A tracked slot ends at the pane edge, so the air between the picker and the
+   toggle belongs to the pane, not to the row: space-between places both and
+   whatever is left is the air (20pt at the default 234pt sidebar). Keeping the
+   17.5pt gap would make it a floor the narrowest sidebars cannot meet, which
+   is what forced the toggle off the edge before tracking was dropped. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-sidebar-tracking='true'] .sidebar-control {
+  gap: 0;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline .outline-row.active,
 :root[data-runtime='tauri'][data-platform='macos'] .native-file-tree .tree-row.active {
   background: var(--hover);
   color: var(--text);
+}
+/* Upstream's source-list disclosure is a 16pt-wide stroked chevron that sits
+   flush in the row's leading edge, so a level-1 heading's text starts ~17pt in
+   rather than 22pt. 16px of icon box plus 1.5px of text padding reproduces
+   that; the level step is 12.5pt to match the source list's indent. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline .outline-disclosure {
+  flex: 0 0 16px;
+  width: 16px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline .outline-disclosure svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+/* Upstream's TOC cells are plain NSTextField labels: system 13pt regular at
+   every level, so a level-1 heading is not bolder than its children. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline button {
+  font-size: 13px;
+}
+/* The source list's rows start flush with the scroll view's top edge: the
+   title row is a 30pt row like every other, with its label 8pt under that
+   edge. Both numbers are the reference's own measurements, so the first
+   heading lands 30pt below the title row's top. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-sidebar > .native-outline {
+  padding-top: 0;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline .outline-title-row {
+  padding-top: 6.5px;
+}
+/* A leaf keeps the cell's plain label inset: measured against the reference,
+   its label starts 2.5pt right of the title row's text and one 12pt indent
+   step per deeper level, whether or not it shows a chevron. Solved from the
+   reference's own ink: a depth-6 leaf sits at 88pt, the label's regular-face
+   side bearing is 1pt, and the cell adds its 1.5pt inset, so the gutter is
+   15.5px on top of the row's 12pt-per-level padding. */
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline {
+  --outline-leaf-gutter: 15.5px;
+}
+:root[data-runtime='tauri'][data-platform='macos'] .native-outline .outline-level-1 {
+  font-weight: 400;
 }
 :root[data-runtime='tauri'] .traffic-lights {
   display: none;
@@ -4965,8 +7186,8 @@ mark.search-match.active {
   }
 }
 @media (max-width: 920px) {
-  .document-shell.with-sidebar.with-inspector {
-    grid-template-columns: var(--sidebar-width) 6px minmax(0, 1fr);
+  .document-shell.with-inspector {
+    grid-template-columns: minmax(0, 1fr);
   }
   .toolbar-group.document-actions {
     border-color: transparent;
@@ -4991,9 +7212,10 @@ mark.search-match.active {
   .traffic-lights {
     display: none;
   }
-  .document-shell.with-sidebar,
-  .document-shell.with-inspector,
-  .document-shell.with-sidebar.with-inspector {
+  .workspace-stack.with-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .document-shell.with-inspector {
     grid-template-columns: minmax(0, 1fr);
   }
   .native-sidebar {

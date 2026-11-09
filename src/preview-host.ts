@@ -1,4 +1,5 @@
 import './preview-host.css'
+import './code-theme.css'
 import { renderMarkdownEnhanced } from './lib/markdown'
 import type { DocumentFont, Locale, ThemeColors, ThemeMode, ThemePreset } from './types'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'

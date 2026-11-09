@@ -1,3 +1,22 @@
+# TextMark v0.10.42
+
+TextMark 0.10.42 aligns the macOS desktop with Markdown Preview 0.0.71. The window chrome, toolbar, sidebar, tab bar and inspector now use the reference's measured geometry and symbols, the menus carry its tab commands, and tables open in their own expandable window. Settings gain the reference's pane layout and appearance editor, the sidebar lists files with Finder's icons, and the editor and preview share the reference's page metrics.
+
+TextMark 0.10.42 对 macOS 桌面版完成与 Markdown Preview 0.0.71 的对齐：窗口外观、工具栏、侧栏、标签栏与检查器均采用参考应用的实测几何与符号，菜单补齐其标签命令，表格可在独立窗口中展开。设置窗口采用参考应用的分页布局与外观编辑器，侧栏使用 Finder 图标列出文件，编辑器与预览共用参考应用的版心度量。
+
+## Highlights / 主要更新
+
+- Desktop chrome: the traffic lights, toolbar cluster, sidebar material, tab strip and inspector tray match the reference app, with SwiftUI-style segmented controls, capsule wells and the upstream toolbar arrangement.
+- Symbols: toolbar, formatting and inspector glyphs are drawn as SF Symbols and match the reference's ink boxes and stencil weights; the sidebar and recent lists request Finder icons through NSWorkspace.
+- Menus and tabs: native File/Edit/View/Window/Help menus follow the reference, adding View ▸ Hide Tab Bar, View ▸ Show All Tabs (an in-window tab overview), Window ▸ Show Previous/Next Tab and Window ▸ Move Tab to New Window.
+- Tables: the preview's expand affordance opens a read-only table window that sizes to the table's natural columns.
+- Settings: the dedicated settings window uses the reference's General/Reading/Appearance/Privacy/Advanced/About panes, including the appearance preset and per-slot colour editor, and the About pane reports the running version.
+- Sidebar and files: create files and folders, rename in place, and import dropped or picked files from the source list; the open-with menu lists discovered Markdown editors.
+- Updates: an update pill surfaces available downloads in the toolbar, with channel selection and automatic checks in Settings.
+- Verification: 591 tests across 60 files pass, the production build succeeds, and the first-screen bundle stays within the 320 KiB gzip budget.
+
+---
+
 # TextMark v0.10.41
 
 TextMark 0.10.41 completes the Markdown Preview 0.0.70 desktop alignment pass. The sidebar and inspector default to the reference app's measured split-view geometry, the toolbar default matches the upstream macOS 26 arrangement, Safari-style ⌘1–⌘9 tab switching arrives as in upstream #603, and clearing the search field now dismisses the find bar as the upstream toolbar search does. The editor and preview stay mounted across view switches with pixel-accurate scroll restoration, and the macOS tab bar tightens to the reference height.

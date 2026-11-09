@@ -1,12 +1,15 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Capability for the main and document windows",
+  "windows": ["main", "document-*", "restored-*", "table-*"],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
     "core:window:allow-set-title",
     "core:window:allow-set-always-on-top",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
     "core:webview:allow-create-webview-window",
     "core:window:allow-create",
     "dialog:allow-open",

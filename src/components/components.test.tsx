@@ -40,6 +40,17 @@ const settingsDialogProps = {
   themeColors: {},
   autoSaveIntervalMinutes: 0,
   openDocumentsInTabs: false,
+  openMarkdownLinksInNewWindows: false,
+  textAlignment: 'automatic' as const,
+  readerLayout: {
+    boldText: false,
+    isCustomized: false,
+    lineSpacing: 1.6,
+    characterSpacingPercent: 0,
+    wordSpacingPercent: 0,
+    marginsPercent: 0,
+  },
+  outlineFollowsPointer: false,
   alwaysOnTop: false,
   zoom: 100,
   applications: [
@@ -50,33 +61,46 @@ const settingsDialogProps = {
   ],
   defaultOpenTarget: 'system',
   locale: 'en',
+  localeSetting: 'en',
   crashReports: false,
   crashReportsAvailable: false,
+  sharesUsageAnalytics: false,
   updateChannel: 'stable',
   autoCheckUpdates: true,
+  autoDownloadUpdates: false,
   lastUpdateCheckAt: null,
   updateStatus: { state: 'idle' },
   onLocaleChange: vi.fn(),
   onCrashReportsChange: vi.fn(),
+  onUsageAnalyticsChange: vi.fn(),
   onUpdateChannelChange: vi.fn(),
   onAutoCheckUpdatesChange: vi.fn(),
+  onAutoDownloadUpdatesChange: vi.fn(),
   onCheckUpdate: vi.fn(),
   onInstallUpdate: vi.fn(),
+  onRelaunchUpdate: vi.fn(),
   onThemeChange: vi.fn(),
   onContentWidthChange: vi.fn(),
   onEditorFontSizeChange: vi.fn(),
   onLineHeightChange: vi.fn(),
   onStrictLineBreaksChange: vi.fn(),
   onPagePaddingHorizontalChange: vi.fn(),
+  onTextAlignmentChange: vi.fn(),
+  onOutlineFollowsPointerChange: vi.fn(),
+  onReaderLayoutChange: vi.fn(),
   onDocumentFontChange: vi.fn(),
   onThemePresetChange: vi.fn(),
   onThemeColorChange: vi.fn(),
   onThemeColorsReset: vi.fn(),
   onAutoSaveIntervalChange: vi.fn(),
   onOpenDocumentsInTabsChange: vi.fn(),
+  onOpenMarkdownLinksInNewWindowsChange: vi.fn(),
+  supportCardDismissed: false,
+  onSupportCardDismissedChange: vi.fn(),
   onAlwaysOnTopChange: vi.fn(),
   onZoomChange: vi.fn(),
   onDefaultOpenTargetChange: vi.fn(),
+  onInstallCli: vi.fn(),
   onClose: vi.fn(),
 } satisfies ComponentProps<typeof SettingsDialog>
 
@@ -397,29 +421,45 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
-  it('keeps LLM applications out of the default editor target preference', () => {
+  it('groups the default open target into Editors and AI apps like upstream', () => {
     const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} />)
-    expect(html).toContain('Visual Studio Code')
-    expect(html).not.toContain('ChatGPT')
+    expect(html).toContain('<optgroup label="Editors"')
+    expect(html).toContain('<optgroup label="AI apps"')
+    // Editors first, then AI apps; unavailable apps stay out of both groups.
+    expect(html.indexOf('Visual Studio Code')).toBeGreaterThan(html.indexOf('<optgroup label="Editors"'))
+    expect(html.indexOf('ChatGPT')).toBeGreaterThan(html.indexOf('<optgroup label="AI apps"'))
     expect(html).not.toContain('Missing Editor')
   })
   it('exposes the reading typography controls in the settings dialog', () => {
-    const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} locale="zh-CN" />)
+    const html = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} locale="zh-CN" initialPane="reading" />)
     expect(html).toContain('行高')
     expect(html).toContain('左右页边距')
     expect(html).toContain('将软换行显示为换行')
+    expect(html).toContain('文本对齐')
+    expect(html).toContain('两端对齐')
+    expect(html).toContain('高亮指针下的大纲章节')
     // The sliders must carry the live values; the markup is what proves the
     // controls are reachable at all.
     expect(html).toContain('value="1.66"')
     expect(html).toContain('value="56"')
     expect(html).toContain('max="96"')
+    // General no longer hosts the reading controls.
+    const general = renderToStaticMarkup(<SettingsDialog {...settingsDialogProps} locale="zh-CN" />)
+    expect(general).not.toContain('行高')
   })
   it('allows enabling the strict soft-break reading preference', async () => {
     const host = document.createElement('div')
     const root = createRoot(host)
     const onStrictLineBreaksChange = vi.fn()
     await act(async () =>
-      root.render(<SettingsDialog {...settingsDialogProps} locale="zh-CN" onStrictLineBreaksChange={onStrictLineBreaksChange} />),
+      root.render(
+        <SettingsDialog
+          {...settingsDialogProps}
+          locale="zh-CN"
+          initialPane="reading"
+          onStrictLineBreaksChange={onStrictLineBreaksChange}
+        />,
+      ),
     )
     const setting = [...host.querySelectorAll('label')].find((label) => label.textContent?.includes('将软换行显示为换行'))
     const checkbox = setting?.querySelector<HTMLInputElement>('input[type="checkbox"]')
@@ -429,7 +469,95 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
-  it('keeps the sidebar header as a section title without duplicate mode controls', () => {
+  it('exposes the advanced tools: CLI install and App Link reset', async () => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    const onInstallCli = vi.fn()
+    await act(async () =>
+      root.render(<SettingsDialog {...settingsDialogProps} locale="en" initialPane="advanced" onInstallCli={onInstallCli} />),
+    )
+    expect(host.textContent).toContain('Command line tools')
+    expect(host.textContent).toContain('App links')
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.settings-advanced-row button')]
+    expect(buttons.map((button) => button.textContent)).toEqual(['Install…', 'Reset App Link Approvals'])
+    await act(async () => buttons[0]!.click())
+    expect(onInstallCli).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+  it('shows the dismissible support card on General and hides it once dismissed', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const onSupportCardDismissedChange = vi.fn()
+    await act(async () =>
+      root.render(<SettingsDialog {...settingsDialogProps} locale="en" onSupportCardDismissedChange={onSupportCardDismissedChange} />),
+    )
+    expect(host.textContent).toContain('Buy the developer a coffee')
+    const dismiss = host.querySelector<HTMLButtonElement>('.settings-support-dismiss')!
+    await act(async () => dismiss.click())
+    expect(onSupportCardDismissedChange).toHaveBeenCalledWith(true)
+
+    // Once dismissed, the card never renders again.
+    await act(async () =>
+      root.render(
+        <SettingsDialog
+          {...settingsDialogProps}
+          locale="en"
+          supportCardDismissed
+          onSupportCardDismissedChange={onSupportCardDismissedChange}
+        />,
+      ),
+    )
+    expect(host.querySelector('.settings-support-card')).toBeNull()
+
+    // The privacy ⓘ disclosure toggles inline next to the analytics switch.
+    await act(async () =>
+      root.render(
+        <SettingsDialog
+          {...settingsDialogProps}
+          locale="en"
+          initialPane="privacy"
+          supportCardDismissed
+          onSupportCardDismissedChange={onSupportCardDismissedChange}
+        />,
+      ),
+    )
+    const info = host.querySelector<HTMLButtonElement>('.privacy-info-button')!
+    expect(info.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => info.click())
+    expect(info.getAttribute('aria-expanded')).toBe('true')
+    expect(host.querySelector('.privacy-detail-popover')).not.toBeNull()
+    await act(async () => root.unmount())
+    host.remove()
+  })
+  it('copies the version string when the About version chip is clicked', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const clipboard = (navigator as unknown as { clipboard?: { writeText: unknown } }).clipboard
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    try {
+      await act(async () => root.render(<SettingsDialog {...settingsDialogProps} locale="en" initialPane="about" />))
+      const chip = host.querySelector<HTMLElement>('.settings-version')!
+      expect(chip.textContent).toMatch(/^v\d+\.\d+\.\d+/)
+      expect(chip.getAttribute('role')).toBe('button')
+
+      await act(async () => chip.click())
+      expect(writeText).toHaveBeenCalledWith(chip.textContent)
+      expect(chip.getAttribute('title')).toBe('Copied')
+
+      // Keyboard activation copies too.
+      await act(async () => chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+      expect(writeText).toHaveBeenCalledTimes(2)
+      await act(async () => root.unmount())
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true })
+    }
+    host.remove()
+  })
+  it('renders the document name as the outline title row without duplicate mode controls', () => {
     const html = renderToStaticMarkup(
       <Sidebar
         mode="outline"
@@ -454,7 +582,9 @@ describe('localized desktop components', () => {
         onOpenFolder={vi.fn()}
       />,
     )
-    expect(html).toContain('<strong>README.md</strong>')
+    // The file name is the outline's first row (upstream TitleItem), not a
+    // pinned header outside the scrolling list.
+    expect(html).toContain('<div class="outline-title-row" title="README.md">README.md</div>')
     expect(html).not.toContain('sidebar-mode-switch')
     expect(html).not.toContain('role="tablist"')
   })
@@ -514,6 +644,61 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+  it('expands a collapsed ancestor when the active heading scrolls into it', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const outline = [
+      { id: 'intro', text: 'Intro', level: 1, line: 1 },
+      { id: 'intro-detail', text: 'Detail', level: 2, line: 4 },
+      { id: 'intro-deep', text: 'Deeper', level: 3, line: 6 },
+      { id: 'usage', text: 'Usage', level: 1, line: 9 },
+    ]
+    const props = {
+      mode: 'outline' as const,
+      fileName: 'a.md',
+      documentKey: 'doc-reveal',
+      files: [],
+      workspacePath: null,
+      activePath: null,
+      outline,
+      activeHeading: null as string | null,
+      applications: [],
+      defaultOpenTarget: 'system',
+      onOpenFolder: vi.fn(),
+      onOpenFile: vi.fn(),
+      onOpenFileInTab: vi.fn(),
+      onOpenFileInWindow: vi.fn(),
+      onOpenFileWith: vi.fn(),
+      onRevealFile: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onCopyFileContents: vi.fn(),
+      onOutlineSelect: vi.fn(),
+      locale: 'zh-CN' as const,
+    }
+    const rows = () => host.querySelectorAll('.outline-row')
+    const disclosure = () => host.querySelector<HTMLButtonElement>('.outline-disclosure')!
+
+    await act(async () => root.render(<Sidebar {...props} />))
+    await act(async () => disclosure().click())
+    expect(rows()).toHaveLength(2)
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false')
+
+    // Reading past the folded section reveals the active row instead of
+    // letting the position indicator disappear (upstream scroll follow).
+    await act(async () => root.render(<Sidebar {...props} activeHeading="intro-deep" />))
+    expect(rows()).toHaveLength(4)
+    expect(disclosure().getAttribute('aria-expanded')).toBe('true')
+
+    // The reader can fold it again; the same active heading does not fight
+    // the manual choice back open.
+    await act(async () => disclosure().click())
+    await act(async () => root.render(<Sidebar {...props} activeHeading="intro-deep" />))
+    expect(rows()).toHaveLength(2)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
   it('keeps directory context actions scoped to files', async () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -562,6 +747,143 @@ describe('localized desktop components', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+  it('persists expanded navigator folders per workspace and restores them across remounts', async () => {
+    window.localStorage.clear()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const files = [
+      {
+        name: 'docs',
+        path: '/tmp/docs',
+        isDirectory: true,
+        children: [{ name: 'guide.md', path: '/tmp/docs/guide.md', isDirectory: false, children: [] }],
+      },
+      { name: 'intro.md', path: '/tmp/intro.md', isDirectory: false, children: [] },
+    ]
+    const props = {
+      mode: 'files' as const,
+      fileName: 'intro.md',
+      documentKey: 'doc',
+      files,
+      workspacePath: '/tmp',
+      activePath: null,
+      outline: [],
+      activeHeading: null,
+      applications: [],
+      defaultOpenTarget: 'system',
+      onOpenFolder: vi.fn(),
+      onOpenFile: vi.fn(),
+      onOpenFileInTab: vi.fn(),
+      onOpenFileInWindow: vi.fn(),
+      onOpenFileWith: vi.fn(),
+      onRevealFile: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onCopyFileContents: vi.fn(),
+      onOutlineSelect: vi.fn(),
+      locale: 'en' as const,
+    }
+    const treeRows = () => host.querySelectorAll('.tree-row')
+
+    await act(async () => root.render(<Sidebar {...props} />))
+    // Top-level file rows render without expansion; the folder is collapsed.
+    expect(treeRows()).toHaveLength(2)
+    expect(treeRows()[0]!.getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => (treeRows()[0] as HTMLButtonElement).click())
+    expect(treeRows()).toHaveLength(3) // docs + guide.md + intro.md
+    expect(window.localStorage.getItem('textmark.treeExpanded')).toContain('/tmp/docs')
+
+    // A fresh mount replays the stored expansion for the same workspace.
+    await act(async () => root.unmount())
+    const remountRoot = createRoot(host)
+    await act(async () => remountRoot.render(<Sidebar {...props} />))
+    expect(treeRows()).toHaveLength(3)
+    expect(treeRows()[0]!.getAttribute('aria-expanded')).toBe('true')
+
+    // A different workspace starts compact: expansion state is per workspace.
+    await act(async () =>
+      remountRoot.render(
+        <Sidebar {...props} workspacePath="/other" files={[{ name: 'docs', path: '/other/docs', isDirectory: true, children: [] }]} />,
+      ),
+    )
+    expect(treeRows()).toHaveLength(1)
+    expect(treeRows()[0]!.getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => remountRoot.unmount())
+    host.remove()
+    window.localStorage.clear()
+  })
+  it('reveals filter matches, then restores the pre-filter expansion when the filter clears', async () => {
+    window.localStorage.clear()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const files = [
+      {
+        name: 'docs',
+        path: '/tmp/docs',
+        isDirectory: true,
+        children: [
+          {
+            name: 'nested',
+            path: '/tmp/docs/nested',
+            isDirectory: true,
+            children: [{ name: 'guide.md', path: '/tmp/docs/nested/guide.md', isDirectory: false, children: [] }],
+          },
+          { name: 'other.md', path: '/tmp/docs/other.md', isDirectory: false, children: [] },
+        ],
+      },
+    ]
+    const props = {
+      mode: 'files' as const,
+      fileName: 'guide.md',
+      documentKey: 'doc',
+      files,
+      workspacePath: '/tmp',
+      activePath: null,
+      outline: [],
+      activeHeading: null,
+      applications: [],
+      defaultOpenTarget: 'system',
+      onOpenFolder: vi.fn(),
+      onOpenFile: vi.fn(),
+      onOpenFileInTab: vi.fn(),
+      onOpenFileInWindow: vi.fn(),
+      onOpenFileWith: vi.fn(),
+      onRevealFile: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onCopyFileContents: vi.fn(),
+      onOutlineSelect: vi.fn(),
+      locale: 'en' as const,
+    }
+    const treeRows = () => host.querySelectorAll('.tree-row')
+
+    await act(async () => root.render(<Sidebar {...props} />))
+    expect(treeRows()).toHaveLength(1)
+
+    // Filtering by "guide" auto-reveals every ancestor of the match.
+    const filterInput = host.querySelector<HTMLInputElement>('.sidebar-filter-field input')!
+    const nativeInputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      nativeInputSetter.call(filterInput, 'guide')
+      filterInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(treeRows().length).toBeGreaterThanOrEqual(3) // docs, nested, guide.md
+    expect(host.textContent).toContain('guide.md')
+
+    // Clearing the filter restores the pre-filter shape: everything folded.
+    await act(async () => {
+      nativeInputSetter.call(filterInput, '')
+      filterInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(treeRows()).toHaveLength(1)
+    expect(treeRows()[0]!.getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => root.unmount())
+    host.remove()
+    window.localStorage.clear()
+  })
   it('preserves an open disclosure while incremental search marks are applied', async () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -587,6 +909,11 @@ describe('localized desktop components', () => {
       workspacePath: null,
       zoom: 100,
       contentWidth: 'normal' as const,
+      textAlignment: 'automatic' as const,
+      outlineFollowsPointer: false,
+      documentFont: 'system' as const,
+      themePreset: 'normal' as const,
+      themeColors: {},
       searchIndex: 0,
       matchCase: false,
       searchMode: 'contains' as const,
@@ -603,6 +930,60 @@ describe('localized desktop components', () => {
     await act(async () => root.render(<PreviewPane {...props} searchQuery="TextMark" />))
     expect(host.querySelector('details')?.open).toBe(true)
     expect(host.querySelectorAll('mark.search-match')).toHaveLength(1)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  it('injects the upstream prose-only alignment block when a non-automatic alignment is set', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const base: RenderedMarkdown = {
+      html: '<p>TextMark body</p>',
+      outline: [],
+      hasMermaid: false,
+      hasMath: false,
+      frontmatter: [],
+      sourceMap: [],
+      tables: [],
+      tasks: [],
+      optionalRenderers: [],
+      direction: 'auto' as const,
+    }
+    const props = {
+      rendered: base,
+      documentKey: 'doc',
+      initialScrollTop: 0,
+      baseDirectory: null,
+      workspacePath: null,
+      zoom: 100,
+      contentWidth: 'normal' as const,
+      textAlignment: 'justified' as const,
+      outlineFollowsPointer: false,
+      documentFont: 'system' as const,
+      themePreset: 'normal' as const,
+      themeColors: {},
+      searchQuery: '',
+      searchIndex: 0,
+      matchCase: false,
+      searchMode: 'contains' as const,
+      locale: 'zh-CN' as const,
+      onSearchCount: vi.fn(),
+      onActiveHeading: vi.fn(),
+      onZoomChange: vi.fn(),
+      onOpenRelative: vi.fn(),
+      onRenameImage: vi.fn(),
+    }
+    await act(async () => root.render(<PreviewPane {...props} />))
+    const style = host.querySelector('style')!
+    expect(style.textContent).toContain('text-align: justify')
+    // Prose-only selector, upstream shape.
+    expect(style.textContent).toContain(':is(p, li, dt, dd, h1, h2, h3, h4, h5, h6)')
+    expect(style.textContent).toContain('.mermaid *')
+    // Code cards recover a start alignment inside an aligned list.
+    expect(style.textContent).toContain('.md-code-card')
+    await act(async () => root.render(<PreviewPane {...props} textAlignment="automatic" />))
+    expect(host.querySelector('style')).toBeNull()
     await act(async () => root.unmount())
     host.remove()
   })
@@ -631,6 +1012,11 @@ describe('localized desktop components', () => {
       workspacePath: null,
       zoom: 100,
       contentWidth: 'normal' as const,
+      textAlignment: 'automatic' as const,
+      outlineFollowsPointer: false,
+      documentFont: 'system' as const,
+      themePreset: 'normal' as const,
+      themeColors: {},
       searchQuery: '',
       searchIndex: 0,
       matchCase: false,
@@ -679,6 +1065,11 @@ describe('localized desktop components', () => {
       workspacePath: null,
       zoom: 100,
       contentWidth: 'normal' as const,
+      textAlignment: 'automatic' as const,
+      outlineFollowsPointer: false,
+      documentFont: 'system' as const,
+      themePreset: 'normal' as const,
+      themeColors: {},
       searchQuery: '',
       searchIndex: 0,
       matchCase: false,
@@ -735,6 +1126,11 @@ describe('localized desktop components', () => {
       workspacePath: null,
       zoom: 100,
       contentWidth: 'normal' as const,
+      textAlignment: 'automatic' as const,
+      outlineFollowsPointer: false,
+      documentFont: 'system' as const,
+      themePreset: 'normal' as const,
+      themeColors: {},
       searchQuery: '',
       searchIndex: 0,
       matchCase: false,

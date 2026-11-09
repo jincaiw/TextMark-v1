@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { autoSaveDelayMs, shouldAutoSave } from './autoSave'
 
 describe('automatic saving policy', () => {
-  it('maps disabled, thirty-second, and minute settings to safe delays', () => {
+  it('maps disabled, instant, thirty-second, and minute settings to safe delays', () => {
     expect(autoSaveDelayMs(0)).toBeNull()
+    expect(autoSaveDelayMs(-2)).toBe(2_000)
     expect(autoSaveDelayMs(-30)).toBe(30_000)
     expect(autoSaveDelayMs(1)).toBe(60_000)
     expect(autoSaveDelayMs(60)).toBe(3_600_000)

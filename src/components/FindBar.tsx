@@ -1,5 +1,5 @@
 import { CaseSensitive, ChevronDown, ChevronUp } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { t } from '../lib/i18n'
 import type { Locale, SearchMode } from '../types'
 
@@ -20,11 +20,16 @@ interface FindBarProps {
   onReplacementChange: (value: string) => void
   onReplace: () => void
   onReplaceAll: () => void
+  /** Bumped by Edit ▸ Find and Replace…; each change expands the row. */
+  replaceSignal?: number
   onClose: () => void
 }
 
 export function FindBar(props: FindBarProps) {
   const [replaceExpanded, setReplaceExpanded] = useState(false)
+  useEffect(() => {
+    if (props.replaceSignal) setReplaceExpanded(true)
+  }, [props.replaceSignal])
   const modeToggle = (value: SearchMode, label: Parameters<typeof t>[1]) => (
     <button
       role="button"

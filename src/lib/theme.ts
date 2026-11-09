@@ -23,46 +23,63 @@ const palette = (windowBackground: string, codeBlockBackground: string, textColo
   linkColor,
 })
 
-/** The seven current upstream palettes, expressed as platform-neutral CSS tokens. */
+/** The upstream built-in gallery, in its order — three rows of three: the
+ * Apple Books set (Original, Quiet, Paper / Bold, Calm, Focus) first, then
+ * the remaining dark themes. Original leads: it is the default theme, and
+ * applying it clears overrides instead of pinning a palette. Quiet, Paper,
+ * Bold, and Focus are sampled from Apple Books' theme cards; the entries
+ * marked "Bear" are sampled from Bear's themes. */
 export const THEME_PRESETS: Record<ThemePreset, ThemePresetDefinition> = {
   normal: {
-    name: 'Normal',
+    name: 'Original',
     flavor: 'system',
-    light: palette('#FFFFFF', '#F2F2F2', '#000000', '#007AFF'),
-    dark: palette('#1E1E1E', '#2A2828', '#F5F5F7', '#0A84FF'),
+    light: palette('#FFFFFF', '#F5F5F7', '#000000', '#0066CC'),
+    dark: palette('#1C1C1C', '#2A2828', '#F5F5F7', '#2997FF'),
   },
-  charcoal: {
-    name: 'Charcoal',
+  quiet: {
+    name: 'Quiet',
     flavor: 'dark',
-    light: palette('#2E3235', '#3F4347', '#A7A7A6', '#99B7C4'),
-    dark: palette('#2E3235', '#3F4347', '#A7A7A6', '#99B7C4'),
+    light: palette('#4A4A4D', '#59595D', '#EBEBF4', '#99B7C4'),
+    dark: palette('#4A4A4D', '#59595D', '#EBEBF4', '#99B7C4'),
   },
-  redGraphite: {
-    name: 'Red Graphite',
+  paper: {
+    name: 'Paper',
     flavor: 'light',
-    light: palette('#FFFFFF', '#F3F5F7', '#434343', '#DE4A4F'),
-    dark: palette('#FFFFFF', '#F3F5F7', '#434343', '#DE4A4F'),
+    light: palette('#EEEDED', '#E3E1E1', '#262626', '#DE4A4F'),
+    dark: palette('#EEEDED', '#E3E1E1', '#262626', '#DE4A4F'),
   },
-  darkGraphite: {
-    name: 'Dark Graphite',
-    flavor: 'dark',
-    light: palette('#1D1E1F', '#2E2F30', '#E0E1E0', '#42A2E6'),
-    dark: palette('#1D1E1F', '#2E2F30', '#E0E1E0', '#42A2E6'),
+  bold: {
+    name: 'Bold',
+    flavor: 'light',
+    light: palette('#FFFFFF', '#F2F2F2', '#1C1C1E', '#007AFF'),
+    dark: palette('#FFFFFF', '#F2F2F2', '#1C1C1E', '#007AFF'),
   },
-  solarizedLight: {
-    name: 'Solarized Light',
+  calm: {
+    name: 'Calm',
     flavor: 'light',
     light: palette('#FDF6E3', '#F6EDDB', '#313D45', '#A0630F'),
     dark: palette('#FDF6E3', '#F6EDDB', '#313D45', '#A0630F'),
   },
-  solarizedDark: {
-    name: 'Solarized Dark',
-    flavor: 'dark',
-    light: palette('#0C3742', '#103E49', '#9BA7A4', '#299385'),
-    dark: palette('#0C3742', '#103E49', '#9BA7A4', '#299385'),
+  focus: {
+    name: 'Focus',
+    flavor: 'light',
+    light: palette('#FFFCF5', '#F5F1E4', '#14120B', '#A0630F'),
+    dark: palette('#FFFCF5', '#F5F1E4', '#14120B', '#A0630F'),
   },
-  dracula: {
-    name: 'Dracula',
+  graphite: {
+    name: 'Graphite',
+    flavor: 'dark',
+    light: palette('#1D1E1F', '#2E2F30', '#E0E1E0', '#42A2E6'),
+    dark: palette('#1D1E1F', '#2E2F30', '#E0E1E0', '#42A2E6'),
+  },
+  dusk: {
+    name: 'Dusk',
+    flavor: 'dark',
+    light: palette('#0C3742', '#103E49', '#C3CFCC', '#299385'),
+    dark: palette('#0C3742', '#103E49', '#C3CFCC', '#299385'),
+  },
+  midnight: {
+    name: 'Midnight',
     flavor: 'dark',
     light: palette('#363846', '#313343', '#FFFFFF', '#8BE9FD'),
     dark: palette('#363846', '#313343', '#FFFFFF', '#8BE9FD'),
@@ -91,6 +108,15 @@ export function normalizeThemeColors(value: unknown): ThemeColors {
 
 export function resolvedThemePalette(preset: ThemePreset, scheme: ThemeColorScheme, overrides: ThemeColors = {}): ThemePalette {
   return { ...THEME_PRESETS[preset][scheme], ...overrides[scheme] }
+}
+
+/**
+ * Fixed palettes must keep matching native chrome, so a light or dark preset
+ * pins the appearance picker; Original (flavor "system") follows the user's
+ * choice, mirroring the upstream requiredAppearance semantics.
+ */
+export function isAppearanceLocked(preset: ThemePreset): boolean {
+  return THEME_PRESETS[preset].flavor !== 'system'
 }
 
 export function applyThemeColors(root: HTMLElement, preset: ThemePreset, scheme: ThemeColorScheme, overrides: ThemeColors = {}) {

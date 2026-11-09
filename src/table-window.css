@@ -1,0 +1,103 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color-scheme: light dark;
+}
+/* Fill the window independently of the document's reading column and custom
+   margins, keeping the standard theme and fonts, as the upstream table window
+   does. */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--document-background);
+  overflow-x: auto;
+}
+body {
+  padding: 24px;
+  padding-inline-end: 0;
+  box-sizing: border-box;
+}
+#table-root.markdown-body {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  /* The reading surface's hairline colour, from the current appearance. */
+  --document-grid: -apple-system-separator;
+}
+/* Upstream hides the expand affordance inside the expanded window. */
+#table-root.markdown-body .md-table-actions {
+  display: none;
+}
+/* The end padding lives on the wrapper, which may grow past the window, so a
+   wide table keeps a gap at its end and its last column edge stays clear of
+   the window's resize area. */
+#table-root.markdown-body .md-table-wrap {
+  position: relative;
+  width: fit-content;
+  max-width: none;
+  margin: 0;
+  padding-top: 0;
+  padding-inline-end: 24px;
+}
+#table-root.markdown-body .md-table-wrap > .md-table-scroll {
+  width: fit-content;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+}
+/* The reading surface's treatment, not the export card: a hairline row grid
+   with no cell borders and no header fill. */
+#table-root.markdown-body table {
+  margin: 0;
+  display: block;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: visible;
+  border: 0;
+  border-spacing: 0;
+  border-collapse: collapse;
+  background: transparent;
+  font-size: inherit;
+}
+#table-root.markdown-body th,
+#table-root.markdown-body td {
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid var(--document-grid);
+  border-bottom: 1px solid var(--document-grid);
+  text-align: start;
+  vertical-align: top;
+  background: transparent;
+}
+#table-root.markdown-body th {
+  font-weight: 600;
+}
+/* Upstream marks each column edge with a short divider in the header row, so
+   the reader can see where columns split; the last edge stays bare. */
+@media screen {
+  #table-root.markdown-body thead th {
+    position: relative;
+  }
+  #table-root.markdown-body thead th::after {
+    content: '';
+    position: absolute;
+    inset-inline-end: 0;
+    top: 25%;
+    bottom: 25%;
+    border-inline-end: 1px solid transparent;
+  }
+  #table-root.markdown-body thead th:not(:last-child)::after {
+    border-color: var(--document-grid);
+  }
+}
+/* The header row sticks to the window, so the page is the only scroller. Only
+   a single header row sticks: row headers in a raw HTML table body, or several
+   header rows, would pile up at the top. */
+#table-root.markdown-body thead > tr:only-child > th {
+  position: sticky;
+  top: 0;
+  background: var(--document-background);
+  box-shadow: inset 0 -1px var(--document-grid);
+}

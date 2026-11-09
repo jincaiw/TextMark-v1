@@ -4,11 +4,12 @@ import { openPath as openExternalPath, openUrl } from '@tauri-apps/plugin-opener
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import './App.css'
+import './code-theme.css'
 import type { EditorPaneHandle } from './components/EditorPane'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
-import { ExportDialog } from './components/ExportDialog'
+import { DocumentOverview } from './components/DocumentOverview'
 import { FindBar } from './components/FindBar'
 import { ProjectDocumentSearch } from './components/ProjectDocumentSearch'
 import { DocumentTools } from './components/DocumentTools'
@@ -16,13 +17,10 @@ import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
 import { PanelResizer } from './components/PanelResizer'
-import { SettingsDialog } from './components/SettingsDialog'
 import { UnsavedCloseDialog } from './components/UnsavedCloseDialog'
-import { WhatsNewDialog } from './components/WhatsNewDialog'
-import { SettingsWindow } from './components/SettingsWindow'
+import { UpdatePill } from './components/UpdatePill'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
-import { ToolbarCustomizer } from './components/ToolbarCustomizer'
 import { useDocument } from './hooks/useDocument'
 import { useSettings } from './hooks/useSettings'
 import { useTheme } from './hooks/useTheme'
@@ -34,9 +32,12 @@ import { anchorForOffset, caretForReturnToEditor, lineForAnchor, offsetForLine, 
 import { createPreviewHydrationGate, type PreviewHydrationGate } from './lib/previewHydration'
 import { resolveAlwaysOnTopTransition } from './lib/alwaysOnTop'
 import { t } from './lib/i18n'
+import { splitFrontmatter } from './lib/frontmatter'
+import { isNonEmptySelection, selectionStatsFromText, sliceSelection } from './lib/inspectorSelection'
 import { externalMenuUrl } from './lib/menuCommands'
 import {
   clearRecentFiles,
+  createDirectoryEntry,
   detectPlatform,
   detectRuntime,
   discoverApplications,
@@ -44,22 +45,28 @@ import {
   isMacos,
   isTauri,
   installCli,
+  linkDecision,
   openDocumentWindow,
   openSettingsWindow,
   openInApplication,
+  pickAndImportFiles,
+  readClipboardText,
   readDocument,
   recordRecentFile,
+  rememberLinkScheme,
+  renameDirectoryEntry,
   revealInFileManager,
   refreshMenu,
+  resolveSiblingPath,
   saveExportFile,
   setDefaultHandler,
   shareSourceNatively,
   shouldUseDedicatedSettingsWindow,
 } from './lib/platform'
 import { partitionDroppedPaths } from './lib/documentPresentation'
-import { readSidebarWidth } from './lib/layoutState'
+import { readSidebarWidth, SIDEBAR_WIDTH_RANGE } from './lib/layoutState'
 import { configureCrashReporting, crashReportingAvailable } from './lib/telemetry'
-import { applyUpstreamDocumentTokens } from './lib/designTokens'
+import { applyUpstreamDocumentTokens, readerLayoutCss } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
 import { formattingCommandForShortcut, isFormattingShortcut, isTextEntryControl } from './lib/keyboardShortcuts'
@@ -76,15 +83,20 @@ import type {
 } from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
+// The settings window and toolbar customizer are opened from the menu, never on
+// first paint, so their bundles stay out of the first-screen budget.
+const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
+// Update notes and the export sheet only appear on demand; keep them off the
+// first-screen bundle as well.
+const WhatsNewDialog = lazy(() => import('./components/WhatsNewDialog').then((module) => ({ default: module.WhatsNewDialog })))
+const ExportDialog = lazy(() => import('./components/ExportDialog').then((module) => ({ default: module.ExportDialog })))
+const SettingsWindow = lazy(() => import('./components/SettingsWindow').then((module) => ({ default: module.SettingsWindow })))
+const ToolbarCustomizer = lazy(() => import('./components/ToolbarCustomizer').then((module) => ({ default: module.ToolbarCustomizer })))
 import { nextZoomStep as nextZoom } from './constants'
 function DocumentApp() {
-  const hadPreviousInstall = useRef(
-    Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).some((key) =>
-      /^textmark\.settings\.v\d+$/.test(key ?? ''),
-    ),
-  )
   const {
     settings,
+    locale,
     setLocale,
     setTheme,
     setContentWidth,
@@ -93,13 +105,19 @@ function DocumentApp() {
     setLineHeight,
     setPagePaddingHorizontal,
     setDocumentFont,
+    setReaderLayout,
     patch,
   } = useSettings()
-  const documents = useDocument(settings.locale, {
+  const documents = useDocument(locale, {
     autoSaveIntervalMinutes: settings.autoSaveIntervalMinutes,
     openDocumentsInTabs: settings.openDocumentsInTabs,
   })
-  const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
+  const updater = useUpdater(
+    settings.updateChannel,
+    settings.autoCheckUpdates,
+    (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }),
+    settings.autoDownloadUpdates,
+  )
   useEffect(() => {
     if (!isTauri() || getCurrentWindow().label !== 'main') return
     void getVersion()
@@ -107,7 +125,23 @@ function DocumentApp() {
         const key = 'textmark.lastSeenWhatsNewVersion'
         const previousVersion = localStorage.getItem(key)
         localStorage.setItem(key, version)
-        if ((previousVersion && previousVersion !== version) || (!previousVersion && hadPreviousInstall.current)) setWhatsNewOpen(true)
+        // Mirror the upstream ReleaseNotesPolicy: only a strict upgrade from a
+        // seen version opens What's New. Fresh installs and version downgrades
+        // (or reinstalls of the same build) stay silent.
+        const newer = (previous: string, current: string) => {
+          const toParts = (value: string) => value.split('.').map((part) => Number.parseInt(part, 10) || 0)
+          const [a, b] = [toParts(previous), toParts(current)]
+          for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+            const left = a[index] ?? 0
+            const right = b[index] ?? 0
+            if (left !== right) return left < right
+          }
+          return false
+        }
+        if (previousVersion && newer(previousVersion, version)) {
+          setWhatsNewPreviousVersion(previousVersion)
+          setWhatsNewOpen(true)
+        }
       })
       .catch(() => undefined)
   }, [])
@@ -119,8 +153,8 @@ function DocumentApp() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
   // Inspector 默认关闭，因此只有显式存过 'true' 才恢复——与 sidebarVisible 的「默认开」相反。
   const [inspectorVisible, setInspectorVisible] = useState(() => localStorage.getItem('textmark.inspectorVisible') === 'true')
-  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(
-    () => (localStorage.getItem('textmark.inspectorMode') as InspectorMode) || 'document',
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() =>
+    localStorage.getItem('textmark.inspectorMode') === 'properties' ? 'properties' : 'document',
   )
   const [inspectorWidth, setInspectorWidth] = useState(() =>
     Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 270)),
@@ -130,7 +164,10 @@ function DocumentApp() {
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [whatsNewOpen, setWhatsNewOpen] = useState(false)
-  const [settingsPane, setSettingsPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
+  // The version this launch updated from, so the dialog offers exactly the
+  // releases the reader has not seen (upstream ReleaseNotesPolicy).
+  const [whatsNewPreviousVersion, setWhatsNewPreviousVersion] = useState('')
+  const [settingsPane, setSettingsPane] = useState<'general' | 'reading' | 'appearance' | 'privacy' | 'advanced' | 'about'>('general')
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const alwaysOnTop = settings.alwaysOnTop
   // Ref keeps the keydown/menu closures reading the live value without adding
@@ -142,6 +179,13 @@ function DocumentApp() {
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [findFromToolbar, setFindFromToolbar] = useState(false)
+  // View ▸ Hide Tab Bar hides the document strip; Show All Tabs opens the
+  // overview of open documents.
+  const [tabsVisible, setTabsVisible] = useState(true)
+  const [tabsOverviewOpen, setTabsOverviewOpen] = useState(false)
+  // Bumped by Edit ▸ Find and Replace… so an already-open bar expands its
+  // replacement row instead of ignoring the request.
+  const [findReplaceSignal, setFindReplaceSignal] = useState(0)
   const [projectSearchOpen, setProjectSearchOpen] = useState(false)
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
@@ -189,7 +233,7 @@ function DocumentApp() {
   // the last source anchor also lets output actions return to the same position.
   const editorExitRef = useRef<EditorExitCaret | null>(null)
   const editorExitSelectionRef = useRef<EditorSessionState['selection'] | null>(null)
-  const rendered = useMarkdownRenderer(documents.document.contents, settings.locale, settings.strictLineBreaks)
+  const rendered = useMarkdownRenderer(documents.document.contents, locale, settings.strictLineBreaks)
   useEffect(() => {
     localStorage.setItem('textmark.sidebarVisible', String(sidebarVisible))
     localStorage.setItem('textmark.sidebarMode', sidebarMode)
@@ -200,7 +244,7 @@ function DocumentApp() {
   }, [inspectorMode, inspectorVisible, inspectorWidth, sidebarMode, sidebarVisible, sidebarWidth])
   useTextmarkDeepLinks(documents.openPath, () => {
     setNotice(
-      settings.locale === 'zh-CN'
+      locale === 'zh-CN'
         ? '无法打开此 TextMark 链接。请使用 textmark://file/<绝对路径>。'
         : 'This TextMark link is invalid. Use textmark://file/<absolute path>.',
     )
@@ -209,18 +253,33 @@ function DocumentApp() {
   })
   const previewHydrationRef = useRef<PreviewHydrationGate | null>(null)
   previewHydrationRef.current ??= createPreviewHydrationGate()
-  const stats = useMemo(
-    () => ({
-      words: documents.document.contents.trim().split(/\s+/u).filter(Boolean).length,
-      characters: documents.document.contents.length,
-      lines: documents.document.contents.split(/\r?\n/).length,
-      headings: rendered.outline.length,
-      links: (documents.document.contents.match(/(?<!!)\[[^\]]*]\([^)]+\)/g) ?? []).length,
-      images: (documents.document.contents.match(/!\[[^\]]*]\([^)]+\)/g) ?? []).length,
+  const stats = useMemo(() => {
+    // Statistics cover the document body only, like the upstream inspector:
+    // the frontmatter block is metadata, not prose. Characters are grapheme
+    // clusters (`body.count` in Swift), and headings count every trimmed line
+    // that starts with `#` — including ones inside code blocks or quotes.
+    const { body } = splitFrontmatter(documents.document.contents)
+    const segmenter = new Intl.Segmenter()
+    return {
+      words: body.trim().split(/\s+/u).filter(Boolean).length,
+      characters: [...segmenter.segment(body)].length,
+      lines: body ? body.split(/\r?\n/).length : 0,
+      headings: body.split(/\r?\n/).filter((line) => line.trimStart().startsWith('#')).length,
+      links: (body.match(/(?<!!)\[[^\]]*]\([^)]+\)/g) ?? []).length,
+      images: (body.match(/!\[[^\]]*]\([^)]+\)/g) ?? []).length,
       bytes: new TextEncoder().encode(documents.document.contents).byteLength,
-    }),
-    [documents.document.contents, rendered.outline.length],
-  )
+    }
+  }, [documents.document.contents])
+  // When the editor has a selection, the inspector's words/characters/lines
+  // count the selection and gain a "- Selected" suffix, as upstream does.
+  const editorSelection = documents.document.editorState?.selection ?? null
+  const hasSelection = isNonEmptySelection(editorSelection)
+  const selectionStats = useMemo(() => {
+    if (!hasSelection || !editorSelection) return null
+    const start = editorSelection.anchor
+    const end = editorSelection.head
+    return selectionStatsFromText(sliceSelection(documents.document.contents, start, end))
+  }, [hasSelection, editorSelection, documents.document.contents])
   const resolvedTheme = useTheme(settings.theme)
   const previewRenderKey = `${documents.document.id}:${documents.document.path ?? documents.document.name}:${rendered.html}`
 
@@ -237,6 +296,18 @@ function DocumentApp() {
       pagePaddingHorizontal: settings.pagePaddingHorizontal,
     })
   }, [settings.documentFont, settings.lineHeight, settings.pagePaddingHorizontal])
+  // The reader layout lives in its own :root rule, rewritten in place so a
+  // slider tick restyles the open document without a re-render of the page.
+  const readerLayoutCssText = readerLayoutCss(settings.readerLayout)
+  useEffect(() => {
+    let element = document.getElementById('reader-layout') as HTMLStyleElement | null
+    if (!element) {
+      element = document.createElement('style')
+      element.id = 'reader-layout'
+      document.head.appendChild(element)
+    }
+    element.textContent = readerLayoutCssText
+  }, [readerLayoutCssText])
   useEffect(() => {
     applyThemeColors(document.documentElement, settings.themePreset, resolvedTheme, settings.themeColors)
   }, [resolvedTheme, settings.themeColors, settings.themePreset])
@@ -281,13 +352,17 @@ function DocumentApp() {
     if (!isTauri()) return
     const updateMenu = () =>
       void refreshMenu({
-        locale: settings.locale,
+        locale: locale,
         appearance: settings.theme,
         contentWidth: settings.contentWidth,
         sidebarMode,
         sidebarVisible,
         alwaysOnTop,
         toolbarVisible,
+        tabsHidden: !tabsVisible,
+        sessionCount: documents.sessions.length,
+        editable: viewMode === 'edit',
+        dirty: documents.isDirty,
       })
     updateMenu()
     let disposed = false
@@ -304,18 +379,34 @@ function DocumentApp() {
       disposed = true
       unlisten?.()
     }
-  }, [settings.locale, settings.theme, settings.contentWidth, sidebarMode, sidebarVisible, alwaysOnTop, toolbarVisible])
+  }, [
+    locale,
+    settings.theme,
+    settings.contentWidth,
+    sidebarMode,
+    sidebarVisible,
+    alwaysOnTop,
+    toolbarVisible,
+    tabsVisible,
+    documents.sessions.length,
+    viewMode,
+    documents.isDirty,
+  ])
   useEffect(() => {
     if (!isTauri() || !documents.document.path) return
     void recordRecentFile(documents.document.path).then(() =>
       refreshMenu({
-        locale: settings.locale,
+        locale: locale,
         appearance: settings.theme,
         contentWidth: settings.contentWidth,
         sidebarMode,
         sidebarVisible,
         alwaysOnTop,
         toolbarVisible,
+        tabsHidden: !tabsVisible,
+        sessionCount: documents.sessions.length,
+        editable: viewMode === 'edit',
+        dirty: documents.isDirty,
       }),
     )
   }, [documents.document.path])
@@ -327,11 +418,11 @@ function DocumentApp() {
     document.documentElement.dataset.runtime = detectRuntime()
   }, [])
   useEffect(() => {
-    document.documentElement.lang = settings.locale
-    const title = documents.document.name + (documents.isDirty ? ` — ${t(settings.locale, 'edited')}` : '')
+    document.documentElement.lang = locale
+    const title = documents.document.name + (documents.isDirty ? ` — ${t(locale, 'edited')}` : '')
     document.title = title
     if (isTauri()) void getCurrentWindow().setTitle(title)
-  }, [documents.document.name, documents.isDirty, settings.locale])
+  }, [documents.document.name, documents.isDirty, locale])
   useEffect(() => {
     // When a tab changes while the editor is visible, restore that session's
     // saved editor position. Do not key this effect on viewMode: entering edit
@@ -476,15 +567,11 @@ function DocumentApp() {
   const installCliAction = () => {
     void installCli().then((result) => {
       if (result.ok)
-        flash(
-          settings.locale === 'zh-CN'
-            ? `命令行工具已安装到 ${result.detail ?? ''}`
-            : `Command-line tools installed to ${result.detail ?? ''}`,
-        )
-      else flash(settings.locale === 'zh-CN' ? '安装命令行工具失败。' : 'Could not install the command-line tools.')
+        flash(locale === 'zh-CN' ? `命令行工具已安装到 ${result.detail ?? ''}` : `Command-line tools installed to ${result.detail ?? ''}`)
+      else flash(locale === 'zh-CN' ? '安装命令行工具失败。' : 'Could not install the command-line tools.')
     })
   }
-  const openSettings = (pane: 'general' | 'appearance' | 'privacy' | 'about' = 'general') => {
+  const openSettings = (pane: 'general' | 'reading' | 'appearance' | 'privacy' | 'advanced' | 'about' = 'general') => {
     setSettingsPane(pane)
     // Use the already-loaded document WebView on Windows. On some WebView2
     // runtimes a freshly-created secondary settings window can show only a
@@ -504,10 +591,10 @@ function DocumentApp() {
     void setDefaultHandler().then((result) => {
       flash(
         result.ok
-          ? settings.locale === 'zh-CN'
+          ? locale === 'zh-CN'
             ? '已设为默认 Markdown 打开方式。'
             : 'Set as the default Markdown handler.'
-          : settings.locale === 'zh-CN'
+          : locale === 'zh-CN'
             ? '未能设为默认打开方式。'
             : 'Could not set the default handler.',
       )
@@ -520,7 +607,7 @@ function DocumentApp() {
   }, [])
   const copySource = async () => {
     await navigator.clipboard.writeText(documents.document.contents)
-    flash(t(settings.locale, 'copied'))
+    flash(t(locale, 'copied'))
   }
   const shareSource = async () => {
     const outcome = await shareMarkdownSource({
@@ -528,28 +615,68 @@ function DocumentApp() {
       name: documents.document.name,
       environment: navigator,
       nativeShare:
-        isTauri() && isMacos() && !import.meta.env.VITE_WDIO ? () => shareSourceNatively(documents.document.contents) : undefined,
+        isTauri() && isMacos() && !import.meta.env.VITE_WDIO
+          ? () => shareSourceNatively(documents.document.contents, documents.document.path)
+          : undefined,
     })
-    if (outcome === 'copied') flash(t(settings.locale, 'copied'))
+    if (outcome === 'copied') flash(t(locale, 'copied'))
+  }
+  // Edit ▸ Speech reads the selection, or the whole document when nothing is
+  // selected, through the platform's speech synthesis.
+  const speakDocument = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const text = editorRef.current?.selectionText() || documents.document.contents
+    if (!text.trim()) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = locale === 'zh-CN' ? 'zh-CN' : 'en-US'
+    window.speechSynthesis.speak(utterance)
+  }
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+  }
+  const pasteMatchStyle = async () => {
+    let text = await readClipboardText()
+    if (text == null) text = await navigator.clipboard.readText().catch(() => '')
+    if (text) editorRef.current?.insertText(text)
+  }
+  // Window ▸ Show Previous/Next Tab cycles the in-window document tabs.
+  const activateRelativeTab = (delta: number) => {
+    const list = documents.sessions
+    if (list.length < 2) return
+    const current = list.findIndex((session) => session.id === documents.activeId)
+    const target = list[(Math.max(0, current) + delta + list.length) % list.length]
+    activateDocumentTab(target.id)
+  }
+  // Window ▸ Move Tab to New Window reopens a saved document in its own
+  // window, then drops the tab. An unsaved document stays put so nothing can
+  // be lost in the hand-off.
+  const moveTabToNewWindow = async () => {
+    const path = documents.document.path
+    if (!path || !isTauri()) return
+    if (documents.isDirty) {
+      flash(locale === 'zh-CN' ? '请先存储文稿，再将其移到新窗口。' : 'Save the document before moving it to a new window.')
+      return
+    }
+    await openDocumentWindow(path)
+    documents.closeSession(documents.activeId)
   }
   const openWith = async (application = 'system') => {
     if (!documents.document.path && documents.isDirty) {
       flash(
-        settings.locale === 'zh-CN'
-          ? '请先保存未命名文稿，再使用外部编辑器打开。'
-          : 'Save the untitled document before opening it in another app.',
+        locale === 'zh-CN' ? '请先保存未命名文稿，再使用外部编辑器打开。' : 'Save the untitled document before opening it in another app.',
       )
       return
     }
     if (!documents.document.path || !isTauri()) {
-      flash(settings.locale === 'zh-CN' ? '请先保存文件，再使用外部编辑器打开。' : 'Save the file before opening it in another app.')
+      flash(locale === 'zh-CN' ? '请先保存文件，再使用外部编辑器打开。' : 'Save the file before opening it in another app.')
       return
     }
     if (documents.isDirty) {
       const saved = await documents.saveFile()
       if (!saved) {
         flash(
-          settings.locale === 'zh-CN'
+          locale === 'zh-CN'
             ? '文稿未保存，已取消打开外部编辑器。'
             : 'The document was not saved; opening the external editor was cancelled.',
         )
@@ -560,25 +687,29 @@ function DocumentApp() {
       if (application === 'system' && !isMacos()) await openExternalPath(documents.document.path)
       else await openInApplication(documents.document.path, application)
     } catch {
-      flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.')
+      flash(locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.')
+      return
     }
+    // Like the upstream pickEditor, choosing an editor from the menu also
+    // promotes it to the default target for the next open.
+    if (application !== settings.defaultOpenTarget) patch({ defaultOpenTarget: application })
   }
   const openFileWith = (path: string, application: string) => {
     if (!isTauri()) return
     if (application === 'system' && !isMacos())
       void openExternalPath(path).catch(() =>
-        flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.'),
+        flash(locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.'),
       )
     else
       void openInApplication(path, application).catch(() =>
-        flash(settings.locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.'),
+        flash(locale === 'zh-CN' ? '无法打开所选应用。' : 'The selected application could not be opened.'),
       )
   }
   const openInLlm = async (application: 'codex' | 'claude' | 'chatgpt') => {
     if (documents.isDirty && documents.document.path) {
       const saved = await documents.saveFile()
       if (!saved) {
-        flash(settings.locale === 'zh-CN' ? '文稿未保存，已取消打开 LLM。' : 'The document was not saved; opening the LLM was cancelled.')
+        flash(locale === 'zh-CN' ? '文稿未保存，已取消打开 LLM。' : 'The document was not saved; opening the LLM was cancelled.')
         return
       }
     }
@@ -589,14 +720,27 @@ function DocumentApp() {
       contents: documents.document.contents,
       folder: documents.workspacePath,
       name: documents.document.name,
-      locale: settings.locale,
+      locale: locale,
     })
     localStorage.setItem('textmark.lastLlmTarget', application)
     await navigator.clipboard.writeText(handoff.clipboard)
     const url = handoff.url ?? (application === 'chatgpt' ? 'chatgpt://' : `${application}://`)
     try {
-      if (isTauri()) await openUrl(url)
-      else
+      if (isTauri()) {
+        // Mirrors the upstream cold-start delay: when the LLM app was not
+        // running, launching it and immediately handing it the deep link can
+        // race its registration of the scheme handler. Waiting before the
+        // open gives the app time to finish booting (upstream uses 1.25s).
+        await new Promise((resolve) => setTimeout(resolve, 1250))
+        // The App Link policy only re-asks custom schemes after the user
+        // resets approvals; remembering marks the scheme open until then.
+        if (linkDecision(url) === 'confirm') {
+          const allowed = window.confirm(locale === 'zh-CN' ? `允许 TextMark 打开「${url}」吗？` : `Allow TextMark to open “${url}”?`)
+          if (!allowed) return
+          rememberLinkScheme(url)
+        }
+        await openUrl(url)
+      } else
         window.open(
           application === 'chatgpt' ? 'https://chatgpt.com' : application === 'claude' ? 'https://claude.ai' : 'https://chatgpt.com/codex',
         )
@@ -605,11 +749,9 @@ function DocumentApp() {
     }
     if (handoff.long)
       flash(
-        settings.locale === 'zh-CN'
-          ? '文档较长，全文已拷贝，请粘贴到对话中。'
-          : 'The document is long; its full text was copied for you to paste.',
+        locale === 'zh-CN' ? '文档较长，全文已拷贝，请粘贴到对话中。' : 'The document is long; its full text was copied for you to paste.',
       )
-    else flash(t(settings.locale, 'copied'))
+    else flash(t(locale, 'copied'))
   }
   const waitForNextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
   // Output actions render from the live preview pane, so an edit-mode export has
@@ -638,23 +780,23 @@ function DocumentApp() {
           return
         }
         const { name, bytes } = await exporter.buildHtmlExport(documents.document.name, root)
-        if (await saveExportFile(name, bytes, 'HTML', ['html'])) flash(t(settings.locale, 'exported'))
+        if (await saveExportFile(name, bytes, 'HTML', ['html'])) flash(t(locale, 'exported'))
       } else {
         if (!isTauri()) {
           await exporter.downloadPng(documents.document.name, root)
           return
         }
         const { name, bytes } = await exporter.buildPngExport(documents.document.name, root)
-        if (await saveExportFile(name, bytes, 'PNG', ['png'])) flash(t(settings.locale, 'exported'))
+        if (await saveExportFile(name, bytes, 'PNG', ['png'])) flash(t(locale, 'exported'))
       }
     } catch (error) {
       if (errorCode(error) === 'read_only') {
         flash(
-          settings.locale === 'zh-CN'
+          locale === 'zh-CN'
             ? '目标文件只读。请选择可写位置或更改权限后重试。'
             : 'The destination is read-only. Choose a writable location or change its permissions and try again.',
         )
-      } else flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+      } else flash(locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
     } finally {
       if (restoreEditMode) switchViewMode('edit')
     }
@@ -672,15 +814,15 @@ function DocumentApp() {
         return
       }
       const { name, bytes } = await exporter.buildPdfExport(documents.document.name, root)
-      if (await saveExportFile(name, bytes, 'PDF', ['pdf'])) flash(t(settings.locale, 'exported'))
+      if (await saveExportFile(name, bytes, 'PDF', ['pdf'])) flash(t(locale, 'exported'))
     } catch (error) {
       if (errorCode(error) === 'read_only') {
         flash(
-          settings.locale === 'zh-CN'
+          locale === 'zh-CN'
             ? '目标文件只读。请选择可写位置或更改权限后重试。'
             : 'The destination is read-only. Choose a writable location or change its permissions and try again.',
         )
-      } else flash(settings.locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
+      } else flash(locale === 'zh-CN' ? '导出失败。' : 'Export failed.')
     } finally {
       if (restoreEditMode) switchViewMode('edit')
     }
@@ -695,13 +837,17 @@ function DocumentApp() {
     else if (command === 'clear-recent')
       void clearRecentFiles().then(() =>
         refreshMenu({
-          locale: settings.locale,
+          locale: locale,
           appearance: settings.theme,
           contentWidth: settings.contentWidth,
           sidebarMode,
           sidebarVisible,
           alwaysOnTop,
           toolbarVisible,
+          tabsHidden: !tabsVisible,
+          sessionCount: documents.sessions.length,
+          editable: viewMode === 'edit',
+          dirty: documents.isDirty,
         }),
       )
     else if (command === 'open-folder') {
@@ -711,12 +857,39 @@ function DocumentApp() {
     } else if (command === 'new-tab') void documents.openFile(true)
     else if (command === 'new-document') createNewDocument()
     else if (command === 'close-tab') documents.closeSession(documents.activeId)
+    else if (command === 'close-all') documents.closeAllSessions()
     else if (command === 'save') void documents.saveFile()
     else if (command === 'save-as') void documents.saveAs()
     else if (command === 'revert') documents.revertDocument()
     else if (command === 'print') printDocument()
     else if (command === 'export') setExportOpen(true)
     else if (command === 'export-pdf') exportPdf()
+    else if (command === 'share-link') void shareSource()
+    else if (command === 'paste-match-style') void pasteMatchStyle()
+    else if (command === 'delete-selection') editorRef.current?.deleteSelection()
+    else if (command === 'find-replace') {
+      setFindFromToolbar(false)
+      setFindOpen(true)
+      setFindReplaceSignal((value) => value + 1)
+    } else if (command === 'find-use-selection') {
+      const selected = editorRef.current?.selectionText() ?? ''
+      if (selected) {
+        setSearchQuery(selected)
+        setSearchIndex(0)
+        setFindFromToolbar(false)
+        setFindOpen(true)
+      }
+    } else if (command === 'find-jump-selection') editorRef.current?.scrollToSelection()
+    else if (command === 'transform-upper') editorRef.current?.transformSelection('upper')
+    else if (command === 'transform-lower') editorRef.current?.transformSelection('lower')
+    else if (command === 'transform-capitalize') editorRef.current?.transformSelection('capitalize')
+    else if (command === 'speak-start') speakDocument()
+    else if (command === 'speak-stop') stopSpeaking()
+    else if (command === 'previous-tab') activateRelativeTab(-1)
+    else if (command === 'next-tab') activateRelativeTab(1)
+    else if (command === 'move-tab-window') void moveTabToNewWindow()
+    else if (command === 'toggle-tab-bar') setTabsVisible((value) => !value)
+    else if (command === 'show-all-tabs') setTabsOverviewOpen(true)
     else if (command === 'undo') {
       if (viewModeRef.current === 'edit') editorRef.current?.undo()
       else documents.undo()
@@ -795,12 +968,12 @@ function DocumentApp() {
   const replaceCurrent = () => {
     if (viewMode !== 'edit' || !searchQuery) return
     const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, mode: searchMode }) ?? 0
-    if (replaced) flash(t(settings.locale, 'replacedCount', { count: replaced }))
+    if (replaced) flash(t(locale, 'replacedCount', { count: replaced }))
   }
   const replaceAll = () => {
     if (viewMode !== 'edit' || !searchQuery) return
     const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, all: true, mode: searchMode }) ?? 0
-    if (replaced) flash(t(settings.locale, 'replacedCount', { count: replaced }))
+    if (replaced) flash(t(locale, 'replacedCount', { count: replaced }))
   }
   const previewScrollTop = () => document.querySelector<HTMLElement>('.preview-pane')?.scrollTop ?? 0
   const previewPane = () => document.querySelector<HTMLElement>('.preview-pane')
@@ -1087,12 +1260,12 @@ function DocumentApp() {
         if (event.payload.type !== 'drop') return
         const { first, extras } = partitionDroppedPaths(event.payload.paths)
         if (!first) {
-          setNotice(settings.locale === 'zh-CN' ? '未检测到可打开的文件或文件夹。' : 'No openable file or folder was dropped.')
+          setNotice(locale === 'zh-CN' ? '未检测到可打开的文件或文件夹。' : 'No openable file or folder was dropped.')
           return
         }
         if (extras.length) {
           setNotice(
-            settings.locale === 'zh-CN'
+            locale === 'zh-CN'
               ? `已打开第一个路径，忽略另外 ${extras.length} 个路径。`
               : `Opened the first path and ignored ${extras.length} additional path${extras.length === 1 ? '' : 's'}.`,
           )
@@ -1222,14 +1395,20 @@ function DocumentApp() {
 
   const chooseThemePreset = (themePreset: keyof typeof THEME_PRESETS) => {
     const flavor = THEME_PRESETS[themePreset].flavor
-    patch({ themePreset, theme: flavor, themeColors: {} })
+    // A fixed palette pins the appearance to match its chrome; Original
+    // (flavor "system") keeps the user's appearance choice.
+    patch({ themePreset, theme: flavor === 'system' ? settings.theme : flavor, themeColors: {} })
   }
   const chooseSidebarMode = (mode: SidebarMode) => {
     setSidebarMode(mode)
     setSidebarVisible(true)
   }
   return (
-    <main className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? '' : 'toolbar-hidden'}`}>
+    <main
+      className={`app-shell native-shell mode-${viewMode} ${toolbarVisible ? '' : 'toolbar-hidden'}`}
+      data-sidebar-visible={sidebarVisible ? 'true' : 'false'}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+    >
       <Toolbar
         documentName={documents.document.name}
         documentWords={stats.words}
@@ -1237,7 +1416,7 @@ function DocumentApp() {
         visible={toolbarVisible}
         busy={documents.busy}
         viewMode={viewMode}
-        locale={settings.locale}
+        locale={locale}
         items={settings.toolbar}
         displayMode={settings.toolbarDisplay}
         applications={applications}
@@ -1300,7 +1479,8 @@ function DocumentApp() {
         <ProjectDocumentSearch
           files={documents.files}
           activePath={documents.document.path}
-          locale={settings.locale}
+          locale={locale}
+          onOpenPath={(path) => void documents.openPath(path, true)}
           onOpenCurrent={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
           onOpenInTab={(path) => void documents.openPath(path, true)}
           onOpenInWindow={(path) => void openDocumentWindow(path)}
@@ -1312,51 +1492,88 @@ function DocumentApp() {
           onClose={() => setProjectSearchOpen(false)}
         />
       ) : null}
-      <div className="workspace-stack">
+      {tabsOverviewOpen ? (
+        <DocumentOverview
+          sessions={documents.sessions}
+          activeId={documents.activeId}
+          locale={locale}
+          onActivate={activateDocumentTab}
+          onClose={() => setTabsOverviewOpen(false)}
+        />
+      ) : null}
+      <div
+        className={`workspace-stack ${sidebarVisible ? 'with-sidebar' : ''}`}
+        style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+      >
+        {/* The sidebar and its handle sit beside the tab strip, not below it:
+            upstream's split view spans the full window height, so the
+            outline's first row lines up with the document tabs. */}
+        <Sidebar
+          visible={sidebarVisible}
+          locale={locale}
+          mode={sidebarMode}
+          fileName={documents.document.name}
+          documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
+          files={documents.files}
+          workspacePath={documents.workspacePath}
+          activePath={documents.document.path}
+          outline={rendered.outline}
+          activeHeading={activeHeading}
+          applications={applications}
+          defaultOpenTarget={settings.defaultOpenTarget}
+          onOpenFolder={() => void documents.openFolder()}
+          onCreateEntry={(directory, isDirectory, contents) => {
+            void createDirectoryEntry(directory, isDirectory, contents ?? undefined)
+              .then(() => documents.refreshFiles())
+              .catch(() => undefined)
+          }}
+          onImportFiles={(directory) => {
+            void pickAndImportFiles(directory)
+              .then((imported) => {
+                if (imported.length) return documents.refreshFiles()
+              })
+              .catch(() => undefined)
+          }}
+          onRenameEntry={(path, newName) => {
+            void renameDirectoryEntry(path, newName)
+              .then(() => documents.refreshFiles())
+              .catch(() => undefined)
+          }}
+          onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
+          onOpenFileInTab={(path) => void documents.openPath(path, true)}
+          onOpenFileInWindow={(path) => void openDocumentWindow(path)}
+          onOpenFileWith={openFileWith}
+          onRevealFile={(path) => void revealInFileManager(path)}
+          onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
+          onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
+          onOutlineSelect={selectOutline}
+        />
+        <PanelResizer
+          side="sidebar"
+          width={sidebarWidth}
+          min={SIDEBAR_WIDTH_RANGE.min}
+          max={SIDEBAR_WIDTH_RANGE.max}
+          onWidthChange={setSidebarWidth}
+        />
         <DocumentTabs
           sessions={documents.sessions}
           activeId={documents.activeId}
-          locale={settings.locale}
+          locale={locale}
           onActivate={activateDocumentTab}
           onClose={requestTabClose}
-          alwaysVisible={isTauri() && isMacos()}
+          alwaysVisible={isTauri() && isMacos() && tabsVisible}
+          hidden={!tabsVisible}
           onNew={createNewDocument}
         />
         <div
-          className={`document-shell ${sidebarVisible ? 'with-sidebar' : ''} ${inspectorVisible ? 'with-inspector' : ''}`}
-          style={{ '--sidebar-width': `${sidebarWidth}px`, '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
+          className={`document-shell ${inspectorVisible ? 'with-inspector' : ''}`}
+          style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
         >
-          <>
-            <Sidebar
-              visible={sidebarVisible}
-              locale={settings.locale}
-              mode={sidebarMode}
-              fileName={documents.document.name}
-              documentKey={`${documents.document.id}:${documents.document.path ?? documents.document.name}`}
-              files={documents.files}
-              workspacePath={documents.workspacePath}
-              activePath={documents.document.path}
-              outline={rendered.outline}
-              activeHeading={activeHeading}
-              applications={applications}
-              defaultOpenTarget={settings.defaultOpenTarget}
-              onOpenFolder={() => void documents.openFolder()}
-              onOpenFile={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
-              onOpenFileInTab={(path) => void documents.openPath(path, true)}
-              onOpenFileInWindow={(path) => void openDocumentWindow(path)}
-              onOpenFileWith={openFileWith}
-              onRevealFile={(path) => void revealInFileManager(path)}
-              onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
-              onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
-              onOutlineSelect={selectOutline}
-            />
-            <PanelResizer side="sidebar" width={sidebarWidth} min={180} max={400} onWidthChange={setSidebarWidth} />
-          </>
           <div className="document-workspace">
             <DocumentTools>
               {findOpen ? (
                 <FindBar
-                  locale={settings.locale}
+                  locale={locale}
                   hideQuery={findFromToolbar}
                   query={searchQuery}
                   current={searchIndex}
@@ -1364,6 +1581,7 @@ function DocumentApp() {
                   matchCase={matchCase}
                   mode={searchMode}
                   replacement={replacement}
+                  replaceSignal={findReplaceSignal}
                   onReplacementChange={setReplacement}
                   onReplace={replaceCurrent}
                   onReplaceAll={replaceAll}
@@ -1389,7 +1607,7 @@ function DocumentApp() {
               ) : null}
               {viewMode === 'edit' ? (
                 <FormattingToolbar
-                  locale={settings.locale}
+                  locale={locale}
                   onFormat={requestFormat}
                   onInsertLink={(label, destination) => editorRef.current?.insertLink(label, destination)}
                   state={formattingState}
@@ -1401,11 +1619,14 @@ function DocumentApp() {
                 key={`${documents.document.id}:${documents.document.revision ?? 'memory'}`}
                 ref={editorRef}
                 value={documents.document.contents}
-                locale={settings.locale}
+                locale={locale}
                 theme={resolvedTheme}
                 fontSize={settings.editorFontSize}
                 zoom={settings.zoom}
                 contentWidth={settings.contentWidth}
+                documentFont={settings.documentFont}
+                themePreset={settings.themePreset}
+                themeColors={settings.themeColors}
                 active={viewMode === 'edit'}
                 initialScrollFraction={pendingEditorLine == null ? (pendingScrollFraction ?? undefined) : undefined}
                 initialLine={pendingEditorLine ?? undefined}
@@ -1436,7 +1657,7 @@ function DocumentApp() {
             </Suspense>
             <PreviewPane
               active={viewMode === 'preview'}
-              locale={settings.locale}
+              locale={locale}
               rendered={rendered}
               renderKey={previewRenderKey}
               onHydrated={markPreviewHydrated}
@@ -1447,6 +1668,11 @@ function DocumentApp() {
               workspacePath={documents.workspacePath}
               zoom={settings.zoom}
               contentWidth={settings.contentWidth}
+              textAlignment={settings.textAlignment}
+              outlineFollowsPointer={settings.outlineFollowsPointer}
+              documentFont={settings.documentFont}
+              themePreset={settings.themePreset}
+              themeColors={settings.themeColors}
               searchQuery={searchQuery}
               searchIndex={searchIndex}
               matchCase={matchCase}
@@ -1456,7 +1682,18 @@ function DocumentApp() {
               }}
               onActiveHeading={setActiveHeading}
               onZoomChange={setZoom}
-              onOpenRelative={(path) => void documents.openRelative(path, previewScrollTop())}
+              onOpenRelative={(path) => {
+                // Mirror the upstream link behavior: the toggle sends relative
+                // Markdown links to their own window instead of this one.
+                if (settings.openMarkdownLinksInNewWindows && isTauri()) {
+                  const absolute = documents.baseDirectory ? resolveSiblingPath(documents.baseDirectory, path) : null
+                  if (absolute) {
+                    void openDocumentWindow(absolute)
+                    return
+                  }
+                }
+                void documents.openRelative(path, previewScrollTop())
+              }}
               onRenameImage={(path) => void documents.renamePastedImage(path)}
             />
             {viewMode === 'edit' ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
@@ -1465,20 +1702,21 @@ function DocumentApp() {
             <>
               <PanelResizer side="inspector" width={inspectorWidth} min={270} max={500} onWidthChange={setInspectorWidth} />
               <Inspector
-                locale={settings.locale}
+                locale={locale}
                 mode={inspectorMode}
-                outline={rendered.outline}
                 document={documents.document}
                 stats={stats}
+                selectionCountStats={
+                  selectionStats
+                    ? { words: selectionStats.words, characters: selectionStats.characters, lines: selectionStats.lines }
+                    : null
+                }
                 frontmatter={rendered.frontmatter}
                 onModeChange={(mode) => {
                   setInspectorMode(mode)
                   setInspectorVisible(true)
                 }}
-                onOutlineSelect={selectOutline}
-                onCopyPath={(path) => void navigator.clipboard.writeText(path)}
                 onRevealPath={(path) => void revealInFileManager(path)}
-                onClose={() => setInspectorVisible(false)}
               />
             </>
           ) : null}
@@ -1489,19 +1727,30 @@ function DocumentApp() {
           {notice ?? documents.notice}
         </div>
       ) : null}
-      {whatsNewOpen ? <WhatsNewDialog locale={settings.locale} onClose={() => setWhatsNewOpen(false)} /> : null}
-      <ConflictDialog change={documents.externalChange} locale={settings.locale} onResolve={documents.resolveExternal} />
+      <UpdatePill
+        status={updater.status}
+        locale={locale}
+        onInstall={() => void updater.install()}
+        onCheck={() => void updater.checkNow()}
+        onRelaunch={() => void updater.relaunch()}
+      />
+      {whatsNewOpen ? (
+        <Suspense fallback={null}>
+          <WhatsNewDialog locale={locale} previousVersion={whatsNewPreviousVersion} onClose={() => setWhatsNewOpen(false)} />
+        </Suspense>
+      ) : null}
+      <ConflictDialog change={documents.externalChange} locale={locale} onResolve={documents.resolveExternal} />
       {documents.pendingDraft ? (
         <DraftRecoveryDialog
           record={documents.pendingDraft.record}
-          locale={settings.locale}
+          locale={locale}
           onRestore={documents.restorePendingDraft}
           onDiscard={documents.discardPendingDraft}
         />
       ) : null}
       {closeGuard ? (
         <UnsavedCloseDialog
-          locale={settings.locale}
+          locale={locale}
           dirtyCount={closeGuard.dirty}
           canSaveAll={closeGuard.canSaveAll}
           onSave={() => void saveAndClose()}
@@ -1511,7 +1760,7 @@ function DocumentApp() {
       ) : null}
       {tabCloseGuard ? (
         <UnsavedCloseDialog
-          locale={settings.locale}
+          locale={locale}
           dirtyCount={1}
           canSaveAll={tabCloseGuard.canSave}
           onSave={() => void saveTabAndClose()}
@@ -1521,7 +1770,7 @@ function DocumentApp() {
       ) : null}
       {navigationGuard ? (
         <UnsavedCloseDialog
-          locale={settings.locale}
+          locale={locale}
           dirtyCount={1}
           canSaveAll={navigationGuard.canSave}
           onSave={() => void saveAndNavigate()}
@@ -1529,97 +1778,124 @@ function DocumentApp() {
           onCancel={() => setNavigationGuard(null)}
         />
       ) : null}
-      <ExportDialog
-        open={exportOpen}
-        locale={settings.locale}
-        onExportHtml={() => void exportDocument('html')}
-        onExportPng={() => void exportDocument('png')}
-        onExportPdf={() => exportPdf()}
-        onClose={() => setExportOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <ExportDialog
+          open={exportOpen}
+          locale={locale}
+          onExportHtml={() => void exportDocument('html')}
+          onExportPng={() => void exportDocument('png')}
+          onExportPdf={() => exportPdf()}
+          onClose={() => setExportOpen(false)}
+        />
+      </Suspense>
       {defaultHandlerPrompt ? (
         <div className="dialog-backdrop">
           <section className="conflict-dialog" role="dialog" aria-modal="true">
-            <h2>{settings.locale === 'zh-CN' ? '设为默认 Markdown 打开方式？' : 'Set as the default Markdown handler?'}</h2>
+            <h2>{locale === 'zh-CN' ? '设为默认 Markdown 打开方式？' : 'Set as the default Markdown handler?'}</h2>
             <p>
-              {settings.locale === 'zh-CN'
+              {locale === 'zh-CN'
                 ? '将 TextMark 设为 .md 文件的默认打开方式，双击即可直接预览。'
                 : 'Make TextMark the default opener for .md files so double-clicking opens a preview.'}
             </p>
             <div>
-              <button onClick={() => resolveDefaultHandler(false)}>{settings.locale === 'zh-CN' ? '以后再说' : 'Not Now'}</button>
+              <button onClick={() => resolveDefaultHandler(false)}>{locale === 'zh-CN' ? '以后再说' : 'Not Now'}</button>
               <button className="destructive" onClick={() => resolveDefaultHandler(true)}>
-                {settings.locale === 'zh-CN' ? '设为默认' : 'Set as Default'}
+                {locale === 'zh-CN' ? '设为默认' : 'Set as Default'}
               </button>
             </div>
           </section>
         </div>
       ) : null}
-      <ToolbarCustomizer
-        open={toolbarOpen}
-        locale={settings.locale}
-        items={settings.toolbar}
-        displayMode={settings.toolbarDisplay}
-        onChange={(toolbar) => patch({ toolbar })}
-        onDisplayModeChange={(toolbarDisplay) => patch({ toolbarDisplay })}
-        onClose={() => setToolbarOpen(false)}
-      />
-      <SettingsDialog
-        open={settingsOpen}
-        initialPane={settingsPane}
-        locale={settings.locale}
-        crashReports={settings.crashReports}
-        crashReportsAvailable={crashReportingAvailable}
-        updateChannel={settings.updateChannel}
-        autoCheckUpdates={settings.autoCheckUpdates}
-        lastUpdateCheckAt={settings.lastUpdateCheckAt}
-        updateStatus={updater.status}
-        onCheckUpdate={() => void updater.checkNow()}
-        onInstallUpdate={() => void updater.install()}
-        theme={settings.theme}
-        contentWidth={settings.contentWidth}
-        editorFontSize={settings.editorFontSize}
-        lineHeight={settings.lineHeight}
-        strictLineBreaks={settings.strictLineBreaks}
-        pagePaddingHorizontal={settings.pagePaddingHorizontal}
-        documentFont={settings.documentFont}
-        themePreset={settings.themePreset}
-        themeColors={settings.themeColors}
-        autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
-        openDocumentsInTabs={settings.openDocumentsInTabs}
-        alwaysOnTop={settings.alwaysOnTop}
-        zoom={settings.zoom}
-        applications={applications}
-        defaultOpenTarget={settings.defaultOpenTarget}
-        onLocaleChange={setLocale}
-        onCrashReportsChange={(crashReports) => patch({ crashReports })}
-        onUpdateChannelChange={(updateChannel) => patch({ updateChannel })}
-        onAutoCheckUpdatesChange={(autoCheckUpdates) => patch({ autoCheckUpdates })}
-        onThemeChange={setTheme}
-        onContentWidthChange={setContentWidth}
-        onEditorFontSizeChange={setEditorFontSize}
-        onLineHeightChange={setLineHeight}
-        onStrictLineBreaksChange={(strictLineBreaks) => patch({ strictLineBreaks })}
-        onPagePaddingHorizontalChange={setPagePaddingHorizontal}
-        onDocumentFontChange={setDocumentFont}
-        onThemePresetChange={chooseThemePreset}
-        onThemeColorChange={(scheme, slot, color) =>
-          patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
-        }
-        onThemeColorsReset={() => patch({ themeColors: {} })}
-        onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
-        onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
-        onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
-        onZoomChange={setZoom}
-        onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
-        onClose={() => {
-          setSettingsOpen(false)
-        }}
-      />
+      <Suspense fallback={null}>
+        <ToolbarCustomizer
+          open={toolbarOpen}
+          locale={locale}
+          items={settings.toolbar}
+          displayMode={settings.toolbarDisplay}
+          onChange={(toolbar) => patch({ toolbar })}
+          onDisplayModeChange={(toolbarDisplay) => patch({ toolbarDisplay })}
+          onClose={() => setToolbarOpen(false)}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <SettingsDialog
+          open={settingsOpen}
+          initialPane={settingsPane}
+          locale={locale}
+          crashReports={settings.crashReports}
+          sharesUsageAnalytics={settings.sharesUsageAnalytics}
+          crashReportsAvailable={crashReportingAvailable}
+          updateChannel={settings.updateChannel}
+          autoCheckUpdates={settings.autoCheckUpdates}
+          autoDownloadUpdates={settings.autoDownloadUpdates}
+          lastUpdateCheckAt={settings.lastUpdateCheckAt}
+          updateStatus={updater.status}
+          onCheckUpdate={() => void updater.checkNow()}
+          onInstallUpdate={() => void updater.install()}
+          onRelaunchUpdate={() => void updater.relaunch()}
+          theme={settings.theme}
+          contentWidth={settings.contentWidth}
+          editorFontSize={settings.editorFontSize}
+          lineHeight={settings.lineHeight}
+          strictLineBreaks={settings.strictLineBreaks}
+          pagePaddingHorizontal={settings.pagePaddingHorizontal}
+          textAlignment={settings.textAlignment}
+          outlineFollowsPointer={settings.outlineFollowsPointer}
+          documentFont={settings.documentFont}
+          readerLayout={settings.readerLayout}
+          themePreset={settings.themePreset}
+          themeColors={settings.themeColors}
+          autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
+          openDocumentsInTabs={settings.openDocumentsInTabs}
+          openMarkdownLinksInNewWindows={settings.openMarkdownLinksInNewWindows}
+          supportCardDismissed={settings.supportCardDismissed}
+          alwaysOnTop={settings.alwaysOnTop}
+          zoom={settings.zoom}
+          applications={applications}
+          defaultOpenTarget={settings.defaultOpenTarget}
+          onLocaleChange={setLocale}
+          localeSetting={settings.locale}
+          onCrashReportsChange={(crashReports) => patch({ crashReports })}
+          onUsageAnalyticsChange={(sharesUsageAnalytics) => patch({ sharesUsageAnalytics })}
+          onUpdateChannelChange={(updateChannel) => patch({ updateChannel })}
+          onAutoCheckUpdatesChange={(autoCheckUpdates) => patch({ autoCheckUpdates })}
+          onAutoDownloadUpdatesChange={(autoDownloadUpdates) => patch({ autoDownloadUpdates })}
+          onThemeChange={setTheme}
+          onContentWidthChange={setContentWidth}
+          onEditorFontSizeChange={setEditorFontSize}
+          onLineHeightChange={setLineHeight}
+          onStrictLineBreaksChange={(strictLineBreaks) => patch({ strictLineBreaks })}
+          onPagePaddingHorizontalChange={setPagePaddingHorizontal}
+          onTextAlignmentChange={(textAlignment) => patch({ textAlignment })}
+          onOutlineFollowsPointerChange={(outlineFollowsPointer) => patch({ outlineFollowsPointer })}
+          onDocumentFontChange={setDocumentFont}
+          onReaderLayoutChange={setReaderLayout}
+          onThemePresetChange={chooseThemePreset}
+          onThemeColorChange={(scheme, slot, color) =>
+            patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
+          }
+          onThemeColorsReset={() => patch({ themeColors: {} })}
+          onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
+          onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
+          onOpenMarkdownLinksInNewWindowsChange={(openMarkdownLinksInNewWindows) => patch({ openMarkdownLinksInNewWindows })}
+          onSupportCardDismissedChange={(supportCardDismissed) => patch({ supportCardDismissed })}
+          onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
+          onZoomChange={setZoom}
+          onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
+          onInstallCli={installCliAction}
+          onClose={() => {
+            setSettingsOpen(false)
+          }}
+        />
+      </Suspense>
     </main>
   )
 }
 
 export default function App() {
-  return new URLSearchParams(window.location.search).has('settings') ? <SettingsWindow /> : <DocumentApp />
+  return (
+    <Suspense fallback={null}>
+      {new URLSearchParams(window.location.search).has('settings') ? <SettingsWindow /> : <DocumentApp />}
+    </Suspense>
+  )
 }

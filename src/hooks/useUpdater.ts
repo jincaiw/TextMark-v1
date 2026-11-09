@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { isTauri } from '../lib/platform'
 
 export type UpdateStatus = {
-  state: 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'error'
+  state: 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'error'
   version?: string
   progress?: number
   errorCode?: string
@@ -24,7 +24,7 @@ type UpdateDownloadProgress = {
   finished: boolean
 }
 
-export function useUpdater(channel: 'stable' | 'beta', autoCheck: boolean, onChecked?: (timestamp: number) => void) {
+export function useUpdater(channel: 'stable' | 'beta', autoCheck: boolean, onChecked?: (timestamp: number) => void, autoDownload = false) {
   const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' })
   const statusRef = useRef(status)
   const checkInFlightRef = useRef(false)
@@ -87,27 +87,54 @@ export function useUpdater(channel: 'stable' | 'beta', autoCheck: boolean, onChe
       checkInFlightRef.current = false
     }
   }, [channel])
+  // With automatic downloads on, an available release flows straight into the
+  // download; the user still chooses when to relaunch (upstream
+  // "Automatically download updates" semantics).
+  useEffect(() => {
+    if (!autoDownload || status.state !== 'available') return
+    void installRef.current?.()
+  }, [autoDownload, status.state])
   const install = useCallback(async () => {
     if (installInFlightRef.current || statusRef.current.state !== 'available') return
     installInFlightRef.current = true
     const version = statusRef.current.version
     setStatus({ state: 'downloading', version, progress: 0 })
     try {
-      await invoke('install_update_channel', { channel })
-      const { relaunch } = await import('@tauri-apps/plugin-process')
-      await relaunch()
+      // Download without bouncing the app: the package installs in place and
+      // the user picks when to relaunch, mirroring the upstream two-phase
+      // "Relaunch Now" flow instead of an immediate forced restart.
+      await invoke('install_update_channel', { channel, downloadOnly: true })
+      setStatus({ state: 'ready', version })
     } catch (error) {
       const errorCode = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined
       setStatus({ state: 'error', version, errorCode })
       installInFlightRef.current = false
     }
   }, [channel])
+  // One check shortly after launch, then a 24-hour cadence like Sparkle's
+  // automatic checks, so a long-running window still hears about releases.
+  const DAY_MS = 24 * 60 * 60 * 1000
   useEffect(() => {
     if (!autoCheck) return
-    const timer = window.setTimeout(() => {
+    const initial = window.setTimeout(() => {
       void checkNow()
     }, 5000)
-    return () => window.clearTimeout(timer)
+    const interval = window.setInterval(() => {
+      void checkNow()
+    }, DAY_MS)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(interval)
+    }
   }, [autoCheck, checkNow])
-  return { status, checkNow, install }
+  /** Relaunch into the downloaded update; exposed so the ready pill and the
+   * settings pane share one entry point. */
+  const relaunch = useCallback(async () => {
+    if (!isTauri()) return
+    const { relaunch } = await import('@tauri-apps/plugin-process')
+    await relaunch()
+  }, [])
+  const installRef = useRef(install)
+  installRef.current = install
+  return { status, checkNow, install, relaunch }
 }

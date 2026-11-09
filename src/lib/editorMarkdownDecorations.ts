@@ -7,6 +7,7 @@ import { renderMath } from './mathRender'
 import { renderMarkdown } from './markdown'
 import { markdownDefinitionListBlocks, type MarkdownDefinitionListBlock } from './markdownDefinitionLists'
 import { sanitizeMermaidSvg } from './sanitize'
+import { createCodeActionIcon } from './codeActionIcons'
 
 export { markdownDefinitionListBlocks } from './markdownDefinitionLists'
 
@@ -726,6 +727,14 @@ export function editorImageReferences(line: string): EditorImageReference[] {
 interface EditorMarkdownDecorationOptions {
   resolveImage?: (path: string) => Promise<string | null>
   onRenameImage?: (path: string) => void
+  /** Toggle a fenced block between wrapped and horizontally scrolled code. */
+  onToggleCodeWrap?: (fenceFrom: number) => void
+  /** Localized labels for the card header controls, read when a header is built. */
+  codeCardLabels?: () => { wrap: string; unwrap: string; copy: string; copied: string }
+  /** Localized title for the table widget's expand affordance, read when built. */
+  expandTableLabel?: () => string
+  /** Opens a rendered table in its own window (upstream's Expand Table). */
+  onExpandTable?: (table: HTMLTableElement) => void
 }
 
 class ImagePreviewWidget extends WidgetType {
@@ -906,12 +915,20 @@ class HtmlBlockPreviewWidget extends WidgetType {
 }
 
 class TablePreviewWidget extends WidgetType {
-  constructor(readonly block: MarkdownTableBlock) {
+  constructor(
+    readonly block: MarkdownTableBlock,
+    readonly options: EditorMarkdownDecorationOptions,
+  ) {
     super()
   }
 
   eq(other: TablePreviewWidget) {
-    return this.block.from === other.block.from && this.block.to === other.block.to && this.block.source === other.block.source
+    return (
+      this.block.from === other.block.from &&
+      this.block.to === other.block.to &&
+      this.block.source === other.block.source &&
+      this.options === other.options
+    )
   }
 
   toDOM(view: EditorView) {
@@ -921,6 +938,26 @@ class TablePreviewWidget extends WidgetType {
     element.querySelectorAll<HTMLTableCellElement>('th, td').forEach((cell) => {
       cell.tabIndex = 0
     })
+    // The expand affordance sits in the widget's reserved first row, like the
+    // reading surface's; the editor draws the same glyph.
+    const table = element.querySelector('table')
+    const actions = document.createElement('div')
+    actions.className = 'md-table-actions'
+    const expand = document.createElement('button')
+    expand.type = 'button'
+    expand.className = 'md-table-expand'
+    expand.textContent = '⛶'
+    const label = this.options.expandTableLabel?.() ?? 'Expand table'
+    expand.title = label
+    expand.setAttribute('aria-label', label)
+    expand.addEventListener('mousedown', (event) => event.preventDefault())
+    expand.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (table) this.options.onExpandTable?.(table)
+    })
+    actions.append(expand)
+    element.prepend(actions)
     const enterSourceCell = (cell: HTMLTableCellElement, event: MouseEvent | KeyboardEvent) => {
       const row = cell.parentElement as HTMLTableRowElement | null
       const table = cell.closest('table')
@@ -976,7 +1013,7 @@ class TablePreviewWidget extends WidgetType {
   }
 
   ignoreEvent(event: Event) {
-    return event.target instanceof Element && Boolean(event.target.closest('th, td'))
+    return event.target instanceof Element && Boolean(event.target.closest('th, td, .md-table-expand'))
   }
 }
 
@@ -1352,6 +1389,95 @@ class TaskCheckboxWidget extends WidgetType {
   }
 }
 
+/**
+ * The card header the reading surface draws above a fenced block: the fence's
+ * language on the left and its wrap/copy controls on the right. The canvas
+ * hides the fence line itself, so the header rides on that line as a widget —
+ * the same line the card's wrapper already contains, which keeps the header
+ * inside the card instead of floating beside it.
+ */
+class CodeFenceHeaderWidget extends WidgetType {
+  constructor(
+    readonly language: string,
+    readonly source: string,
+    readonly fenceFrom: number,
+    readonly options: EditorMarkdownDecorationOptions,
+  ) {
+    super()
+  }
+
+  eq(other: CodeFenceHeaderWidget) {
+    return (
+      this.language === other.language &&
+      this.source === other.source &&
+      this.fenceFrom === other.fenceFrom &&
+      this.options === other.options
+    )
+  }
+
+  toDOM() {
+    const labels = this.options.codeCardLabels?.() ?? {
+      wrap: 'Wrap code',
+      unwrap: 'Unwrap code',
+      copy: 'Copy code',
+      copied: 'Copied',
+    }
+    const header = document.createElement('span')
+    header.className = 'cm-md-code-header'
+    const language = document.createElement('span')
+    language.className = 'cm-md-code-language'
+    language.textContent = this.language
+    language.title = this.language
+    const actions = document.createElement('span')
+    actions.className = 'cm-md-code-actions'
+    const wrap = document.createElement('button')
+    wrap.type = 'button'
+    wrap.className = 'cm-md-code-action'
+    wrap.dataset.codeAction = 'wrap'
+    wrap.setAttribute('aria-label', labels.wrap)
+    wrap.title = labels.wrap
+    wrap.append(createCodeActionIcon('wrap'))
+    wrap.addEventListener('mousedown', (event) => event.preventDefault())
+    wrap.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      this.options.onToggleCodeWrap?.(this.fenceFrom)
+    })
+    const copy = document.createElement('button')
+    copy.type = 'button'
+    copy.className = 'cm-md-code-action'
+    copy.dataset.codeAction = 'copy'
+    copy.setAttribute('aria-label', labels.copy)
+    copy.title = labels.copy
+    copy.append(createCodeActionIcon('copy'))
+    copy.addEventListener('mousedown', (event) => event.preventDefault())
+    copy.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void navigator.clipboard?.writeText(this.source).then(() => {
+        copy.classList.add('cm-md-code-action-copied')
+        copy.title = labels.copied
+        copy.setAttribute('aria-label', labels.copied)
+        copy.replaceChildren(createCodeActionIcon('copied'))
+        window.setTimeout(() => {
+          if (!copy.isConnected) return
+          copy.classList.remove('cm-md-code-action-copied')
+          copy.title = labels.copy
+          copy.setAttribute('aria-label', labels.copy)
+          copy.replaceChildren(createCodeActionIcon('copy'))
+        }, 1400)
+      })
+    })
+    actions.append(wrap, copy)
+    header.append(language, actions)
+    return header
+  }
+
+  ignoreEvent() {
+    return true
+  }
+}
+
 function buildDecorations(
   view: EditorView,
   options: EditorMarkdownDecorationOptions,
@@ -1365,6 +1491,7 @@ function buildDecorations(
   tableBlocks: MarkdownTableBlock[],
   quoteBlocks: MarkdownQuoteBlock[],
   tocBlocks: MarkdownTocBlock[],
+  codeCards: Set<number>,
 ): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const add = (from: number, to: number, decoration: Decoration) => ranges.push(decoration.range(from, to))
@@ -1559,6 +1686,7 @@ function buildDecorations(
             Decoration.mark({ class: markerClassForSelection(fenceStart, fenceStart + fence[2].length, 'cm-md-fence-marker') }),
           )
         }
+        const openingFence = fence && line.from <= codeNode.from && codeNode.from <= line.to
         const fenceLineEditing =
           isFence &&
           (selection.empty
@@ -1568,10 +1696,37 @@ function buildDecorations(
           line.from,
           line.from,
           Decoration.line({
-            class: isFence ? `cm-md-code-fence${fenceLineEditing ? ' cm-md-code-fence-editing' : ''}` : 'cm-md-code-line',
+            class: isFence
+              ? `cm-md-code-fence${openingFence ? '' : ' cm-md-code-fence-close'}${fenceLineEditing ? ' cm-md-code-fence-editing' : ''}`
+              : 'cm-md-code-line',
             attributes: codeNode.name === 'FencedCode' ? { 'data-code-fence-from': String(codeNode.from) } : {},
           }),
         )
+        if (openingFence && !fenceLineEditing && codeCards.has(codeNode.from)) {
+          const document = view.state.doc
+          const openingLine = document.lineAt(codeNode.from).number
+          const closingLine = document.lineAt(Math.max(codeNode.from, codeNode.to - 1)).number
+          const closingIsFence = closingLine > openingLine && /^\s*(?:`{3,}|~{3,})\s*$/.test(document.line(closingLine).text)
+          const bodyEnd = closingIsFence ? closingLine - 1 : closingLine
+          const body: string[] = []
+          for (let bodyLine = openingLine + 1; bodyLine <= bodyEnd; bodyLine += 1) {
+            const text = document.line(bodyLine).text
+            body.push(text.slice(markdownQuotePrefix(text).length))
+          }
+          add(
+            line.to,
+            line.to,
+            Decoration.widget({
+              widget: new CodeFenceHeaderWidget(
+                codeText.slice(fence[1].length + fence[2].length).trim(),
+                body.join('\n'),
+                codeNode.from,
+                options,
+              ),
+              side: 1,
+            }),
+          )
+        }
       } else {
         const markerLineEditing =
           setextMarkerLines.has(number) &&
@@ -1580,18 +1735,24 @@ function buildDecorations(
             : selection.from <= line.to && selection.to >= line.from)
         const quotePrefix = markdownQuotePrefix(line.text)
         const quoteBlank = quotePrefix.length > 0 && !line.text.slice(quotePrefix.length).trim()
-        const previousLine = number > 1 ? view.state.doc.line(number - 1).text : ''
-        const previousQuotePrefix = markdownQuotePrefix(previousLine)
-        const previousQuoteBlank = previousQuotePrefix.length > 0 && !previousLine.slice(previousQuotePrefix.length).trim()
-        const blankRunHasEarlierLine = number > 1 && ((!line.text.trim() && !previousLine.trim()) || (quoteBlank && previousQuoteBlank))
+        const nextLine = number < view.state.doc.lines ? view.state.doc.line(number + 1).text : ''
+        const nextQuotePrefix = markdownQuotePrefix(nextLine)
+        const nextQuoteBlank = nextQuotePrefix.length > 0 && !nextLine.slice(nextQuotePrefix.length).trim()
+        const blankRunHasLaterLine =
+          number < view.state.doc.lines && ((!line.text.trim() && !nextLine.trim()) || (quoteBlank && nextQuoteBlank))
         const blankLineEditing = selection.empty
           ? selection.head >= line.from && selection.head <= line.to
           : selection.from <= line.to && selection.to >= line.from
+        const blankSourceLine = (!line.text.trim() || quoteBlank) && !blankLineEditing
+        // A blank source line is layout, not content: the reference's editing
+        // canvas draws it exactly as its preview does — every blank in a run
+        // keeps the full source line height and only the last one shrinks to
+        // the 4pt spacer, so the authored separation before a block survives
+        // and the block's own top margin supplies the rest. The line under the
+        // caret stays a normal row so it stays usable.
         const fallbackLineClass =
           setextHeadingLines.get(number) ??
-          ((!line.text.trim() || quoteBlank) && blankRunHasEarlierLine && !blankLineEditing
-            ? 'cm-md-blank-line-collapsed'
-            : lineClass(line.text))
+          (blankSourceLine ? (blankRunHasLaterLine ? 'cm-md-blank-line-kept' : 'cm-md-blank-line') : lineClass(line.text))
         const className =
           frontmatterLines.get(number) ??
           (setextMarkerLines.has(number) ? `cm-md-setext-marker${markerLineEditing ? ' cm-md-source-revealed' : ''}` : null) ??
@@ -1844,13 +2005,26 @@ function buildDecorations(
   return Decoration.set(ranges, true)
 }
 
-function buildCodeBlockWrappers(
+interface CodeCardFence {
+  /** Offset of the opening fence line. */
+  from: number
+  /** Offset of the closing fence (or the document end when it is unclosed). */
+  to: number
+  firstLineFrom: number
+  lastLineTo: number
+}
+
+/**
+ * The fences the canvas renders as a card. The wrapping decoration and the
+ * card's header must agree on exactly this set, so both read it from here.
+ */
+function codeCardFences(
   view: EditorView,
   detailsBlocks: MarkdownDetailsBlock[],
   htmlBlocks: MarkdownHtmlBlock[],
   quoteBlocks: MarkdownQuoteBlock[],
-) {
-  const wrappers: Range<BlockWrapper>[] = []
+): CodeCardFence[] {
+  const fences: CodeCardFence[] = []
   const document = view.state.doc
   const selection = view.state.selection.main
   const visibleDetailsBlocks = detailsBlocks.filter((block) =>
@@ -1883,14 +2057,36 @@ function buildCodeBlockWrappers(
       const first = document.lineAt(node.from)
       const last = document.lineAt(Math.max(node.from, node.to - 1))
       if (/^\s*(?:>\s*)?(`{3,}|~{3,})\s*mermaid\b/i.test(first.text)) return
-      wrappers.push(
-        BlockWrapper.create({
-          tagName: 'div',
-          attributes: { class: markdownQuotePrefix(first.text) ? 'cm-md-code-card cm-md-quote-code-card' : 'cm-md-code-card' },
-        }).range(first.from, Math.max(last.to, last.from + 1)),
-      )
+      fences.push({ from: node.from, to: node.to, firstLineFrom: first.from, lastLineTo: Math.max(last.to, last.from + 1) })
     },
   })
+  return fences
+}
+
+function codeCardFenceSetFor(
+  view: EditorView,
+  detailsBlocks: MarkdownDetailsBlock[],
+  htmlBlocks: MarkdownHtmlBlock[],
+  quoteBlocks: MarkdownQuoteBlock[],
+) {
+  return new Set(codeCardFences(view, detailsBlocks, htmlBlocks, quoteBlocks).map((fence) => fence.from))
+}
+
+function buildCodeBlockWrappers(
+  view: EditorView,
+  detailsBlocks: MarkdownDetailsBlock[],
+  htmlBlocks: MarkdownHtmlBlock[],
+  quoteBlocks: MarkdownQuoteBlock[],
+) {
+  const document = view.state.doc
+  const wrappers = codeCardFences(view, detailsBlocks, htmlBlocks, quoteBlocks).map((fence) =>
+    BlockWrapper.create({
+      tagName: 'div',
+      attributes: {
+        class: markdownQuotePrefix(document.lineAt(fence.from).text) ? 'cm-md-code-card cm-md-quote-code-card' : 'cm-md-code-card',
+      },
+    }).range(fence.firstLineFrom, fence.lastLineTo),
+  )
   return BlockWrapper.set(wrappers, true)
 }
 
@@ -1916,6 +2112,7 @@ function buildDisplayMathDecorations(
   quoteBlocks: MarkdownQuoteBlock[],
   tocBlocks: MarkdownTocBlock[],
   definitionListBlocks: MarkdownDefinitionListBlock[],
+  options: EditorMarkdownDecorationOptions,
 ): DecorationSet {
   const selection = state.selection.main
   const ranges: Range<Decoration>[] = []
@@ -1999,7 +2196,7 @@ function buildDisplayMathDecorations(
   for (const block of standaloneHtmlBlocks)
     ranges.push(Decoration.replace({ widget: new HtmlBlockPreviewWidget(block.source), block: true }).range(block.from, block.to))
   for (const block of visibleTableBlocks)
-    ranges.push(Decoration.replace({ widget: new TablePreviewWidget(block), block: true }).range(block.from, block.to))
+    ranges.push(Decoration.replace({ widget: new TablePreviewWidget(block, options), block: true }).range(block.from, block.to))
   for (const block of visibleTocBlocks)
     ranges.push(Decoration.replace({ widget: new TocPreviewWidget(state.doc.toString()), block: true }).range(block.from, block.to))
   for (const block of visibleDefinitionListBlocks)
@@ -2033,6 +2230,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
         this.tableBlocks = markdownTableBlocks(view.state.doc.toString())
         this.quoteBlocks = markdownQuoteBlocks(view.state.doc.toString())
         this.tocBlocks = markdownTocBlocks(view.state.doc.toString())
+        const codeCardFenceSet = codeCardFenceSetFor(view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
         this.decorations = buildDecorations(
           view,
           options,
@@ -2046,6 +2244,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           this.tableBlocks,
           this.quoteBlocks,
           this.tocBlocks,
+          codeCardFenceSet,
         )
         this.blockWrappers = buildCodeBlockWrappers(view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
       }
@@ -2068,6 +2267,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
             this.quoteBlocks = markdownQuoteBlocks(update.state.doc.toString())
             this.tocBlocks = markdownTocBlocks(update.state.doc.toString())
           }
+          const codeCardFenceSet = codeCardFenceSetFor(update.view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
           this.decorations = buildDecorations(
             update.view,
             options,
@@ -2081,6 +2281,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
             this.tableBlocks,
             this.quoteBlocks,
             this.tocBlocks,
+            codeCardFenceSet,
           )
           this.blockWrappers = buildCodeBlockWrappers(update.view, this.detailsBlocks, this.htmlBlocks, this.quoteBlocks)
         }
@@ -2123,6 +2324,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           quoteBlocks,
           tocBlocks,
           definitionListBlocks,
+          options,
         ),
       }
     },
@@ -2155,6 +2357,7 @@ export function createEditorMarkdownDecorations(options: EditorMarkdownDecoratio
           quoteBlocks,
           tocBlocks,
           definitionListBlocks,
+          options,
         ),
       }
     },

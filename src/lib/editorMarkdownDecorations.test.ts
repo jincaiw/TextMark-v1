@@ -896,7 +896,7 @@ describe('inactive Markdown syntax markers', () => {
 })
 
 describe('editing-mode whitespace', () => {
-  it('collapses repeated blank source lines but restores the active line', () => {
+  it('draws repeated blank source lines like the preview and restores the active line', () => {
     const source = '> first\n\n\n> second\n```text\none\n\n\ntwo\n```'
     const view = new EditorView({
       parent: document.body,
@@ -909,15 +909,20 @@ describe('editing-mode whitespace', () => {
     try {
       const blankLines = [...view.dom.querySelectorAll('.cm-line')].filter((line) => !line.textContent?.trim())
       expect(blankLines).toHaveLength(4)
-      expect(blankLines.filter((line) => line.classList.contains('cm-md-blank-line-collapsed'))).toHaveLength(1)
+      // The preview keeps every blank in a run at the source line height and
+      // shrinks only the last one to the 4pt spacer.
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-kept')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line')).toHaveLength(1)
       view.dispatch({ selection: { anchor: source.indexOf('\n\n') + 2 } })
-      expect(view.dom.querySelectorAll('.cm-md-blank-line-collapsed')).toHaveLength(0)
+      // The caret's own blank line renders as a normal row again, so the run no
+      // longer ends in the compact spacer.
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line')).toHaveLength(0)
     } finally {
       view.destroy()
     }
   })
 
-  it('collapses repeated empty blockquote lines while preserving one paragraph break', () => {
+  it('keeps repeated empty blockquote lines while shrinking the last one', () => {
     const source = '> first paragraph\n> \n> \n> second paragraph'
     const view = new EditorView({
       parent: document.body,
@@ -928,9 +933,10 @@ describe('editing-mode whitespace', () => {
       }),
     })
     try {
-      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-collapsed')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-kept')).toHaveLength(1)
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line')).toHaveLength(1)
       view.dispatch({ selection: { anchor: source.indexOf('> \n> \n') + 4 } })
-      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line-collapsed')).toHaveLength(0)
+      expect(view.dom.querySelectorAll('.cm-line.cm-md-blank-line')).toHaveLength(0)
     } finally {
       view.destroy()
     }

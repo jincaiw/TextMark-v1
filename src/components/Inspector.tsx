@@ -1,190 +1,197 @@
-import { useMemo } from 'react'
-import { ArrowDownRight, FileText, ListTree, Tag, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { homeDir } from '@tauri-apps/api/path'
+import { ChevronRight } from 'lucide-react'
 import { t } from '../lib/i18n'
-import type { DocumentStats, FrontmatterEntry, InspectorMode, Locale, OutlineItem, TextDocument } from '../types'
+import type { SelectionStats } from '../lib/inspectorSelection'
+import type { DocumentStats, FrontmatterEntry, InspectorMode, Locale, TextDocument } from '../types'
 
-const formatDate = (value: number | null | undefined, locale: Locale) =>
-  value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'
-const formatBytes = (bytes: number, locale: Locale) =>
-  new Intl.NumberFormat(locale, { style: 'unit', unit: bytes < 1024 ? 'byte' : 'kilobyte', maximumFractionDigits: 1 }).format(
-    bytes < 1024 ? bytes : bytes / 1024,
-  )
-
-const MODE_META: Array<{ mode: InspectorMode; label: Parameters<typeof t>[1]; icon: typeof FileText }> = [
-  { mode: 'outline', label: 'tableOfContents', icon: ListTree },
-  { mode: 'document', label: 'document', icon: FileText },
-  { mode: 'tags', label: 'tags', icon: Tag },
-  { mode: 'outgoing', label: 'outgoingLinks', icon: ArrowDownRight },
-  { mode: 'backlinks', label: 'backlinks', icon: ArrowDownRight },
-]
-
-function extractTags(source: string) {
-  const tags = new Set<string>()
-  for (const match of source.matchAll(/(^|\s)#([\p{L}\p{N}_/-]+)/gmu)) tags.add(`#${match[2]}`)
-  return [...tags]
+// The reference's inspector has exactly two segments: the document summary and
+// the front-matter ("Properties") pane. Its icons are a blank page with a
+// folded corner and a bare serifed "i" — SF Symbols "doc" and "info" — rather
+// than the circled information glyph the web icon set ships.
+const Segments = {
+  document: () => (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 1.75h5.5l4.5 4.5v8H3z" fill="none" stroke="currentColor" strokeWidth="1.15" />
+      <path d="M7.75 1.75v4.5h5.25" fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
+    </svg>
+  ),
+  properties: () => (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <ellipse cx="7.6" cy="2.8" rx="0.8" ry="1.1" fill="currentColor" />
+      <path d="M4.8 6.25h3.5v6.75h-1V7.15H4.8z" fill="currentColor" />
+      <rect x="4.8" y="13" width="6" height="1" fill="currentColor" />
+    </svg>
+  ),
 }
 
-function extractOutgoingLinks(source: string) {
-  const links: string[] = []
-  for (const match of source.matchAll(/(?<!!)(?:\[[^\]]*\]\(([^)]+)\)|\[\[([^\]]+)\]\])/g)) links.push(match[1] ?? match[2])
-  return [...new Set(links)]
+const MODE_META: Array<{ mode: 'document' | 'properties'; label: Parameters<typeof t>[1] }> = [
+  { mode: 'document', label: 'document' },
+  { mode: 'properties', label: 'properties' },
+]
+
+// The reference's medium date plus a 12-hour clock: zh reads
+// "2026年11月8日 上午11:39", en "Nov 8, 2026 at 11:39 AM".
+const formatModified = (value: number | null | undefined, locale: Locale) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  const day = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
+  const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', hour12: true }).format(date)
+  return locale === 'zh-CN' ? `${day} ${time}` : `${day} at ${time}`
+}
+// ByteCountFormatter's wording: "744 字节" over here, "744 bytes" there; a
+// kilobyte or more uses the short "KB" unit.
+const formatBytes = (bytes: number, locale: Locale) => {
+  if (bytes < 1024) return `${bytes.toLocaleString(locale)} ${locale === 'zh-CN' ? '字节' : 'bytes'}`
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / 1024)} KB`
+}
+
+/** Abbreviate a path with `~` when it lives under the user's home, as the
+ * upstream inspector does before display. */
+async function abbreviatePath(path: string): Promise<string> {
+  try {
+    const home = (await homeDir()).replace(/\/$/, '')
+    if (home && path.startsWith(`${home}/`)) return `~${path.slice(home.length)}`
+  } catch {
+    // Non-Tauri contexts (tests, preview host) keep the full path.
+  }
+  return path
 }
 
 export function Inspector({
   mode,
-  outline,
   document,
   stats,
+  selectionCountStats,
   frontmatter,
   locale,
   onModeChange,
-  onOutlineSelect,
-  onCopyPath,
   onRevealPath,
-  onClose,
 }: {
   mode: InspectorMode
-  outline: OutlineItem[]
   document: TextDocument
   stats: DocumentStats
+  /** When the editor has a selection, counts for just that selection. */
+  selectionCountStats: SelectionStats | null
   frontmatter: FrontmatterEntry[]
   locale: Locale
-  onModeChange: (mode: InspectorMode) => void
-  onOutlineSelect: (id: string) => void
-  onCopyPath: (path: string) => void
+  onModeChange: (mode: 'document' | 'properties') => void
   onRevealPath: (path: string) => void
-  onClose: () => void
 }) {
   const bytes = document.sizeBytes ?? new TextEncoder().encode(document.contents).byteLength
-  const tags = useMemo(() => extractTags(document.contents), [document.contents])
-  const outgoingLinks = useMemo(() => extractOutgoingLinks(document.contents), [document.contents])
-  const field = (label: Parameters<typeof t>[1], value: React.ReactNode, title?: string) => (
-    <div>
-      <dt>{t(locale, label)}</dt>
-      <dd title={title}>{value}</dd>
+  const [displayPath, setDisplayPath] = useState(document.path)
+  useEffect(() => {
+    if (!document.path) {
+      setDisplayPath(null)
+      return
+    }
+    let cancelled = false
+    void abbreviatePath(document.path).then((abbreviated) => {
+      if (!cancelled) setDisplayPath(abbreviated)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [document.path])
+  const row = (label: Parameters<typeof t>[1], value: ReactNode, title?: string) => (
+    <div className="inspector-row">
+      <span className="inspector-row-label">{t(locale, label)}</span>
+      <span className="inspector-row-value" title={title}>
+        {value}
+      </span>
     </div>
   )
-  const empty = (message: string) => <p className="inspector-empty">{message}</p>
-  const renderDocument = () => (
-    <>
-      <dl>
-        {field('fileName', <strong>{document.name}</strong>, document.path ?? undefined)}
-        {field('documentType', t(locale, 'markdownDocument'))}
-        {field(
-          'location',
-          document.path ? (
-            <div className="inspector-location">
-              <code>{document.path}</code>
-              <span>
-                <button type="button" onClick={() => onCopyPath(document.path!)}>
-                  {t(locale, 'copyPath')}
-                </button>
-                <button type="button" onClick={() => onRevealPath(document.path!)}>
-                  {t(locale, 'showInFileManager')}
-                </button>
-              </span>
-            </div>
-          ) : (
-            t(locale, 'unsaved')
-          ),
-          document.path ?? undefined,
-        )}
-        {field('fileSize', formatBytes(bytes, locale))}
-        {field('created', formatDate(document.createdMs, locale))}
-        {field('modified', formatDate(document.modifiedMs, locale))}
-      </dl>
-      <h3>{t(locale, 'documentInfo')}</h3>
-      <dl className="stats-grid">
-        {field('words', stats.words.toLocaleString(locale))}
-        {field('characters', stats.characters.toLocaleString(locale))}
-        {field('lines', stats.lines.toLocaleString(locale))}
-        {field('headings', stats.headings.toLocaleString(locale))}
-        {field('links', stats.links.toLocaleString(locale))}
-        {field('images', stats.images.toLocaleString(locale))}
-      </dl>
-    </>
+  // Words / characters / lines carry a muted "- Selected" suffix whenever the
+  // editor has a selection, mirroring the upstream countLabel.
+  const countRow = (label: Parameters<typeof t>[1], value: number) => (
+    <div className="inspector-row">
+      <span className="inspector-row-label">
+        {t(locale, label)}
+        {selectionCountStats ? <span className="inspector-selected-suffix">- {t(locale, 'selected')}</span> : null}
+      </span>
+      <span className="inspector-row-value">{value.toLocaleString(locale)}</span>
+    </div>
   )
-  const renderOutline = () =>
-    outline.length ? (
-      <nav className="inspector-outline" aria-label={t(locale, 'tableOfContents')}>
-        {outline.map((item) => (
-          <button key={item.id} className={`outline-level-${item.level}`} onClick={() => onOutlineSelect(item.id)}>
-            <span>{item.text}</span>
-          </button>
-        ))}
-      </nav>
-    ) : (
-      empty(t(locale, 'noHeadings'))
-    )
-  const renderTags = () =>
-    tags.length ? (
-      <div className="inspector-chip-list" aria-label={t(locale, 'tags')}>
-        {tags.map((tag) => (
-          <span key={tag}>{tag}</span>
-        ))}
-      </div>
-    ) : (
-      empty(locale === 'zh-CN' ? '当前文档没有标签。' : 'This document has no tags.')
-    )
-  const renderLinks = (backlinks: boolean) =>
-    backlinks ? (
-      empty(locale === 'zh-CN' ? '尚未建立反向链接索引。' : 'No backlink index is available yet.')
-    ) : outgoingLinks.length ? (
-      <ul className="inspector-link-list">
-        {outgoingLinks.map((link) => (
-          <li key={link}>
-            <span>{link}</span>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      empty(locale === 'zh-CN' ? '当前文档没有出链。' : 'This document has no outgoing links.')
-    )
-  const renderContent = () => {
-    if (mode === 'outline') return renderOutline()
-    if (mode === 'tags') return renderTags()
-    if (mode === 'outgoing') return renderLinks(false)
-    if (mode === 'backlinks') return renderLinks(true)
-    return frontmatter.length ? (
-      <>
-        {renderDocument()}
-        <h3>{t(locale, 'properties')}</h3>
-        <dl className="frontmatter-list">
+  // Tags, outgoing links and backlinks live in other surfaces; the reference's
+  // inspector is exactly these two segments.
+  const renderDocument = () => (
+    <div className="inspector-sections">
+      <section className="inspector-card">
+        {row('fileName', document.name, document.path ?? undefined)}
+        {document.path
+          ? row(
+              'fullPath',
+              <>
+                <code>{displayPath ?? document.path}</code>
+                <button
+                  type="button"
+                  className="inspector-reveal"
+                  title={t(locale, 'showInFileManager')}
+                  aria-label={t(locale, 'showInFileManager')}
+                  onClick={() => onRevealPath(document.path!)}
+                >
+                  <ChevronRight />
+                </button>
+              </>,
+              document.path,
+            )
+          : null}
+        {row('documentType', t(locale, 'markdownDocument'))}
+        {row('fileSize', formatBytes(bytes, locale))}
+      </section>
+      <section className="inspector-card">
+        {countRow('words', selectionCountStats?.words ?? stats.words)}
+        {countRow('characters', selectionCountStats?.characters ?? stats.characters)}
+        {countRow('lines', selectionCountStats?.lines ?? stats.lines)}
+      </section>
+      <section className="inspector-card">
+        {row('headings', stats.headings.toLocaleString(locale))}
+        {row('links', stats.links.toLocaleString(locale))}
+        {row('images', stats.images.toLocaleString(locale))}
+      </section>
+      <section className="inspector-card inspector-card-date">
+        <span className="inspector-row-label">{t(locale, 'modified')}</span>
+        <span className="inspector-date-value">{formatModified(document.modifiedMs, locale)}</span>
+      </section>
+    </div>
+  )
+  const renderProperties = () =>
+    frontmatter.length ? (
+      <div className="inspector-sections">
+        <section className="inspector-card">
           {frontmatter.map((entry, index) => (
-            <div key={`${entry.key}-${index}`}>
-              <dt>{entry.key}</dt>
-              <dd>{entry.value}</dd>
+            <div className="inspector-row" key={`${entry.key}-${index}`}>
+              <span className="inspector-row-label">{entry.key}</span>
+              <span className="inspector-row-value">{entry.value}</span>
             </div>
           ))}
-        </dl>
-      </>
+        </section>
+      </div>
     ) : (
-      renderDocument()
+      <p className="inspector-empty">{t(locale, 'noFrontmatter')}</p>
     )
-  }
+  const active: 'document' | 'properties' = mode === 'properties' ? 'properties' : 'document'
   return (
     <aside className="inspector-panel" aria-label={t(locale, 'documentInfo')}>
       <header>
         <div className="inspector-segmented" role="tablist" aria-label={locale === 'zh-CN' ? '检查器面板' : 'Inspector panels'}>
-          {MODE_META.map(({ mode: itemMode, label, icon: Icon }) => (
+          {MODE_META.map(({ mode: itemMode, label }) => (
             <button
               key={itemMode}
               role="tab"
-              aria-selected={mode === itemMode}
-              className={mode === itemMode ? 'active' : ''}
+              aria-selected={active === itemMode}
+              className={active === itemMode ? 'active' : ''}
               title={t(locale, label)}
+              aria-label={t(locale, label)}
               onClick={() => onModeChange(itemMode)}
             >
-              <Icon />
-              <span>{t(locale, label)}</span>
+              {Segments[itemMode]()}
             </button>
           ))}
         </div>
-        <button onClick={onClose} aria-label={t(locale, 'close')}>
-          <X />
-        </button>
       </header>
-      <section className="inspector-tab">{renderContent()}</section>
+      <section className={`inspector-tab inspector-tab-${active}`}>{active === 'document' ? renderDocument() : renderProperties()}</section>
     </aside>
   )
 }

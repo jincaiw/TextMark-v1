@@ -85,7 +85,7 @@ export function ToolbarAppearance(props: ToolbarAppearanceProps) {
 
   return (
     <details className="toolbar-group themes-and-settings" ref={detailsRef} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary title={tx('themesAndSettings')} aria-label={tx('themesAndSettings')} aria-expanded={open}>
+      <summary role="button" title={tx('themesHelp')} aria-label={tx('themesLabel')} aria-expanded={open}>
         {props.children}
       </summary>
       <div className="appearance-popover" ref={panelRef} role="dialog" aria-label={tx('themesAndSettings')}>

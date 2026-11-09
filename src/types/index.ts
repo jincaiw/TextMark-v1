@@ -1,14 +1,41 @@
 export type ViewMode = 'edit' | 'preview'
 export type Locale = 'zh-CN' | 'en'
+/** Stored language preference; "system" follows the OS language like the upstream System Default. */
+export type LocaleSetting = Locale | 'system'
 export type ThemeMode = 'dark' | 'light' | 'system'
-export type DocumentFont = 'system' | 'serif' | 'rounded' | 'monospace'
-export type ThemePreset = 'normal' | 'charcoal' | 'redGraphite' | 'darkGraphite' | 'solarizedLight' | 'solarizedDark' | 'dracula'
+export type DocumentFont =
+  | 'system'
+  | 'athelas'
+  | 'avenirNext'
+  | 'charter'
+  | 'georgia'
+  | 'iowan'
+  | 'newYork'
+  | 'palatino'
+  | 'rounded'
+  | 'seravek'
+  | 'timesNewRoman'
+  | 'monospace'
+export type ThemePreset = 'normal' | 'quiet' | 'paper' | 'bold' | 'calm' | 'focus' | 'graphite' | 'dusk' | 'midnight'
 export type ThemeColorScheme = 'light' | 'dark'
 export type ThemeColorSlot = 'windowBackground' | 'editorBackground' | 'codeBlockBackground' | 'textColor' | 'linkColor'
 export type ThemeColors = Partial<Record<ThemeColorScheme, Partial<Record<ThemeColorSlot, string>>>>
 export type SidebarMode = 'outline' | 'files'
-export type InspectorMode = 'outline' | 'document' | 'tags' | 'outgoing' | 'backlinks'
+export type InspectorMode = 'document' | 'properties'
 export type ContentWidth = 'normal' | 'full'
+/** Upstream TextAlignmentSetting: automatic leaves prose at its authored direction. */
+export type TextAlignment = 'automatic' | 'left' | 'center' | 'right' | 'justified'
+
+/** Upstream ReaderLayoutSetting. Sliders only apply while customized is on;
+ * turning it off restores the tuned defaults without losing slider positions. */
+export interface ReaderLayout {
+  boldText: boolean
+  isCustomized: boolean
+  lineSpacing: number
+  characterSpacingPercent: number
+  wordSpacingPercent: number
+  marginsPercent: number
+}
 export type ToolbarDisplayMode = 'iconOnly' | 'iconAndLabel'
 export type SearchMode = 'contains' | 'beginsWith'
 export type FormatCommand =
@@ -80,7 +107,8 @@ export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'canc
 
 export interface AppSettings {
   schemaVersion: 10
-  locale: Locale
+  /** Stored language preference; resolved through resolveLocale before display. */
+  locale: LocaleSetting
   theme: ThemeMode
   contentWidth: ContentWidth
   zoom: number
@@ -104,8 +132,23 @@ export interface AppSettings {
   toolbarDisplay: ToolbarDisplayMode
   defaultOpenTarget: string
   crashReports: boolean
+  /** Anonymous daily-usage ping, mirroring the upstream privacy toggle. */
+  sharesUsageAnalytics: boolean
+  /** Markdown relative links open a separate window instead of the current one. */
+  openMarkdownLinksInNewWindows: boolean
+  /** The General-page support card stays hidden once the reader dismisses it. */
+  supportCardDismissed: boolean
+  /** Prose alignment applied to rendered preview blocks; automatic injects no CSS. */
+  textAlignment: TextAlignment
+  /** Reading face weights and spacing, gated the Apple Books way behind Customize. */
+  readerLayout: ReaderLayout
+  /** The outline highlights the section under the pointer instead of the scroll position. */
+  outlineFollowsPointer: boolean
+  /** Namespace for approved custom app-link schemes; rotating it invalidates every approval. */
+  appLinkGeneration: string
   updateChannel: 'stable' | 'beta'
   autoCheckUpdates: boolean
+  autoDownloadUpdates: boolean
   lastUpdateCheckAt: number | null
 }
 
@@ -272,4 +315,7 @@ export interface ExternalApplication {
   name: string
   kind: 'editor' | 'llm' | 'system'
   available: boolean
+  /** macOS bundle name ("Visual Studio Code.app") used to load the app's
+   * real Finder icon; null elsewhere or for the system target. */
+  macApp?: string | null
 }

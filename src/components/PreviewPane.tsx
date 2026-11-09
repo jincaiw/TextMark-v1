@@ -5,6 +5,7 @@ import { writeKatexSelectionToClipboard } from '../lib/copyTex'
 import { sanitizeMermaidSvg } from '../lib/sanitize'
 import { invoke } from '@tauri-apps/api/core'
 import { isTauri, loadLocalAsset } from '../lib/platform'
+import { openTableWindow } from '../lib/tableWindow'
 import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
 import { clampScrollFraction } from '../lib/scrollFraction'
@@ -13,7 +14,7 @@ import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchroniz
 import { buildSearchPattern } from '../lib/search'
 import { createCodeActionIcon } from '../lib/codeActionIcons'
 import { scrollPreviewToFragment } from '../lib/previewNavigation'
-import type { ContentWidth, Locale, RenderedMarkdown, SearchMode } from '../types'
+import type { ContentWidth, DocumentFont, Locale, RenderedMarkdown, SearchMode, TextAlignment, ThemeColors, ThemePreset } from '../types'
 
 interface PreviewPaneProps {
   active?: boolean
@@ -26,6 +27,11 @@ interface PreviewPaneProps {
   workspacePath: string | null
   zoom: number
   contentWidth: ContentWidth
+  textAlignment: TextAlignment
+  outlineFollowsPointer: boolean
+  documentFont: DocumentFont
+  themePreset: ThemePreset
+  themeColors: ThemeColors
   searchQuery: string
   searchIndex: number
   matchCase: boolean
@@ -43,6 +49,27 @@ interface PreviewPaneProps {
 }
 
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value)
+/** Port of the upstream TextAlignmentSetting.styleBlock: only prose blocks
+ * participate. Authored alignment on the block or its ancestors wins, and
+ * rich content that owns its own layout (tables, code, diagrams, math) is
+ * excluded from the override. */
+const textAlignStyleBlock = (alignment: TextAlignment): string => {
+  if (alignment === 'automatic') return ''
+  const value = alignment === 'justified' ? 'justify' : alignment
+  return `
+article.markdown-body :is(p, li, dt, dd, h1, h2, h3, h4, h5, h6):not(
+    center *, [align], [align] *, [style*="text-align" i], [style*="text-align" i] *,
+    table *, pre *, .mermaid *, .katex *
+) {
+  text-align: ${value};
+  text-align-last: auto;
+}
+article.markdown-body :is(pre, .md-code-card):not(center *, [align], [align] *, [style*="text-align" i], [style*="text-align" i] *) {
+  text-align: start;
+  text-align-last: auto;
+}
+`
+}
 const disclosureKey = (details: HTMLDetailsElement, index: number) =>
   `${index}:${details.querySelector('summary')?.textContent?.trim() ?? ''}`
 
@@ -201,7 +228,50 @@ export function PreviewPane(props: PreviewPaneProps) {
       pane.removeEventListener('scroll', schedule)
       cancelAnimationFrame(frame)
     }
-  }, [props.active, props.documentKey, props.rendered.html, props.onActiveHeading])
+    // Re-run when pointer tracking toggles so disabling it drops the pointer
+    // heading and falls back to the scroll position, as upstream does.
+  }, [props.active, props.documentKey, props.rendered.html, props.onActiveHeading, props.outlineFollowsPointer])
+
+  // Upstream "highlight outline section under the pointer": while the pointer
+  // moves across the preview, the heading above the pointer's document-Y
+  // becomes the active outline row, mirroring lastIndex(where: offset <= y).
+  useEffect(() => {
+    if (!props.outlineFollowsPointer || props.active === false) return
+    const pane = paneRef.current
+    const root = containerRef.current
+    if (!pane || !root) return
+    let frame = 0
+    let pointerY: number | null = null
+    const update = () => {
+      frame = 0
+      if (pointerY == null) return
+      const paneTop = pane.getBoundingClientRect().top
+      const documentY = pane.scrollTop + (pointerY - paneTop)
+      let active: string | null = null
+      for (const heading of root.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')) {
+        if (heading.getBoundingClientRect().top + pane.scrollTop - paneTop <= documentY) active = heading.id
+        else break
+      }
+      if (active != null) props.onActiveHeading(active)
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    const onMove = (event: PointerEvent) => {
+      pointerY = event.clientY
+      schedule()
+    }
+    const onLeave = () => {
+      pointerY = null
+    }
+    pane.addEventListener('pointermove', onMove, { passive: true })
+    pane.addEventListener('pointerleave', onLeave)
+    return () => {
+      pane.removeEventListener('pointermove', onMove)
+      pane.removeEventListener('pointerleave', onLeave)
+      cancelAnimationFrame(frame)
+    }
+  }, [props.outlineFollowsPointer, props.active, props.onActiveHeading])
 
   useEffect(() => {
     const root = containerRef.current
@@ -292,6 +362,26 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
     synchronizeTableSourceCoordinates(root, props.rendered.tables)
     synchronizeTableHeaderAccessibility(root, (index) => t(props.locale, 'unnamedColumn', { index }))
+    // Table expand affordance, as in the upstream palette: each rendered table
+    // gains an actions row with an expand button that opens a read-only
+    // snapshot of the table in its own window.
+    root.querySelectorAll<HTMLElement>('.md-table-scroll > table').forEach((table) => {
+      const scroll = table.parentElement
+      if (!scroll || scroll.querySelector('.md-table-expand')) return
+      const wrap = document.createElement('div')
+      wrap.className = 'md-table-wrap'
+      const actions = document.createElement('div')
+      actions.className = 'md-table-actions'
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'md-table-expand'
+      button.textContent = '⛶'
+      button.title = t(props.locale, 'expandTable')
+      button.setAttribute('aria-label', t(props.locale, 'expandTable'))
+      actions.append(button)
+      scroll.replaceWith(wrap)
+      wrap.append(actions, scroll)
+    })
     root.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach((checkbox) => {
       checkbox.disabled = true
       checkbox.tabIndex = -1
@@ -509,6 +599,9 @@ export function PreviewPane(props: PreviewPaneProps) {
         event.clipboardData.setData('text/plain', text)
       }}
     >
+      {/* The alignment override lives outside the morphdom-managed article so
+          the DOM diff never has to reconcile a synthetic node. */}
+      {textAlignStyleBlock(props.textAlignment) ? <style>{textAlignStyleBlock(props.textAlignment)}</style> : null}
       <article
         ref={containerRef}
         className={`markdown-body content-${props.contentWidth}`}
@@ -572,6 +665,18 @@ export function PreviewPane(props: PreviewPaneProps) {
                 copy.setAttribute('aria-label', copy.title)
               }, 1400)
             })
+            return
+          }
+          const tableExpand = target.closest<HTMLButtonElement>('.md-table-expand')
+          if (tableExpand) {
+            const table = tableExpand.closest<HTMLElement>('.md-table-wrap')?.querySelector('table')
+            // The title comes from the nearest preceding heading.
+            if (table)
+              openTableWindow(table, props.locale, nearestHeadingText(table), {
+                documentFont: props.documentFont,
+                themePreset: props.themePreset,
+                themeColors: props.themeColors,
+              })
             return
           }
           const diagramAction = target.closest<HTMLButtonElement>('[data-diagram-action]')

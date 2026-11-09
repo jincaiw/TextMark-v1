@@ -10,6 +10,7 @@ export function DocumentTabs({
   onActivate,
   onClose,
   alwaysVisible = false,
+  hidden = false,
   onNew,
 }: {
   sessions: DocumentSession[]
@@ -18,9 +19,13 @@ export function DocumentTabs({
   onActivate: (id: string) => void
   onClose: (id: string) => void
   alwaysVisible?: boolean
+  /** View ▸ Hide Tab Bar: the reference hides the whole strip, even with
+   * several documents open. */
+  hidden?: boolean
   onNew?: () => void
 }) {
   const tabRefs = useRef<Array<HTMLDivElement | null>>([])
+  if (hidden) return null
   if (sessions.length < 2 && !alwaysVisible) return null
   const moveTo = (index: number) => {
     const target = (index + sessions.length) % sessions.length

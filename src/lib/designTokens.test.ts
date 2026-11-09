@@ -10,12 +10,16 @@ const apply = (overrides?: { lineHeight?: number; pagePaddingHorizontal?: number
 describe('reading typography tokens', () => {
   it('renders the frozen upstream values when nothing is overridden', () => {
     const style = apply()
-    expect(style.getPropertyValue('--document-line-height')).toBe('1.52')
+    expect(style.getPropertyValue('--document-line-height')).toBe('1.6')
     expect(style.getPropertyValue('--document-page-padding')).toBe('32px 40px 48px')
     expect(style.getPropertyValue('--document-page-padding-horizontal')).toBe('40px')
-    // 15px × 1.52 — the frozen source line height the editor and preview share.
-    expect(style.getPropertyValue('--document-source-line-height')).toBe('22.8px')
-    expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(22.8)
+    // 15px × 1.6 — the frozen source line height the editor and preview share.
+    expect(style.getPropertyValue('--document-source-line-height')).toBe('24px')
+    expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(24)
+    // Upstream adds 6pt of app-only clearance above the 32pt page padding; the
+    // exported page keeps the bare 32pt.
+    expect(style.getPropertyValue('--document-page-padding-top')).toBe('32px')
+    expect(style.getPropertyValue('--mdp-page-top-clearance')).toBe('5.5px')
   })
 
   it('drives the body, the gutter and the shared source line height together', () => {
@@ -34,7 +38,7 @@ describe('reading typography tokens', () => {
 
   it('ignores non-numeric overrides rather than writing NaN into the tokens', () => {
     const style = apply({ lineHeight: Number.NaN, pagePaddingHorizontal: Number.NaN })
-    expect(style.getPropertyValue('--document-line-height')).toBe('1.52')
+    expect(style.getPropertyValue('--document-line-height')).toBe('1.6')
     expect(style.getPropertyValue('--document-page-padding-horizontal')).toBe('40px')
   })
 })

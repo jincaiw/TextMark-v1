@@ -12,14 +12,14 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::{
-        LazyLock, Mutex,
+        LazyLock, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-    menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+    menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 use tauri_plugin_updater::{Error as UpdaterError, UpdaterExt};
 
@@ -158,10 +158,13 @@ struct FileNode {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ExternalApplication {
-    id: &'static str,
-    name: &'static str,
+    id: String,
+    name: String,
     kind: &'static str,
     available: bool,
+    /// macOS app bundle path (or historic bundle name) used to load the app's
+    /// real Finder icon; None on other platforms or for the system target.
+    mac_app: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -179,6 +182,17 @@ struct MenuUiState {
     sidebar_visible: bool,
     toolbar_hidden: bool,
     always_on_top: bool,
+    /// The reference hides its tab strip from View ▸ Hide Tab Bar; the label
+    /// flips once the strip is hidden.
+    tabs_hidden: bool,
+    /// Number of open documents in the focused window. AppKit reveals its
+    /// alternate "Close All" item only while Option is held; because muda has
+    /// no alternate-item support, TextMark shows the command once a window
+    /// actually has more than one document.
+    // The reference always shows Close All, so the count no longer gates the
+    // item; the field stays because the frontend still reports it.
+    #[allow(dead_code)]
+    session_count: usize,
 }
 
 #[derive(Deserialize)]
@@ -191,6 +205,18 @@ struct MenuRefreshRequest {
     sidebar_visible: bool,
     toolbar_visible: bool,
     always_on_top: bool,
+    #[serde(default)]
+    tabs_hidden: bool,
+    // The reference always shows Close All, so the count no longer gates the
+    // item; the field stays because the frontend still reports it.
+    #[allow(dead_code)]
+    session_count: usize,
+    /// True while the document is being edited rather than previewed.
+    #[serde(default)]
+    editable: bool,
+    /// True when the document differs from what is on disk.
+    #[serde(default)]
+    dirty: bool,
 }
 
 #[derive(Serialize)]
@@ -261,34 +287,93 @@ fn enqueue_pending_open_paths(
     }
 }
 
-fn settings_path() -> AppResult<PathBuf> {
+/// Directory that holds `settings-v3.json`, `session-v1.json` and
+/// `recent.json`.
+///
+/// macOS has historically shared this directory with the QuickLook extension
+/// through an App Group container. A group container is only accessible to
+/// processes macOS recognises as belonging to that group, and a locally built
+/// (ad-hoc or development-signed) bundle is not: opening a file inside it
+/// fails with `EPERM`. The same bundle launched directly instead of through
+/// LaunchServices keeps access, which is why this only shows up in a normal
+/// double-click launch. Probing once per process and falling back keeps
+/// settings, session restore and recents working in every launch context.
+fn data_directory() -> AppResult<PathBuf> {
+    static RESOLVED: OnceLock<PathBuf> = OnceLock::new();
+    if let Some(directory) = RESOLVED.get() {
+        return Ok(directory.clone());
+    }
     // The isolated directory is an explicit test/diagnostic override. Keeping
     // it available in the normal debug binary lets recovery tests exercise the
     // real desktop process without touching the user's Group Container.
     if let Some(directory) = std::env::var_os("TEXTMARK_E2E_CONFIG_DIR").map(PathBuf::from) {
         fs::create_dir_all(&directory).map_err(io_error)?;
-        return Ok(directory.join("settings-v3.json"));
+        let _ = RESOLVED.set(directory.clone());
+        return Ok(directory);
     }
     #[cfg(target_os = "macos")]
-    let directory = dirs::home_dir()
-        .map(|home| home.join("Library/Group Containers/group.app.textmark.desktop"));
+    {
+        let home = dirs::home_dir().ok_or(AppError {
+            code: "invalid_path",
+        })?;
+        let shared = home.join("Library/Group Containers/group.app.textmark.desktop");
+        let directory = if is_writable_directory(&shared) {
+            shared
+        } else {
+            let fallback = home.join("Library/Application Support/TextMark");
+            fs::create_dir_all(&fallback).map_err(io_error)?;
+            migrate_legacy_data(&shared, &fallback);
+            fallback
+        };
+        let _ = RESOLVED.set(directory.clone());
+        Ok(directory)
+    }
     #[cfg(not(target_os = "macos"))]
-    let directory = dirs::config_dir().map(|root| root.join("TextMark"));
-    let directory = directory.ok_or(AppError {
-        code: "invalid_path",
-    })?;
-    fs::create_dir_all(&directory).map_err(io_error)?;
-    Ok(directory.join("settings-v3.json"))
+    {
+        let directory = dirs::config_dir()
+            .map(|root| root.join("TextMark"))
+            .ok_or(AppError {
+                code: "invalid_path",
+            })?;
+        fs::create_dir_all(&directory).map_err(io_error)?;
+        let _ = RESOLVED.set(directory.clone());
+        Ok(directory)
+    }
+}
+
+/// True when the process can actually create and remove a file in
+/// `directory`, which is what every settings and session write needs.
+fn is_writable_directory(directory: &Path) -> bool {
+    if fs::create_dir_all(directory).is_err() {
+        return false;
+    }
+    let probe = directory.join(".textmark-write-probe");
+    if fs::write(&probe, b"1").is_err() {
+        return false;
+    }
+    let _ = fs::remove_file(&probe);
+    true
+}
+
+/// Copies anything the previous data directory still holds into the new one
+/// without overwriting newer values. Used only when the App Group container is
+/// not accessible, so failures are expected and ignored.
+fn migrate_legacy_data(from: &Path, to: &Path) {
+    for name in ["settings-v3.json", "session-v1.json", "recent.json"] {
+        let target = to.join(name);
+        if target.exists() {
+            continue;
+        }
+        let _ = fs::copy(from.join(name), target);
+    }
+}
+
+fn settings_path() -> AppResult<PathBuf> {
+    Ok(data_directory()?.join("settings-v3.json"))
 }
 
 fn app_data_file(name: &str) -> AppResult<PathBuf> {
-    let directory = settings_path()?
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or(AppError {
-            code: "invalid_path",
-        })?;
-    Ok(directory.join(name))
+    Ok(data_directory()?.join(name))
 }
 
 fn recent_files_path() -> AppResult<PathBuf> {
@@ -362,6 +447,13 @@ fn clear_recent_files() -> AppResult<()> {
     save_recent_files(&[])?;
     update_recent_cache(Vec::new());
     Ok(())
+}
+
+/// Recent-document paths for UI surfaces such as the file search palette,
+/// mirroring the upstream palette's merge of app-wide recents.
+#[tauri::command]
+fn list_recent_files() -> Vec<String> {
+    load_recent_files()
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -630,11 +722,21 @@ fn spawn_known_application(path: &str, application_id: &str) -> AppResult<()> {
             command.args(["-t", path]);
             return command.spawn().map(|_| ()).map_err(io_error);
         }
-        let name = known_application_name(application_id).ok_or(AppError {
-            code: "invalid_path",
-        })?;
         let mut command = Command::new("open");
-        command.args(["-a", name]).arg(path);
+        match known_application_name(application_id) {
+            // Curated targets launch by application name so renamed bundles
+            // still resolve through Launch Services' own lookup.
+            Some(name) => {
+                command.args(["-a", name]).arg(path);
+            }
+            // Dynamic Open With entries carry the bundle identifier, which is
+            // the only stable handle for an app discovered at runtime. Anything
+            // else is not a target this build knows how to launch.
+            None if application_id.contains('.') => {
+                command.args(["-b", application_id]).arg(path);
+            }
+            None => return Err(AppError { code: "invalid_path" }),
+        }
         command
     };
     #[cfg(not(target_os = "macos"))]
@@ -731,15 +833,16 @@ fn build_document_window(
         url.push_str("&restoreWindowId=");
         url.push_str(&encoded_window_id);
     }
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(canonical.file_name().unwrap_or_default().to_string_lossy())
         .inner_size(1100.0, 720.0)
         .min_inner_size(720.0, 480.0)
         .center()
         .resizable(true)
         .build()
-        .map(|_| ())
-        .map_err(io_error)
+        .map_err(io_error)?;
+    style_macos_document_window(&window);
+    Ok(())
 }
 
 #[tauri::command]
@@ -792,17 +895,13 @@ fn build_menu(
         }
         builder.build(app)
     };
+    // State toggles use a native check menu item: AppKit then draws the mark in
+    // the standard gutter and VoiceOver/AX reports it as the item's mark char,
+    // exactly like the reference, instead of a "✓ " text prefix.
     let state_item =
         |id: &str, checked: bool, zh_text: &str, en_text: &str, accelerator: Option<&str>| {
-            let prefix = if checked { "✓ " } else { "" };
-            let mut builder = MenuItemBuilder::with_id(
-                id,
-                if zh {
-                    format!("{prefix}{zh_text}")
-                } else {
-                    format!("{prefix}{en_text}")
-                },
-            );
+            let mut builder = CheckMenuItemBuilder::with_id(id, if zh { zh_text } else { en_text })
+                .checked(checked);
             if let Some(value) = accelerator {
                 builder = builder.accelerator(value);
             }
@@ -824,14 +923,15 @@ fn build_menu(
     // File menu
     // Upstream's New Tab opens a document chooser. TextMark retains a separate
     // explicit empty-document action for authors who need a scratch buffer.
-    let new_tab = item("new-tab", "新建标签页…", "New Tab…", Some("CmdOrCtrl+T"))?;
-    let new_document = item(
-        "new-document",
-        "新建文稿",
-        "New Document",
-        Some("CmdOrCtrl+N"),
-    )?;
+    let new_document = item("new-document", "新建", "New", Some("CmdOrCtrl+N"))?;
+    let new_tab = item("new-tab", "新建标签页", "New Tab", Some("CmdOrCtrl+T"))?;
     let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
+    let close_all = item(
+        "close-all",
+        "全部关闭",
+        "Close All",
+        Some("CmdOrCtrl+Alt+W"),
+    )?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
     let search_documents = item(
         "search-documents",
@@ -839,17 +939,29 @@ fn build_menu(
         "Search Documents…",
         Some("CmdOrCtrl+Shift+O"),
     )?;
-    let open_folder = item(
-        "open-folder",
-        "打开文件夹…",
-        "Open Folder…",
-        Some("CmdOrCtrl+Alt+O"),
-    )?;
-    let save = item("save", "存储", "Save", Some("CmdOrCtrl+S"))?;
+    let save = item("save", "存储…", "Save…", Some("CmdOrCtrl+S"))?;
     let save_as = item("save-as", "存储为…", "Save As…", Some("CmdOrCtrl+Shift+S"))?;
-    let revert = item("revert", "复原到已存储的版本", "Revert to Saved", None)?;
+    let revert = item(
+        "revert",
+        "复原到已存储的版本",
+        "Revert to Saved",
+        Some("CmdOrCtrl+R"),
+    )?;
     let export = item("export", "导出…", "Export…", None)?;
     let export_pdf = item("export-pdf", "导出为 PDF…", "Export as PDF…", None)?;
+    let share_link = item("share-link", "以链接形式共享…", "Share as Link…", None)?;
+    // AppKit fills this submenu from the system's sharing services; with no
+    // shareable selection it holds a single disabled placeholder, which is the
+    // state the reference shows as well.
+    let share_none = MenuItemBuilder::with_id(
+        "share-none",
+        if zh { "无文稿" } else { "No Document" },
+    )
+    .enabled(false)
+    .build(app)?;
+    let share = SubmenuBuilder::new(app, if zh { "共享" } else { "Share" })
+        .item(&share_none)
+        .build()?;
     let print = item("print", "打印…", "Print…", Some("CmdOrCtrl+P"))?;
 
     // Open Recent submenu (dynamic; rebuilt by refresh_menu)
@@ -862,8 +974,13 @@ fn build_menu(
         },
     );
     for (index, path) in recent_files.iter().enumerate() {
+        // The reference's Open Recent lists file names, not the paths it stores.
+        let label = std::path::Path::new(path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.clone());
         let recent_item =
-            MenuItemBuilder::with_id(format!("recent-{index}"), path.clone()).build(app)?;
+            MenuItemBuilder::with_id(format!("recent-{index}"), label).build(app)?;
         recent_builder = recent_builder.item(&recent_item);
     }
     if !recent_files.is_empty() {
@@ -875,14 +992,17 @@ fn build_menu(
     let open_recent = recent_builder.item(&clear_recent).build()?;
 
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
-        .items(&[&new_tab, &new_document, &close_tab])
-        .separator()
-        .items(&[&open, &search_documents, &open_folder])
+        .items(&[&new_document, &new_tab])
+        .items(&[&open, &search_documents])
         .item(&open_recent)
         .separator()
+        .item(&close_tab)
+        .item(&close_all);
+    let file_builder = file_builder
         .items(&[&save, &save_as, &revert])
         .separator()
         .items(&[&export, &export_pdf])
+        .items(&[&share_link, &share])
         .separator()
         .item(&print);
     #[cfg(target_os = "windows")]
@@ -897,6 +1017,12 @@ fn build_menu(
     let undo = item("undo", "撤销", "Undo", Some("CmdOrCtrl+Z"))?;
     let redo = item("redo", "重做", "Redo", Some("CmdOrCtrl+Shift+Z"))?;
     let find = item("find", "查找…", "Find…", Some("CmdOrCtrl+F"))?;
+    let find_replace = item(
+        "find-replace",
+        "查找和替换…",
+        "Find and Replace…",
+        Some("CmdOrCtrl+Alt+F"),
+    )?;
     let find_next = item("find-next", "查找下一个", "Find Next", Some("CmdOrCtrl+G"))?;
     let find_prev = item(
         "find-prev",
@@ -904,6 +1030,138 @@ fn build_menu(
         "Find Previous",
         Some("CmdOrCtrl+Shift+G"),
     )?;
+    let find_use_selection = item(
+        "find-use-selection",
+        "使用所选内容查找",
+        "Use Selection for Find",
+        None,
+    )?;
+    let find_jump_selection = item(
+        "find-jump-selection",
+        "跳到所选内容",
+        "Jump to Selection",
+        Some("CmdOrCtrl+J"),
+    )?;
+    // The reference groups its find commands in a Finder-style submenu.
+    let find_menu = SubmenuBuilder::new(app, if zh { "查找" } else { "Find" })
+        .items(&[&find, &find_replace, &find_next, &find_prev])
+        .items(&[&find_use_selection, &find_jump_selection])
+        .build()?;
+    // Spelling and substitution commands are AppKit's standard text-editing
+    // actions. They are dispatched down the responder chain (see
+    // dispatch_responder_action), which WKWebView implements for its editable
+    // content, so the menu edits the document exactly as a native text view
+    // would.
+    let spell_panel = item(
+        "spell-show-panel",
+        "显示拼写和语法",
+        "Show Spelling and Grammar",
+        Some("CmdOrCtrl+:"),
+    )?;
+    let spell_now = item(
+        "spell-check-now",
+        "立即检查文稿",
+        "Check Document Now",
+        Some("CmdOrCtrl+;"),
+    )?;
+    let spell_continuous = item(
+        "spell-toggle-continuous",
+        "键入时检查拼写",
+        "Check Spelling While Typing",
+        None,
+    )?;
+    let spell_grammar = item(
+        "spell-toggle-grammar",
+        "检查拼写和语法",
+        "Check Grammar With Spelling",
+        None,
+    )?;
+    let spell_autocorrect = item(
+        "spell-toggle-autocorrect",
+        "自动纠正拼写",
+        "Correct Spelling Automatically",
+        None,
+    )?;
+    let spell_menu = SubmenuBuilder::new(
+        app,
+        if zh {
+            "拼写和语法"
+        } else {
+            "Spelling and Grammar"
+        },
+    )
+    .items(&[&spell_panel, &spell_now])
+    .separator()
+    .items(&[&spell_continuous, &spell_grammar, &spell_autocorrect])
+    .build()?;
+    let substitutions_panel = item(
+        "substitutions-panel",
+        "显示替换",
+        "Show Substitutions",
+        None,
+    )?;
+    let substitutions_smart_insert = item(
+        "substitutions-smart-insert",
+        "智能拷贝/粘贴",
+        "Smart Copy/Paste",
+        None,
+    )?;
+    let substitutions_smart_quotes = item(
+        "substitutions-smart-quotes",
+        "智能引号",
+        "Smart Quotes",
+        None,
+    )?;
+    let substitutions_smart_dashes = item(
+        "substitutions-smart-dashes",
+        "智能破折号",
+        "Smart Dashes",
+        None,
+    )?;
+    let substitutions_smart_links = item(
+        "substitutions-smart-links",
+        "智能链接",
+        "Smart Links",
+        None,
+    )?;
+    let substitutions_data_detection = item(
+        "substitutions-data-detection",
+        "数据检测器",
+        "Data Detectors",
+        None,
+    )?;
+    let substitutions_text_replacement = item(
+        "substitutions-text-replacement",
+        "文本替换",
+        "Text Replacement",
+        None,
+    )?;
+    let substitutions_menu =
+        SubmenuBuilder::new(app, if zh { "替换" } else { "Substitutions" })
+            .item(&substitutions_panel)
+            .separator()
+            .items(&[
+                &substitutions_smart_insert,
+                &substitutions_smart_quotes,
+                &substitutions_smart_dashes,
+                &substitutions_smart_links,
+                &substitutions_data_detection,
+                &substitutions_text_replacement,
+            ])
+            .build()?;
+    // Text-case conversion and speech are the parts of AppKit's text-editing
+    // menus TextMark can honour in its own editor.
+    let transform_upper = item("transform-upper", "变为大写", "Make Uppercase", None)?;
+    let transform_lower = item("transform-lower", "变为小写", "Make Lowercase", None)?;
+    let transform_capitalize = item("transform-capitalize", "首字母大写", "Capitalize", None)?;
+    let transform = SubmenuBuilder::new(app, if zh { "转换" } else { "Transform" })
+        .items(&[&transform_upper, &transform_lower, &transform_capitalize])
+        .build()?;
+    let speak_start = item("speak-start", "开始朗读", "Start Speaking", None)?;
+    let speak_stop = item("speak-stop", "停止朗读", "Stop Speaking", None)?;
+    let speech = SubmenuBuilder::new(app, if zh { "语音" } else { "Speech" })
+        .items(&[&speak_start, &speak_stop])
+        .build()?;
     let edit_mode = item(
         "edit-mode",
         "切换编辑模式",
@@ -911,17 +1169,31 @@ fn build_menu(
         Some("CmdOrCtrl+E"),
     )?;
     let preferences = item("preferences", "设置…", "Settings…", Some("CmdOrCtrl+Comma"))?;
+    let paste_match_style = item(
+        "paste-match-style",
+        "粘贴并匹配样式",
+        "Paste and Match Style",
+        Some("CmdOrCtrl+Alt+Shift+V"),
+    )?;
+    // AppKit binds Delete to the bare forward-delete key; no accelerator is
+    // declared here so the menu does not swallow Backspace inside the editor.
+    let delete_selection = item("delete-selection", "删除", "Delete", None)?;
     let edit_builder = SubmenuBuilder::new(app, if zh { "编辑" } else { "Edit" })
         .items(&[&undo, &redo])
         .separator()
         .cut_with_text(if zh { "剪切" } else { "Cut" })
         .copy_with_text(if zh { "拷贝" } else { "Copy" })
         .paste_with_text(if zh { "粘贴" } else { "Paste" })
+        .item(&paste_match_style)
+        .item(&delete_selection)
         .select_all_with_text(if zh { "全选" } else { "Select All" })
         .separator()
-        .items(&[&find, &find_next, &find_prev])
+        .item(&find_menu)
         .separator()
-        .item(&edit_mode);
+        .item(&spell_menu)
+        .item(&substitutions_menu)
+        .item(&transform)
+        .item(&speech);
     #[cfg(not(target_os = "macos"))]
     let edit_builder = edit_builder.separator().item(&preferences);
     let edit = edit_builder.build()?;
@@ -938,20 +1210,19 @@ fn build_menu(
     let sidebar_outline = state_item(
         "sidebar-outline",
         state.sidebar_visible && state.sidebar_mode == "outline",
-        "大纲",
-        "Outline",
+        "目录",
+        "Table of Contents",
         sidebar_pane_accel("2"),
     )?;
     let sidebar_files = state_item(
         "sidebar-files",
         state.sidebar_visible && state.sidebar_mode == "files",
-        "文件夹",
-        "Folders",
+        "项目导航器",
+        "Project Navigator",
         sidebar_pane_accel("3"),
     )?;
-    // Keep Cmd/Ctrl+I available for italic while editing. The inspector remains
-    // available from the View menu and the preview toolbar.
-    let inspector = item("inspector", "显示简介", "Get Info", None)?;
+    // The reference exposes the inspector from the toolbar only; Cmd/Ctrl+I
+    // stays available for italic while editing.
     let (show_toolbar_zh, show_toolbar_en) = toolbar_menu_labels(state.toolbar_hidden);
     let show_toolbar = item(
         "show-toolbar",
@@ -959,7 +1230,15 @@ fn build_menu(
         show_toolbar_en,
         Some("CmdOrCtrl+Alt+T"),
     )?;
-    let zoom_in = item("zoom-in", "放大", "Zoom In", Some("CmdOrCtrl++"))?;
+    // AppKit renders a literal "+" key equivalent as ⌘+; the deprecated Code
+    // parser only knows "=" so macOS uses the numpad addition code, whose key
+    // character is still "+".
+    let zoom_in_accel = if cfg!(target_os = "macos") {
+        "CmdOrCtrl+NUMPLUS"
+    } else {
+        "CmdOrCtrl+="
+    };
+    let zoom_in = item("zoom-in", "放大", "Zoom In", Some(zoom_in_accel))?;
     let zoom_out = item("zoom-out", "缩小", "Zoom Out", Some("CmdOrCtrl+-"))?;
     let zoom_reset = item("zoom-reset", "实际大小", "Actual Size", Some("CmdOrCtrl+0"))?;
     let customize = item(
@@ -974,7 +1253,7 @@ fn build_menu(
     let always_on_top = state_item(
         "always-on-top",
         state.always_on_top,
-        "窗口置顶",
+        "始终置顶",
         "Always on Top",
         if cfg!(target_os = "macos") {
             Some("CmdOrCtrl+Control+T")
@@ -1026,23 +1305,49 @@ fn build_menu(
         .items(&[&width_normal, &width_full])
         .build()?;
 
+    // The reference's tab strip is AppKit's; TextMark draws its own, so the
+    // toggle and the overview map onto the in-window document tabs.
+    let tabs_toggle = item(
+        "toggle-tab-bar",
+        if state.tabs_hidden {
+            "显示标签页栏"
+        } else {
+            "隐藏标签页栏"
+        },
+        if state.tabs_hidden {
+            "Show Tab Bar"
+        } else {
+            "Hide Tab Bar"
+        },
+        None,
+    )?;
+    let show_all_tabs = item(
+        "show-all-tabs",
+        "显示所有标签页",
+        "Show All Tabs",
+        Some("CmdOrCtrl+Shift+Backslash"),
+    )?;
+
     let view_builder = SubmenuBuilder::new(app, if zh { "显示" } else { "View" })
+        .items(&[&tabs_toggle, &show_all_tabs])
+        .separator()
         .item(&appearance)
         .item(&content_width)
         .separator()
-        .items(&[&show_toolbar, &customize])
-        .separator()
         .items(&[&sidebar, &sidebar_hide, &sidebar_outline, &sidebar_files])
         .separator()
-        .item(&inspector)
+        .items(&[&show_toolbar, &customize])
         .separator()
-        .items(&[&zoom_in, &zoom_out, &zoom_reset])
+        .item(&edit_mode)
         .separator()
-        .item(&always_on_top)
+        .items(&[&zoom_reset, &zoom_in, &zoom_out])
+        // The reference keeps two separators between the zoom group and Always
+        // on Top; AppKit draws the pair as one gap, but the structure matches.
         .separator()
-        .item(&edit_mode);
+        .separator()
+        .item(&always_on_top);
     #[cfg(target_os = "macos")]
-    let view_builder = view_builder.separator().fullscreen_with_text(if zh {
+    let view_builder = view_builder.fullscreen_with_text(if zh {
         "进入全屏幕"
     } else {
         "Enter Full Screen"
@@ -1134,37 +1439,73 @@ fn build_menu(
         ])
         .build()?;
 
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    let previous_tab = item(
+        "previous-tab",
+        "显示上一个标签页",
+        "Show Previous Tab",
+        Some("Control+Shift+Tab"),
+    )?;
+    #[cfg(target_os = "macos")]
+    let next_tab = item(
+        "next-tab",
+        "显示下一个标签页",
+        "Show Next Tab",
+        Some("Control+Tab"),
+    )?;
+    #[cfg(target_os = "macos")]
+    let move_tab_window = item(
+        "move-tab-window",
+        "将标签页移到新窗口",
+        "Move Tab to New Window",
+        None,
+    )?;
+    // Native window tab groups are disabled in TextMark (the app draws its own
+    // document tabs and opts out of AppKit tabbing), so there are no groups to
+    // merge; the item keeps the reference's structure and stays disabled.
+    #[cfg(target_os = "macos")]
+    let merge_windows = MenuItemBuilder::with_id(
+        "merge-windows",
+        if zh {
+            "合并所有窗口"
+        } else {
+            "Merge All Windows"
+        },
+    )
+    .enabled(false)
+    .build(app)?;
+    #[cfg(target_os = "macos")]
+    let window = SubmenuBuilder::new(app, if zh { "窗口" } else { "Window" })
+        .minimize_with_text(if zh { "最小化" } else { "Minimize" })
+        .maximize_with_text(if zh { "缩放" } else { "Zoom" })
+        .separator()
+        .bring_all_to_front_with_text(if zh {
+            "前置全部窗口"
+        } else {
+            "Bring All to Front"
+        })
+        .separator()
+        .items(&[&previous_tab, &next_tab, &move_tab_window, &merge_windows])
+        // AppKit appends the window list after its own separator; the trailing
+        // separator here reproduces the reference's blank line above that list.
+        .separator()
+        .separator()
+        .build()?;
+    #[cfg(target_os = "windows")]
     let window = SubmenuBuilder::new(app, if zh { "窗口" } else { "Window" })
         .minimize_with_text(if zh { "最小化" } else { "Minimize" })
         .maximize_with_text(if zh { "缩放" } else { "Zoom" })
         .build()?;
 
     let help_item = item("help", "TextMark 帮助", "TextMark Help", None)?;
-    let whats_new = item(
-        "whats-new",
-        "TextMark 更新内容",
-        "What's New in TextMark",
-        None,
-    )?;
-    let project_home = item("project-home", "GitHub 项目主页", "GitHub Project", None)?;
-    let releases = item(
-        "github-releases",
-        "GitHub Releases",
-        "GitHub Releases",
-        None,
-    )?;
-    let report_issue = item("report-issue", "报告问题…", "Report an Issue…", None)?;
+    let whats_new = item("whats-new", "发布说明", "Release Notes", None)?;
     let check_updates = item("check-updates", "检查更新…", "Check for Updates…", None)?;
-    let install_cli = item("install-cli", "安装命令行工具…", "Install CLI…", None)?;
-    let crash_reports = item(
-        "crash-reports",
-        "发送匿名崩溃报告",
-        "Send Anonymous Crash Reports",
-        None,
-    )?;
+    let install_cli = item("install-cli", "安装命令行工具", "Install CLI", None)?;
     #[cfg(target_os = "macos")]
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
+        // The reference's Help menu opens with a separator before the help
+        // book entry.
+        .separator()
         .item(&help_item)
         .item(&whats_new);
     #[cfg(not(target_os = "macos"))]
@@ -1173,15 +1514,7 @@ fn build_menu(
     let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
         .item(&help_item)
         .separator()
-        .items(&[
-            &project_home,
-            &releases,
-            &report_issue,
-            &check_updates,
-            &whats_new,
-            &install_cli,
-            &crash_reports,
-        ])
+        .items(&[&check_updates, &whats_new, &install_cli])
         .separator()
         .item(&about);
     let help = help_builder.build()?;
@@ -1196,18 +1529,10 @@ fn build_menu(
             },
             None,
         )
-        .separator()
-        .items(&[
-            &project_home,
-            &releases,
-            &report_issue,
-            &check_updates,
-            &whats_new,
-            &install_cli,
-            &crash_reports,
-        ])
+        .item(&check_updates)
         .separator()
         .item(&preferences)
+        .item(&install_cli)
         .separator()
         .services_with_text(if zh { "服务" } else { "Services" })
         .separator()
@@ -1217,6 +1542,7 @@ fn build_menu(
             "Hide TextMark"
         })
         .hide_others_with_text(if zh { "隐藏其他" } else { "Hide Others" })
+        .show_all_with_text(if zh { "全部显示" } else { "Show All" })
         .separator()
         .quit_with_text(if zh {
             "退出 TextMark"
@@ -1231,8 +1557,8 @@ fn build_menu(
             &application,
             &file,
             &edit,
-            &view,
             &format,
+            &view,
             &go,
             &window,
             &help,
@@ -1289,9 +1615,13 @@ fn refresh_menu(
         sidebar_visible: request.sidebar_visible,
         toolbar_hidden: !request.toolbar_visible,
         always_on_top: request.always_on_top,
+        tabs_hidden: request.tabs_hidden,
+        session_count: request.session_count,
     };
     let menu = build_menu(&app, &request.locale, &state, &load_recent_files()).map_err(io_error)?;
     app.set_menu(menu).map_err(io_error)?;
+    #[cfg(target_os = "macos")]
+    apply_native_menu_key_equivalents(&app, request.editable, request.dirty);
     Ok(())
 }
 
@@ -1391,92 +1721,187 @@ fn application_available(commands: &[&str], mac_app: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
+/// Bundle identifiers the reference's OpenTargetCatalog keeps out of its
+/// Editors menu even though Launch Services reports editor roles for them.
 #[cfg(target_os = "macos")]
-fn mac_application_path(app: &str) -> Option<PathBuf> {
-    let mut roots = vec![
-        PathBuf::from("/Applications"),
-        PathBuf::from("/System/Applications"),
-    ];
-    if let Some(home) = dirs::home_dir() {
-        roots.push(home.join("Applications"));
-    }
-    roots
-        .into_iter()
-        .map(|root| root.join(app))
-        .find(|path| path.is_dir())
+const IGNORED_OPEN_WITH_BUNDLES: &[&str] = &[
+    "com.microsoft.Word",
+    "com.ideasoncanvas.mindnode.macos",
+    "com.somac.subtitleburner",
+];
+
+/// Editors that declare plain-text document types without a Markdown one.
+/// The reference admits these by bundle identifier rather than by capability
+/// sniffing, which is why TextEdit appears but Numbers, Word and Excel do not.
+#[cfg(target_os = "macos")]
+const PREFERRED_OPEN_WITH_BUNDLES: &[&str] = &[
+    "com.microsoft.VSCode",
+    "com.todesktop.230313mzl4w4u92",
+    "com.sublimetext.4",
+    "com.sublimetext.3",
+    "com.barebones.bbedit",
+    "com.coteditor.CotEditor",
+    "com.apple.TextEdit",
+    "com.apple.dt.Xcode",
+    "com.macromates.TextMate",
+    "pro.writer.mac-setapp",
+    "abnerworks.Typora",
+    "com.uranusjr.macdown",
+];
+
+#[cfg(target_os = "macos")]
+const MARKDOWN_UTIS: &[&str] = &["net.daringfireball.markdown", "public.markdown", "net.ia.markdown"];
+
+/// Only the Markdown spellings: the broader `MARKDOWN_EXTENSIONS` list also
+/// contains "txt", which would wrongly admit spreadsheets and word processors
+/// that register plain text as an editor type.
+#[cfg(target_os = "macos")]
+const MARKDOWN_DOCUMENT_EXTENSIONS: &[&str] = &["md", "markdown"];
+
+#[cfg(target_os = "macos")]
+fn mac_bundle_info(bundle: &Path) -> Option<plist::Dictionary> {
+    plist::Value::from_file(bundle.join("Contents/Info.plist"))
+        .ok()?
+        .into_dictionary()
 }
 
 #[cfg(target_os = "macos")]
-fn mac_editor_role_handlers() -> HashSet<String> {
-    use core_foundation::{
-        array::{CFArray, CFArrayRef},
-        base::TCFType,
-        string::{CFString, CFStringRef},
-    };
+fn mac_application_is_markdown_editor(info: &plist::Dictionary) -> bool {
+    info.get("CFBundleDocumentTypes")
+        .and_then(|value| value.as_array())
+        .is_some_and(|document_types| {
+            document_types.iter().any(|document_type| {
+                let Some(document_type) = document_type.as_dictionary() else {
+                    return false;
+                };
+                if document_type
+                    .get("CFBundleTypeRole")
+                    .and_then(|value| value.as_string())
+                    != Some("Editor")
+                {
+                    return false;
+                }
+                let markdown_uti = document_type
+                    .get("LSItemContentTypes")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|utis| {
+                        utis.iter()
+                            .filter_map(|value| value.as_string())
+                            .any(|uti| MARKDOWN_UTIS.contains(&uti))
+                    });
+                markdown_uti
+                    || document_type
+                        .get("CFBundleTypeExtensions")
+                        .and_then(|value| value.as_array())
+                        .is_some_and(|extensions| {
+                            extensions.iter().filter_map(|value| value.as_string()).any(
+                                |extension| {
+                                    MARKDOWN_DOCUMENT_EXTENSIONS
+                                        .contains(&extension.to_ascii_lowercase().as_str())
+                                },
+                            )
+                        })
+            })
+        })
+}
 
-    #[link(name = "CoreServices", kind = "framework")]
-    unsafe extern "C" {
-        fn LSCopyAllRoleHandlersForContentType(content_type: CFStringRef, roles: u32)
-        -> CFArrayRef;
+/// TextMark's own bundle identifier and its parity/test clones; the reference
+/// likewise omits itself from its Editors menu.
+#[cfg(target_os = "macos")]
+fn is_own_application_bundle(bundle_id: &str) -> bool {
+    bundle_id == "app.textmark.desktop" || bundle_id.starts_with("app.textmark.desktop.")
+}
+
+/// Moves into a bundle name an application whose bundle identifier is in the
+/// curated catalog, so stored default targets keep working after discovery
+/// became dynamic.
+#[cfg(target_os = "macos")]
+fn curated_application_id(mac_app_file_name: &str) -> Option<&'static str> {
+    APPLICATION_CATALOG
+        .iter()
+        .find(|entry| entry.5 == Some(mac_app_file_name))
+        .map(|entry| entry.0)
+}
+
+/// Launch Services' ordered candidate list for a Markdown document, narrowed to
+/// markdown-capable editors exactly as the reference's Editors menu does it.
+/// The order is the reference menu order; bundle identifiers that are known
+/// curated targets keep their historic ids.
+#[cfg(target_os = "macos")]
+fn mac_open_with_applications() -> Vec<ExternalApplication> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+
+    // Launch Services dispatches by file type; a tiny Markdown sample gives the
+    // same candidate order for every document. It never needs refreshing.
+    let sample_path = std::env::temp_dir().join("textmark-open-with.md");
+    if !sample_path.exists() {
+        let _ = fs::write(&sample_path, "# Markdown\n");
     }
-
-    const LS_ROLES_EDITOR: u32 = 0x0000_0004;
-    let mut handlers = HashSet::new();
-    for content_type in ["net.daringfireball.markdown", "public.plain-text"] {
-        let content_type = CFString::new(content_type);
-        // SAFETY: LaunchServices returns a retained CFArray of CFString bundle
-        // identifiers for the supplied, valid content type and roles mask.
-        let raw = unsafe {
-            LSCopyAllRoleHandlersForContentType(content_type.as_concrete_TypeRef(), LS_ROLES_EDITOR)
+    let sample_url = NSURL::fileURLWithPath(&NSString::from_str(&sample_path.to_string_lossy()));
+    let workspace = NSWorkspace::sharedWorkspace();
+    let file_manager = NSFileManager::defaultManager();
+    let mut seen = HashSet::new();
+    let mut applications = Vec::new();
+    for url in workspace.URLsForApplicationsToOpenURL(&sample_url).iter() {
+        let Some(bundle_path) = url.path() else {
+            continue;
         };
-        if raw.is_null() {
+        let bundle_path = PathBuf::from(bundle_path.to_string());
+        let Some(info) = mac_bundle_info(&bundle_path) else {
+            continue;
+        };
+        let Some(bundle_id) = info
+            .get("CFBundleIdentifier")
+            .and_then(|value| value.as_string())
+        else {
+            continue;
+        };
+        if is_own_application_bundle(bundle_id)
+            || IGNORED_OPEN_WITH_BUNDLES.contains(&bundle_id)
+            || (!mac_application_is_markdown_editor(&info)
+                && !PREFERRED_OPEN_WITH_BUNDLES.contains(&bundle_id))
+        {
             continue;
         }
-        // SAFETY: `LSCopy...` follows the Create Rule and the values are CFString.
-        let values = unsafe { CFArray::<CFString>::wrap_under_create_rule(raw) };
-        handlers.extend(values.iter().map(|value| value.to_string()));
-    }
-    handlers
-}
-
-#[cfg(target_os = "macos")]
-fn mac_editor_available(commands: &[&str], mac_app: Option<&str>) -> bool {
-    static EDITOR_HANDLERS: LazyLock<HashSet<String>> = LazyLock::new(mac_editor_role_handlers);
-    let Some(app_path) = mac_app.and_then(mac_application_path) else {
-        return application_available(commands, None);
-    };
-    // If LaunchServices is unavailable, retain the established existence
-    // fallback rather than hiding every editor from the UI.
-    if EDITOR_HANDLERS.is_empty() {
-        return true;
-    }
-    let bundle_id = plist::Value::from_file(app_path.join("Contents/Info.plist"))
-        .ok()
-        .and_then(|value| {
-            value
-                .as_dictionary()?
-                .get("CFBundleIdentifier")?
-                .as_string()
-                .map(str::to_owned)
+        let Some(file_name) = bundle_path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let id = curated_application_id(file_name)
+            .map(str::to_string)
+            .unwrap_or_else(|| bundle_id.to_string());
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let display_name = file_manager
+            .displayNameAtPath(&NSString::from_str(&bundle_path.to_string_lossy()))
+            .to_string();
+        applications.push(ExternalApplication {
+            id,
+            // Finder's localized name ("妙言", "文本编辑") matches the
+            // reference menu; strip the extension Finder keeps.
+            name: display_name
+                .strip_suffix(".app")
+                .unwrap_or(&display_name)
+                .to_string(),
+            kind: "editor",
+            available: true,
+            mac_app: Some(bundle_path.to_string_lossy().to_string()),
         });
-    bundle_id.is_some_and(|bundle_id| EDITOR_HANDLERS.contains(&bundle_id))
+    }
+    applications
 }
 
-#[cfg(not(target_os = "macos"))]
-fn mac_editor_available(commands: &[&str], mac_app: Option<&str>) -> bool {
-    application_available(commands, mac_app)
-}
-
-#[tauri::command]
-fn discover_applications() -> Vec<ExternalApplication> {
-    [
-        ("system", "System Default", "system", true, &[][..], None),
-        (
+/// Static catalog backing the non-macOS Open With menu and the LLM targets on
+/// every platform. macOS editors come from Launch Services instead, because
+/// the reference menu is the system's own ordered candidate list.
+const APPLICATION_CATALOG: &[CatalogEntry] = &[
+    (
             "vscode",
             "Visual Studio Code",
             "editor",
             false,
-            &["code"][..],
+            &["code"],
             Some("Visual Studio Code.app"),
         ),
         (
@@ -1484,7 +1909,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Visual Studio Code Insiders",
             "editor",
             false,
-            &["code-insiders"][..],
+            &["code-insiders"],
             Some("Visual Studio Code - Insiders.app"),
         ),
         (
@@ -1492,7 +1917,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "VSCodium",
             "editor",
             false,
-            &["codium"][..],
+            &["codium"],
             Some("VSCodium.app"),
         ),
         (
@@ -1500,7 +1925,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Cursor",
             "editor",
             false,
-            &["cursor"][..],
+            &["cursor"],
             Some("Cursor.app"),
         ),
         (
@@ -1508,7 +1933,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Windsurf",
             "editor",
             false,
-            &["windsurf"][..],
+            &["windsurf"],
             Some("Windsurf.app"),
         ),
         (
@@ -1516,16 +1941,16 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Trae",
             "editor",
             false,
-            &["trae"][..],
+            &["trae"],
             Some("Trae.app"),
         ),
-        ("zed", "Zed", "editor", false, &["zed"][..], Some("Zed.app")),
+        ("zed", "Zed", "editor", false, &["zed"], Some("Zed.app")),
         (
             "fleet",
             "Fleet",
             "editor",
             false,
-            &["fleet"][..],
+            &["fleet"],
             Some("Fleet.app"),
         ),
         (
@@ -1533,7 +1958,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "IntelliJ IDEA",
             "editor",
             false,
-            &["idea"][..],
+            &["idea"],
             Some("IntelliJ IDEA.app"),
         ),
         (
@@ -1541,7 +1966,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Sublime Text",
             "editor",
             false,
-            &["subl", "sublime_text"][..],
+            &["subl", "sublime_text"],
             Some("Sublime Text.app"),
         ),
         (
@@ -1549,7 +1974,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Notepad++",
             "editor",
             false,
-            &["notepad++.exe"][..],
+            &["notepad++.exe"],
             None,
         ),
         (
@@ -1557,7 +1982,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Obsidian",
             "editor",
             false,
-            &["obsidian"][..],
+            &["obsidian"],
             Some("Obsidian.app"),
         ),
         (
@@ -1565,7 +1990,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Typora",
             "editor",
             false,
-            &["typora"][..],
+            &["typora"],
             Some("Typora.app"),
         ),
         (
@@ -1573,7 +1998,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "MarkEdit",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("MarkEdit.app"),
         ),
         (
@@ -1581,16 +2006,16 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Mellow",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("Mellow.app"),
         ),
-        ("taio", "Taio", "editor", false, &[][..], Some("Taio.app")),
+        ("taio", "Taio", "editor", false, &[], Some("Taio.app")),
         (
             "marktext",
             "MarkText",
             "editor",
             false,
-            &["marktext"][..],
+            &["marktext"],
             Some("MarkText.app"),
         ),
         (
@@ -1598,7 +2023,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "MacDown",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("MacDown.app"),
         ),
         (
@@ -1606,16 +2031,16 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "BBEdit",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("BBEdit.app"),
         ),
-        ("nova", "Nova", "editor", false, &[][..], Some("Nova.app")),
+        ("nova", "Nova", "editor", false, &[], Some("Nova.app")),
         (
             "coteditor",
             "CotEditor",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("CotEditor.app"),
         ),
         (
@@ -1623,7 +2048,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "TextMate",
             "editor",
             false,
-            &["mate"][..],
+            &["mate"],
             Some("TextMate.app"),
         ),
         (
@@ -1631,7 +2056,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "MacVim",
             "editor",
             false,
-            &["mvim"][..],
+            &["mvim"],
             Some("MacVim.app"),
         ),
         (
@@ -1639,7 +2064,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Xcode",
             "editor",
             false,
-            &["xed"][..],
+            &["xed"],
             Some("Xcode.app"),
         ),
         (
@@ -1647,7 +2072,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "TextEdit",
             "editor",
             false,
-            &[][..],
+            &[],
             Some("TextEdit.app"),
         ),
         (
@@ -1655,7 +2080,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Emacs",
             "editor",
             false,
-            &["emacs"][..],
+            &["emacs"],
             Some("Emacs.app"),
         ),
         (
@@ -1663,7 +2088,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Codex",
             "llm",
             false,
-            &["codex"][..],
+            &["codex"],
             Some("Codex.app"),
         ),
         (
@@ -1671,7 +2096,7 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "Claude",
             "llm",
             false,
-            &["claude"][..],
+            &["claude"],
             Some("Claude.app"),
         ),
         (
@@ -1679,25 +2104,55 @@ fn discover_applications() -> Vec<ExternalApplication> {
             "ChatGPT",
             "llm",
             false,
-            &["chatgpt"][..],
+            &["chatgpt"],
             Some("ChatGPT.app"),
         ),
-    ]
-    .into_iter()
-    .map(
-        |(id, name, kind, always, commands, mac_app)| ExternalApplication {
-            id,
-            name,
-            kind,
-            available: always
-                || if kind == "editor" {
-                    mac_editor_available(commands, mac_app)
-                } else {
-                    application_available(commands, mac_app)
-                },
-        },
-    )
-    .collect()
+    ];
+
+type CatalogEntry = (
+    &'static str,
+    &'static str,
+    &'static str,
+    bool,
+    &'static [&'static str],
+    Option<&'static str>,
+);
+
+fn catalog_application(entry: &CatalogEntry) -> ExternalApplication {
+    ExternalApplication {
+        id: entry.0.to_string(),
+        name: entry.1.to_string(),
+        kind: entry.2,
+        available: entry.3 || application_available(entry.4, entry.5),
+        mac_app: entry.5.map(str::to_string),
+    }
+}
+
+#[tauri::command]
+fn discover_applications() -> Vec<ExternalApplication> {
+    let mut applications = vec![ExternalApplication {
+        id: "system".to_string(),
+        name: "System Default".to_string(),
+        kind: "system",
+        available: true,
+        mac_app: None,
+    }];
+    #[cfg(target_os = "macos")]
+    applications.extend(mac_open_with_applications());
+    #[cfg(not(target_os = "macos"))]
+    applications.extend(
+        APPLICATION_CATALOG
+            .iter()
+            .filter(|entry| entry.2 == "editor")
+            .map(catalog_application),
+    );
+    applications.extend(
+        APPLICATION_CATALOG
+            .iter()
+            .filter(|entry| entry.2 == "llm")
+            .map(catalog_application),
+    );
+    applications
 }
 
 fn scan_directory(path: &Path, depth: usize) -> AppResult<Vec<FileNode>> {
@@ -1738,12 +2193,62 @@ fn scan_directory(path: &Path, depth: usize) -> AppResult<Vec<FileNode>> {
             })
         })
         .collect::<Vec<_>>();
+    // Natural sort like the upstream navigator's localizedStandardCompare:
+    // digit runs compare numerically so file2 precedes file10, matching Finder.
     entries.sort_by(|a, b| {
         b.is_directory
             .cmp(&a.is_directory)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| natural_cmp(&a.name, &b.name))
     });
     Ok(entries)
+}
+
+/// Compare two names with embedded digit runs ordered numerically, falling
+/// back to a case-insensitive comparison for the non-digit remainder.
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let left = a.as_bytes();
+    let right = b.as_bytes();
+    let mut i = 0;
+    let mut j = 0;
+    while i < left.len() && j < right.len() {
+        if left[i].is_ascii_digit() && right[j].is_ascii_digit() {
+            // Compare whole digit runs numerically: shorter (after stripping
+            // leading zeros) means smaller, then lexicographically.
+            let l_end = digit_run_end(left, i);
+            let r_end = digit_run_end(right, j);
+            let l = &a[i..l_end];
+            let r = &b[j..r_end];
+            let l_trimmed = l.trim_start_matches('0');
+            let r_trimmed = r.trim_start_matches('0');
+            let order = l_trimmed
+                .len()
+                .cmp(&r_trimmed.len())
+                .then_with(|| l_trimmed.cmp(r_trimmed));
+            if order != std::cmp::Ordering::Equal {
+                return order;
+            }
+            i = l_end;
+            j = r_end;
+        } else {
+            let l = left[i].to_ascii_lowercase();
+            let r = right[j].to_ascii_lowercase();
+            if l != r {
+                return l.cmp(&r);
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    (left.len() - i).cmp(&(right.len() - j))
+}
+
+/// End index (exclusive) of the ASCII digit run starting at `start`.
+fn digit_run_end(bytes: &[u8], start: usize) -> usize {
+    let mut end = start;
+    while end < bytes.len() && bytes[end].is_ascii_digit() {
+        end += 1;
+    }
+    end
 }
 
 fn is_package_directory(path: &Path) -> bool {
@@ -1863,6 +2368,27 @@ fn save_export_bytes(path: String, bytes: Vec<u8>) -> AppResult<()> {
     let mut file = AtomicWriteFile::open(&target).map_err(io_error)?;
     file.write_all(&bytes).map_err(io_error)?;
     file.commit().map_err(io_error)
+}
+
+/// Reads the plain-text flavour of the system clipboard for Edit ▸ Paste and
+/// Match Style. WebView clipboard reads need a transient user activation that a
+/// menu invocation never has, so the read happens natively instead.
+#[tauri::command]
+fn read_clipboard_text() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+        let pasteboard = NSPasteboard::generalPasteboard();
+        // SAFETY: the pasteboard type identifier is a constant AppKit exports.
+        let data_type = unsafe { NSPasteboardTypeString };
+        pasteboard
+            .stringForType(data_type)
+            .map(|value| value.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
 }
 
 /// Normalizes clipboard pixels to PNG and stores them next to the Markdown
@@ -2064,7 +2590,328 @@ fn list_directory(path: String) -> AppResult<Vec<FileNode>> {
             code: "invalid_path",
         });
     }
-    scan_directory(&canonical, 5)
+    // The upstream navigator recurses without a depth cap. A bound still
+    // guards against pathological trees (symlink loops are already excluded
+    // by canonicalize, but circular hard links and generated trees exist);
+    // 12 levels covers real documentation roots, and hidden/node_modules/
+    // target/dist/package directories are pruned before recursing.
+    scan_directory(&canonical, 12)
+}
+
+/// Renders the Finder icon for a file or application as a PNG data URL —
+/// the upstream navigator's NSWorkspace.icon(forFile:) at 16pt (32px backing
+/// pixels). Empty string when the path does not exist or rendering fails; the
+/// UI falls back to the generic lucide glyph in that case.
+/// Renders the Finder icon for a path as a PNG data URL at 16pt (32px
+/// backing pixels). Accepts any filesystem path; when the path is an app
+/// name like "Visual Studio Code.app" it is resolved from /Applications,
+/// /System/Applications, or ~/Applications — the upstream menus show each
+/// editor's real NSWorkspace icon. Empty string when nothing resolves or
+/// rendering fails; the UI falls back to its generic glyph.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn file_icon_data_url(_path: String, _size: Option<f64>) -> AppResult<String> {
+    Ok(String::new())
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn file_icon_data_url(path: String, size: Option<f64>) -> AppResult<String> {
+    use base64::Engine as _;
+    use objc2::AnyThread;
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSWorkspace};
+    use objc2_foundation::{NSDictionary, NSSize, NSString};
+
+    let mut resolved = PathBuf::from(&path);
+    if !resolved.exists() && path.ends_with(".app") {
+        // Bare app name: search the standard install locations like
+        // application_available does.
+        for root in ["/Applications", "/System/Applications"] {
+            let candidate = Path::new(root).join(&path);
+            if candidate.exists() {
+                resolved = candidate;
+                break;
+            }
+        }
+        if !resolved.exists()
+            && let Some(home) = dirs::home_dir()
+        {
+            let candidate = home.join("Applications").join(&path);
+            if candidate.exists() {
+                resolved = candidate;
+            }
+        }
+    }
+    if !resolved.exists() {
+        return Ok(String::new());
+    }
+    let workspace = NSWorkspace::sharedWorkspace();
+    let ns_path = NSString::from_str(&resolved.to_string_lossy());
+    let icon = workspace.iconForFile(&ns_path);
+    // Backing pixels for a 2x display: 32 for the 16pt menu rows, 40 for the
+    // titlebar tile's 20pt icon.
+    let points = size.unwrap_or(16.0).clamp(8.0, 128.0);
+    icon.setSize(NSSize::new(points * 2.0, points * 2.0));
+    let Some(tiff) = icon.TIFFRepresentation() else {
+        return Ok(String::new());
+    };
+    let Some(rep) = NSBitmapImageRep::initWithData(NSBitmapImageRep::alloc(), &tiff) else {
+        return Ok(String::new());
+    };
+    let png = unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new()) };
+    let Some(png) = png else {
+        return Ok(String::new());
+    };
+    let encoded = base64::engine::general_purpose::STANDARD.encode(png.to_vec());
+    Ok(format!("data:image/png;base64,{encoded}"))
+}
+
+/// One toolbar glyph to rasterise: the SF Symbol's name plus the two knobs
+/// AppKit exposes for it — point size and NSFont.Weight (0 regular, 0.23
+/// semibold, …).
+#[derive(serde::Deserialize)]
+struct SfSymbolRequest {
+    name: String,
+    points: f64,
+    weight: f64,
+}
+
+/// A rasterised symbol: the PNG data URL, and the point size AppKit gave the
+/// artwork so the stylesheet can size the mask box without rescaling it.
+#[derive(serde::Serialize)]
+struct SfSymbolImage {
+    url: String,
+    width: f64,
+    height: f64,
+}
+
+fn empty_sf_symbol() -> SfSymbolImage {
+    SfSymbolImage {
+        url: String::new(),
+        width: 0.0,
+        height: 0.0,
+    }
+}
+
+/// The titlebar's glyphs are SF Symbols in the reference, so the same symbols
+/// are rasterised here rather than approximated with hand-drawn paths: the
+/// system draws the exact outlines the reference shows. Each image is drawn
+/// into a 2x bitmap and handed to the webview as a CSS mask, which keeps the
+/// glyph tintable with `currentColor` in every appearance.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn sf_symbol_data_urls(requests: Vec<SfSymbolRequest>) -> Vec<SfSymbolImage> {
+    requests.iter().map(|_| empty_sf_symbol()).collect()
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn sf_symbol_data_urls(requests: Vec<SfSymbolRequest>) -> Vec<SfSymbolImage> {
+    use base64::Engine as _;
+    use objc2::AnyThread;
+    use objc2_app_kit::{
+        NSBitmapImageFileType, NSBitmapImageRep, NSGraphicsContext, NSImage,
+        NSImageSymbolConfiguration,
+    };
+    use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
+
+    // Two backing pixels per point, like every other raster this app hands to
+    // the webview; the mask box stays at the point size, so the glyph is never
+    // resampled.
+    const SCALE: f64 = 2.0;
+    let color_space = NSString::from_str("NSDeviceRGBColorSpace");
+    let mut images = Vec::with_capacity(requests.len());
+    for request in requests {
+        let name = NSString::from_str(&request.name);
+        let Some(symbol) =
+            NSImage::imageWithSystemSymbolName_accessibilityDescription(&name, None)
+        else {
+            images.push(empty_sf_symbol());
+            continue;
+        };
+        let config = NSImageSymbolConfiguration::configurationWithPointSize_weight(
+            request.points.clamp(4.0, 128.0),
+            request.weight.clamp(0.0, 1.0),
+        );
+        let Some(symbol) = symbol.imageWithSymbolConfiguration(&config) else {
+            images.push(empty_sf_symbol());
+            continue;
+        };
+        let natural = symbol.size();
+        let pixels_w = (natural.width * SCALE).round() as isize;
+        let pixels_h = (natural.height * SCALE).round() as isize;
+        if pixels_w <= 0 || pixels_h <= 0 {
+            images.push(empty_sf_symbol());
+            continue;
+        }
+        let Some(rep) = (unsafe {
+            NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel(
+                NSBitmapImageRep::alloc(),
+                std::ptr::null_mut(),
+                pixels_w,
+                pixels_h,
+                8,
+                4,
+                true,
+                false,
+                &color_space,
+                0,
+                0,
+            )
+        }) else {
+            images.push(empty_sf_symbol());
+            continue;
+        };
+        rep.setSize(NSSize::new(natural.width, natural.height));
+        let Some(context) = NSGraphicsContext::graphicsContextWithBitmapImageRep(&rep) else {
+            images.push(empty_sf_symbol());
+            continue;
+        };
+        NSGraphicsContext::saveGraphicsState_class();
+        NSGraphicsContext::setCurrentContext(Some(&context));
+        symbol.drawInRect(NSRect::new(NSPoint::new(0.0, 0.0), natural));
+        NSGraphicsContext::restoreGraphicsState_class();
+        let Some(png) = (unsafe {
+            rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
+        }) else {
+            images.push(empty_sf_symbol());
+            continue;
+        };
+        let encoded = base64::engine::general_purpose::STANDARD.encode(png.to_vec());
+        images.push(SfSymbolImage {
+            url: format!("data:image/png;base64,{encoded}"),
+            width: natural.width,
+            height: natural.height,
+        });
+    }
+    images
+}
+
+/// The next free "base", "base 2", "base 3"… name in `directory`, mirroring
+/// the upstream navigator's uniqueURL so a new file never overwrites.
+fn unique_entry_name(directory: &Path, base: &str, extension: Option<&str>) -> String {
+    let mut candidate = match extension {
+        Some(ext) => format!("{base}.{ext}"),
+        None => base.to_string(),
+    };
+    let mut index = 2;
+    while directory.join(&candidate).exists() {
+        candidate = match extension {
+            Some(ext) => format!("{base} {index}.{ext}"),
+            None => format!("{base} {index}"),
+        };
+        index += 1;
+    }
+    candidate
+}
+
+fn entry_name_error(name: &str) -> AppResult<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains(':') || trimmed == "." || trimmed == ".." {
+        return Err(AppError { code: "invalid_name" });
+    }
+    Ok(())
+}
+
+/// Creates an empty Markdown file, or a folder when `is_directory`, under a
+/// default name in the given folder — the upstream navigator's createItem.
+#[tauri::command]
+fn create_directory_entry(directory: String, is_directory: bool, contents: Option<String>) -> AppResult<FileNode> {
+    let folder = PathBuf::from(directory);
+    if !folder.is_dir() {
+        return Err(AppError { code: "invalid_path" });
+    }
+    let (base, extension) = if is_directory {
+        ("New Folder".to_string(), None)
+    } else {
+        ("Untitled".to_string(), Some("md"))
+    };
+    let name = unique_entry_name(&folder, &base, extension);
+    let target = folder.join(&name);
+    if is_directory {
+        fs::create_dir(&target).map_err(io_error)?;
+    } else {
+        // Upstream writes .withoutOverwriting; unique_entry_name already
+        // guarantees a free name, so a plain create is equivalent.
+        let bytes = contents.unwrap_or_default();
+        fs::write(&target, bytes.as_bytes()).map_err(io_error)?;
+    }
+    let name = target
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_default();
+    Ok(FileNode {
+        name,
+        path: target.to_string_lossy().to_string(),
+        is_directory,
+        children: Vec::new(),
+    })
+}
+
+/// Copies externally picked files into the navigator's folder under unique,
+/// non-overwriting names — the upstream "Add Files to…" import. Sources stay
+/// where they are (copy, not move); directories are skipped because the
+/// navigator models folders from the workspace scan, not from loose imports.
+#[tauri::command]
+fn import_files(directory: String, paths: Vec<String>) -> AppResult<Vec<FileNode>> {
+    let folder = PathBuf::from(&directory);
+    if !folder.is_dir() {
+        return Err(AppError { code: "invalid_path" });
+    }
+    let mut imported = Vec::new();
+    for source in paths {
+        let source = PathBuf::from(&source);
+        if !source.is_file() {
+            continue;
+        }
+        let Some(original) = source.file_name() else { continue };
+        let original = original.to_string_lossy().to_string();
+        let extension = source.extension().map(|value| value.to_string_lossy().to_string());
+        let stem = source
+            .file_stem()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or(original.clone());
+        let name = unique_entry_name(&folder, &stem, extension.as_deref());
+        let destination = folder.join(&name);
+        fs::copy(&source, &destination).map_err(io_error)?;
+        imported.push(FileNode {
+            name,
+            path: destination.to_string_lossy().to_string(),
+            is_directory: false,
+            children: Vec::new(),
+        });
+    }
+    Ok(imported)
+}
+
+/// Renames (moves) a navigator entry in place, keeping a file's `.md`
+/// extension when the typed name has none — the upstream renamedURL rule.
+#[tauri::command]
+fn rename_directory_entry(path: String, new_name: String) -> AppResult<FileNode> {
+    entry_name_error(&new_name)?;
+    let source = PathBuf::from(path);
+    if !source.exists() {
+        return Err(AppError { code: "not_found" });
+    }
+    let mut name = new_name.trim().to_string();
+    let is_directory = source.is_dir();
+    if !is_directory && !name.contains('.') {
+        name += ".md";
+    }
+    let destination = source
+        .parent()
+        .ok_or(AppError { code: "invalid_path" })?
+        .join(&name);
+    if destination.exists() {
+        return Err(AppError { code: "already_exists" });
+    }
+    fs::rename(&source, &destination).map_err(io_error)?;
+    Ok(FileNode {
+        name,
+        path: destination.to_string_lossy().to_string(),
+        is_directory,
+        children: Vec::new(),
+    })
 }
 
 #[tauri::command]
@@ -2191,9 +3038,19 @@ async fn check_update_channel(
 }
 
 #[tauri::command]
-async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppResult<()> {
+async fn install_update_channel(
+    app: tauri::AppHandle,
+    channel: String,
+    download_only: Option<bool>,
+) -> AppResult<()> {
     let updater = build_updater(&app, &channel)?;
     if let Some(update) = updater.check().await.map_err(updater_check_error)? {
+        // download_only=true keeps the Windows installer from bouncing the app
+        // when the package lands, so the frontend controls when to relaunch —
+        // the upstream "ready → Relaunch Now / install on quit" two-phase
+        // flow. macOS and Linux never exit from install() anyway; the
+        // frontend relaunches at the user's choosing.
+        let restart = !download_only.unwrap_or(false);
         let event_name = "update-download-progress";
         let progress_channel = channel.clone();
         let progress_bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -2201,6 +3058,7 @@ async fn install_update_channel(app: tauri::AppHandle, channel: String) -> AppRe
         let finish_app = app.clone();
         let finish_channel = progress_channel.clone();
         let finish_bytes = progress_bytes.clone();
+        let update = update.restart_after_install(restart);
         update
             .download_and_install(
                 move |chunk_length, total_bytes| {
@@ -2286,6 +3144,64 @@ fn open_mermaid_window(
             let _ = WebviewWindowBuilder::new(&window_handle, id, WebviewUrl::App(url.into()))
                 .title(window_title)
                 .inner_size(980.0, 720.0)
+                .min_inner_size(520.0, 360.0)
+                .center()
+                .resizable(true)
+                .build();
+        });
+    });
+    Ok(())
+}
+
+/// Opens one table in its own ordinary window, mirroring the upstream
+/// TablePreviewWindow: a read-only snapshot where Escape closes and zooming
+/// never changes the document's saved text size.
+#[tauri::command]
+fn open_table_window(
+    app: tauri::AppHandle,
+    id: String,
+    locale: String,
+    title: Option<String>,
+) -> AppResult<()> {
+    if !id.starts_with("table-")
+        || !id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err(AppError {
+            code: "invalid_path",
+        });
+    }
+    let url = format!(
+        "table.html?id={id}&locale={}",
+        if locale == "en" { "en" } else { "zh-CN" }
+    );
+    // Title the popup from the nearest heading in the document; fall back to
+    // the localized default when the caller provides no usable text.
+    let window_title = title
+        .map(|value| {
+            value
+                .chars()
+                .filter(|character| !character.is_control())
+                .take(120)
+                .collect::<String>()
+        })
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| {
+            if locale == "zh-CN" {
+                "表格".to_string()
+            } else {
+                "Table".to_string()
+            }
+        });
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let window_handle = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            let _ = WebviewWindowBuilder::new(&window_handle, id, WebviewUrl::App(url.into()))
+                .title(window_title)
+                .inner_size(1100.0, 800.0)
                 .min_inner_size(520.0, 360.0)
                 .center()
                 .resizable(true)
@@ -2497,11 +3413,244 @@ fn restore_macos_window_chrome() {
     }
 }
 
+/// Gives a document window the same chrome the launch window has.
+///
+/// Tauri's config path makes the main window's title bar transparent, but a
+/// window built at runtime only gets `NSWindowStyleMaskFullSizeContentView`;
+/// with `titlebarAppearsTransparent` left false AppKit paints the title bar
+/// over the content, so the webview starts one bar-height down. A document
+/// opened from Finder therefore showed the file name beside the traffic lights
+/// and pushed the whole toolbar 40pt lower than the reference, whose toolbar
+/// begins at the window's top edge. Windows built before setup finishes are
+/// also covered by `restore_macos_window_chrome`; this handles the ones built
+/// afterwards.
 #[cfg(target_os = "macos")]
-fn show_macos_share_picker(window_pointer: usize, source: &str) {
+fn style_macos_document_window(window: &tauri::WebviewWindow) {
+    let handle = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        use objc2_app_kit::{NSWindow, NSWindowButton, NSWindowTitleVisibility};
+        let Ok(pointer) = handle.ns_window() else {
+            return;
+        };
+        if pointer.is_null() {
+            return;
+        }
+        // SAFETY: `ns_window` returns the live NSWindow backing this webview
+        // window, and the closure runs on AppKit's main thread.
+        let window = unsafe { &*(pointer as *const NSWindow) };
+        window.setTitlebarAppearsTransparent(true);
+        window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
+        for kind in [
+            NSWindowButton::CloseButton,
+            NSWindowButton::MiniaturizeButton,
+            NSWindowButton::ZoomButton,
+        ] {
+            if let Some(button) = window.standardWindowButton(kind) {
+                button.setHidden(false);
+                button.setEnabled(true);
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn style_macos_document_window(_window: &tauri::WebviewWindow) {}
+
+/// AppKit matches menu key equivalents against characters rather than key
+/// codes, so a few reference shortcuts spell characters muda's accelerator
+/// parser cannot express (⌘: is Shift+; rendered as a colon). Those are set on
+/// the installed NSMenuItems directly.
+#[cfg(target_os = "macos")]
+fn apply_native_menu_key_equivalents(app: &tauri::AppHandle, editable: bool, dirty: bool) {
+    use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
+    use objc2_foundation::NSString;
+    fn find_item(menu: &NSMenu, title: &str) -> Option<objc2::rc::Retained<NSMenuItem>> {
+        for index in 0..menu.numberOfItems() {
+            let Some(item) = menu.itemAtIndex(index) else {
+                continue;
+            };
+            if item.title().to_string() == title {
+                return Some(item);
+            }
+            if let Some(submenu) = item.submenu()
+                && let Some(found) = find_item(&submenu, title)
+            {
+                return Some(found);
+            }
+        }
+        None
+    }
+    let _ = app.run_on_main_thread(move || {
+        let Some(mtm) = objc2::MainThreadMarker::new() else {
+            return;
+        };
+        let application = NSApplication::sharedApplication(mtm);
+        let Some(main_menu) = application.mainMenu() else {
+            return;
+        };
+        for (title, key) in [
+            ("显示拼写和语法", ":"),
+            ("Show Spelling and Grammar", ":"),
+        ] {
+            if let Some(item) = find_item(&main_menu, title) {
+                item.setKeyEquivalent(&NSString::from_str(key));
+                item.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
+            }
+        }
+        // The reference's Go menu carries AppKit's standard arrow and page
+        // keys on its four navigation rows. They are drawn in the menu's
+        // shortcut column as ▲ ▼ ↑ ↓ (the private-use function-key
+        // characters) and take no Command modifier: the reference's AX tree
+        // reports them with key equivalents U+F700/U+F701/U+F72C/U+F72D and
+        // the no-command mask, so a bare arrow press reaches the responder
+        // chain exactly as it does in AppKit's own text views.
+        for (title, key) in [
+            ("向上", "\u{F700}"),
+            ("Up", "\u{F700}"),
+            ("向下", "\u{F701}"),
+            ("Down", "\u{F701}"),
+            ("上一页", "\u{F72C}"),
+            ("Page Up", "\u{F72C}"),
+            ("下一页", "\u{F72D}"),
+            ("Page Down", "\u{F72D}"),
+        ] {
+            if let Some(item) = find_item(&main_menu, title) {
+                item.setKeyEquivalent(&NSString::from_str(key));
+                item.setKeyEquivalentModifierMask(NSEventModifierFlags::empty());
+            }
+        }
+        // AppKit reveals "Close All" only while Option is held: it is the
+        // alternate of "Close", carrying the same ⌘W with Option added. muda
+        // has no alternate-item support, so the pair is marked here — then the
+        // File menu matches the reference, which lists Close alone until the
+        // Option key is down.
+        if let Some(close) = find_item(&main_menu, "关闭").or_else(|| find_item(&main_menu, "Close")) {
+            close.setKeyEquivalent(&NSString::from_str("w"));
+            close.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
+            close.setAlternate(false);
+        }
+        for title in ["全部关闭", "Close All"] {
+            if let Some(item) = find_item(&main_menu, title) {
+                item.setKeyEquivalent(&NSString::from_str("w"));
+                item.setKeyEquivalentModifierMask(
+                    NSEventModifierFlags::Command.union(NSEventModifierFlags::Option),
+                );
+                item.setAlternate(true);
+            }
+        }
+        // The reference's Share row carries the system share glyph, drawn as a
+        // template symbol so it follows the menu's text colour (it greys with
+        // the row). AppKit does not draw a symbol image straight from
+        // NSMenuItem — the menu needs a plain image — so the symbol is rendered
+        // into a 16pt bitmap first. NSMenuItem keeps that inside the regular
+        // text indent instead of widening the menu's icon gutter, which is the
+        // single-row indent the reference shows.
+        for title in ["共享", "Share"] {
+            let Some(item) = find_item(&main_menu, title) else {
+                continue;
+            };
+            let name = NSString::from_str("square.and.arrow.up");
+            let Some(symbol) =
+                objc2_app_kit::NSImage::imageWithSystemSymbolName_accessibilityDescription(
+                    &name, None,
+                )
+            else {
+                continue;
+            };
+            let side = 16.0_f64;
+            // The reference draws a semibold symbol: at a 14.5pt fit the
+            // default weight inks 176px of 81-level grey against the
+            // reference's 207 of 81, medium reaches 181, and semibold 217.
+            let config = objc2_app_kit::NSImageSymbolConfiguration::configurationWithPointSize_weight(
+                13.0,
+                unsafe { objc2_app_kit::NSFontWeightSemibold },
+            );
+            let Some(symbol) = symbol.imageWithSymbolConfiguration(&config) else {
+                continue;
+            };
+            let natural = symbol.size();
+            // The reference's glyph inks 18x23 device pixels; the symbol's
+            // artwork carries about a point of padding inside its own bounds,
+            // so fitting it to 14.5pt lands exactly on that ink box.
+            let scale = (14.5 / natural.width).min(14.5 / natural.height);
+            let drawn = objc2_foundation::NSSize::new(natural.width * scale, natural.height * scale);
+            // NSImage's lockFocus drawing path is deprecated; the block-based
+            // image draws the symbol into a 16pt bitmap without a focused view.
+            let handler = block2::RcBlock::new(move |_rect: objc2_foundation::NSRect| -> objc2::runtime::Bool {
+                symbol.drawInRect(objc2_foundation::NSRect::new(
+                    objc2_foundation::NSPoint::new((side - drawn.width) / 2.0, (side - drawn.height) / 2.0),
+                    drawn,
+                ));
+                objc2::runtime::Bool::YES
+            });
+            let image = objc2_app_kit::NSImage::imageWithSize_flipped_drawingHandler(
+                objc2_foundation::NSSize::new(side, side),
+                false,
+                &handler,
+            );
+            image.setTemplate(true);
+            item.setImage(Some(&image));
+        }
+        // The reference validates its document commands like an NSDocument:
+        // in read (preview) mode all three storage rows are grey, and while
+        // editing they follow the document's modified state.
+        for (title, enabled) in [
+            ("存储…", editable && dirty),
+            ("Save…", editable && dirty),
+            ("存储为…", editable),
+            ("Save As…", editable),
+            ("复原到已存储的版本", editable && dirty),
+            ("Revert to Saved", editable && dirty),
+        ] {
+            if let Some(item) = find_item(&main_menu, title) {
+                item.setEnabled(enabled);
+            }
+        }
+        // AppKit needs to know which submenus play the window and help roles;
+        // the window menu is what gains the system's tiling and window-list
+        // commands, and the help menu gains its search field.
+        for (title, window_role) in [("窗口", true), ("Window", true), ("帮助", false), ("Help", false)] {
+            let Some(item) = find_item(&main_menu, title) else {
+                continue;
+            };
+            let Some(submenu) = item.submenu() else {
+                continue;
+            };
+            if window_role {
+                application.setWindowsMenu(Some(&submenu));
+            } else {
+                application.setHelpMenu(Some(&submenu));
+            }
+        }
+    });
+}
+
+/// Dispatches one of AppKit's standard text-editing actions down the responder
+/// chain. WKWebView implements these selectors for its editable content, so
+/// the spelling and substitution commands act on the focused editor exactly as
+/// they would in a native text view.
+#[cfg(target_os = "macos")]
+fn dispatch_responder_action(selector: &'static std::ffi::CStr) {
+    use objc2::runtime::Sel;
+    use objc2_app_kit::NSApplication;
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let action = Sel::register(selector);
+    // SAFETY: the selector is a documented NSResponder action, and AppKit
+    // resolves it against the first responder; both target and sender are nil,
+    // which the signature allows.
+    unsafe {
+        app.sendAction_to_from(action, None, None);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn show_macos_share_picker(window_pointer: usize, source: &str, path: Option<&str>) {
     use objc2::{AnyThread, rc::Retained, runtime::AnyObject};
     use objc2_app_kit::{NSSharingServicePicker, NSWindow};
-    use objc2_foundation::{NSArray, NSRectEdge, NSString};
+    use objc2_foundation::{NSArray, NSRectEdge, NSString, NSURL};
 
     // SAFETY: Tauri supplies the NSWindow pointer for this live WebviewWindow,
     // and this helper is invoked on AppKit's main thread.
@@ -2509,28 +3658,34 @@ fn show_macos_share_picker(window_pointer: usize, source: &str) {
     let Some(view) = window.contentView() else {
         return;
     };
-    let source: Retained<AnyObject> = NSString::from_str(source).into();
-    let items = NSArray::from_retained_slice(&[source]);
-    // SAFETY: NSString conforms to NSPasteboardWriting, as required by the
-    // picker. AppKit owns the visible picker after it is shown.
+    // A saved document shares its file URL so the picker header shows the
+    // document icon, name and size like the reference app. Unsaved documents
+    // (or a path that has since disappeared) fall back to the source text.
+    let item: Retained<AnyObject> = match path.filter(|path| !path.is_empty() && std::path::Path::new(path).is_file()) {
+        Some(path) => NSURL::fileURLWithPath(&NSString::from_str(path)).into(),
+        None => NSString::from_str(source).into(),
+    };
+    let items = NSArray::from_retained_slice(&[item]);
+    // SAFETY: both NSString and NSURL conform to NSPasteboardWriting, as
+    // required by the picker. AppKit owns the visible picker after it is shown.
     let picker =
         unsafe { NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), &items) };
     picker.showRelativeToRect_ofView_preferredEdge(view.bounds(), &view, NSRectEdge::MaxY);
 }
 
 #[tauri::command]
-fn share_source(window: tauri::WebviewWindow, source: String) -> AppResult<()> {
+fn share_source(window: tauri::WebviewWindow, source: String, path: Option<String>) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     {
         let pointer = window.ns_window().map_err(io_error)? as usize;
         window
-            .run_on_main_thread(move || show_macos_share_picker(pointer, &source))
+            .run_on_main_thread(move || show_macos_share_picker(pointer, &source, path.as_deref()))
             .map_err(io_error)?;
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (window, source);
+        let _ = (window, source, path);
         Err(AppError {
             code: "unsupported",
         })
@@ -2575,6 +3730,8 @@ pub fn run() {
             restore_macos_window_chrome();
             let menu = build_menu(app.handle(), "zh-CN", &MenuUiState::default(), &[])?;
             app.set_menu(menu)?;
+            #[cfg(target_os = "macos")]
+            apply_native_menu_key_equivalents(app.handle(), false, false);
             let handle = app.handle().clone();
             #[cfg(target_os = "macos")]
             {
@@ -2592,6 +3749,8 @@ pub fn run() {
                         build_menu(&app_handle, "zh-CN", &MenuUiState::default(), &recent_files)
                     {
                         let _ = app_handle.set_menu(menu);
+                        #[cfg(target_os = "macos")]
+                        apply_native_menu_key_equivalents(&app_handle, false, false);
                     }
                 });
             });
@@ -2599,6 +3758,30 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
+            // AppKit's spelling and substitution commands are handled by the
+            // focused WebView's responder chain, not by the frontend.
+            #[cfg(target_os = "macos")]
+            {
+                let native_action: Option<&'static std::ffi::CStr> = match id {
+                    "spell-show-panel" => Some(c"showGuessPanel:"),
+                    "spell-check-now" => Some(c"checkSpelling:"),
+                    "spell-toggle-continuous" => Some(c"toggleContinuousSpellChecking:"),
+                    "spell-toggle-grammar" => Some(c"toggleGrammarChecking:"),
+                    "spell-toggle-autocorrect" => Some(c"toggleAutomaticSpellingCorrection:"),
+                    "substitutions-panel" => Some(c"showSubstitutionsPanel:"),
+                    "substitutions-smart-insert" => Some(c"toggleSmartInsertDelete:"),
+                    "substitutions-smart-quotes" => Some(c"toggleAutomaticQuoteSubstitution:"),
+                    "substitutions-smart-dashes" => Some(c"toggleAutomaticDashSubstitution:"),
+                    "substitutions-smart-links" => Some(c"toggleAutomaticLinkDetection:"),
+                    "substitutions-data-detection" => Some(c"toggleAutomaticDataDetection:"),
+                    "substitutions-text-replacement" => Some(c"toggleAutomaticTextReplacement:"),
+                    _ => None,
+                };
+                if let Some(selector) = native_action {
+                    dispatch_responder_action(selector);
+                    return;
+                }
+            }
             let command = if let Some(path) = id
                 .strip_prefix("recent-")
                 .and_then(|index| index.parse::<usize>().ok())
@@ -2662,20 +3845,28 @@ pub fn run() {
             write_text_file,
             save_export_bytes,
             save_pasted_image,
+            read_clipboard_text,
             rename_pasted_image,
             temp_export_path,
             list_directory,
+            create_directory_entry,
+            rename_directory_entry,
             read_local_asset,
             check_update_channel,
             install_update_channel,
             open_mermaid_window,
+            open_table_window,
             open_settings_window,
             install_cli,
             set_default_handler,
             refresh_menu,
             record_recent_file,
             clear_recent_files,
+            list_recent_files,
             discover_applications,
+            file_icon_data_url,
+            sf_symbol_data_urls,
+            import_files,
             share_source,
             load_settings,
             save_settings,
@@ -2723,6 +3914,93 @@ mod tests {
     use super::*;
 
     #[test]
+    fn natural_sort_orders_digit_runs_numerically() {
+        assert_eq!(natural_cmp("file2", "file10"), std::cmp::Ordering::Less);
+        assert_eq!(natural_cmp("file10", "file2"), std::cmp::Ordering::Greater);
+        assert_eq!(natural_cmp("File2", "file2"), std::cmp::Ordering::Equal);
+        // Padded zeros do not reorder equal values.
+        assert_eq!(natural_cmp("file007", "file7"), std::cmp::Ordering::Equal);
+        assert_eq!(natural_cmp("a1b", "a1c"), std::cmp::Ordering::Less);
+        assert_eq!(natural_cmp("第2章", "第10章"), std::cmp::Ordering::Less);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_markdown_editor_detection_matches_the_reference_menu() {
+        let document = |role: &str, utis: &[&str], extensions: &[&str]| {
+            let mut document = plist::Dictionary::new();
+            document.insert(
+                "CFBundleTypeRole".into(),
+                plist::Value::String(role.to_string()),
+            );
+            document.insert(
+                "LSItemContentTypes".into(),
+                plist::Value::Array(
+                    utis.iter()
+                        .map(|uti| plist::Value::String((*uti).to_string()))
+                        .collect(),
+                ),
+            );
+            document.insert(
+                "CFBundleTypeExtensions".into(),
+                plist::Value::Array(
+                    extensions
+                        .iter()
+                        .map(|extension| plist::Value::String((*extension).to_string()))
+                        .collect(),
+                ),
+            );
+            let mut info = plist::Dictionary::new();
+            info.insert(
+                "CFBundleDocumentTypes".into(),
+                plist::Value::Array(vec![plist::Value::Dictionary(document)]),
+            );
+            info
+        };
+        assert!(mac_application_is_markdown_editor(&document(
+            "Editor",
+            &["net.daringfireball.markdown"],
+            &[]
+        )));
+        assert!(mac_application_is_markdown_editor(&document(
+            "Editor",
+            &[],
+            &["md", "markdown"]
+        )));
+        // Viewers and plain-text-only editors stay out; the reference admits
+        // the latter by bundle identifier (TextEdit) and excludes the rest
+        // (Numbers, Word, Excel).
+        assert!(!mac_application_is_markdown_editor(&document(
+            "Viewer",
+            &["net.daringfireball.markdown"],
+            &[]
+        )));
+        assert!(!mac_application_is_markdown_editor(&document(
+            "Editor",
+            &["public.plain-text"],
+            &["txt"]
+        )));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_open_with_keeps_own_and_curated_identity() {
+        assert!(is_own_application_bundle("app.textmark.desktop"));
+        assert!(is_own_application_bundle(
+            "app.textmark.desktop.personaltest"
+        ));
+        assert!(!is_own_application_bundle("doc.md-preview"));
+        assert_eq!(
+            curated_application_id("Visual Studio Code.app"),
+            Some("vscode")
+        );
+        assert_eq!(curated_application_id("CotEditor.app"), Some("coteditor"));
+        // Localized bundles and uncurated apps stay keyed by bundle id.
+        assert_eq!(curated_application_id("妙言.app"), None);
+        assert_eq!(curated_application_id("MiaoYan.app"), None);
+    }
+
+    #[test]
     fn toolbar_menu_label_tracks_visibility_in_both_locales() {
         assert_eq!(toolbar_menu_labels(false), ("隐藏工具栏", "Hide Toolbar"));
         assert_eq!(toolbar_menu_labels(true), ("显示工具栏", "Show Toolbar"));
@@ -2742,6 +4020,64 @@ mod tests {
             updater_endpoint("nightly").unwrap_err().code,
             "invalid_update_channel"
         );
+    }
+
+    #[test]
+    fn legacy_data_migration_copies_missing_files_without_overwriting() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-data-migration-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let legacy = root.join("legacy");
+        let current = root.join("current");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::create_dir_all(&current).unwrap();
+        fs::write(legacy.join("settings-v3.json"), "{\"theme\":\"dark\"}").unwrap();
+        fs::write(legacy.join("session-v1.json"), "{\"version\":1}").unwrap();
+        fs::write(
+            current.join("session-v1.json"),
+            "{\"version\":1,\"updatedAt\":7}",
+        )
+        .unwrap();
+
+        migrate_legacy_data(&legacy, &current);
+
+        assert_eq!(
+            fs::read_to_string(current.join("settings-v3.json")).unwrap(),
+            "{\"theme\":\"dark\"}"
+        );
+        // Newer state in the active directory always wins.
+        assert_eq!(
+            fs::read_to_string(current.join("session-v1.json")).unwrap(),
+            "{\"version\":1,\"updatedAt\":7}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn write_probe_rejects_directories_it_cannot_create() {
+        let root = std::env::temp_dir().join(format!(
+            "textmark-data-probe-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        assert!(is_writable_directory(&root));
+        // The probe file never survives a successful check.
+        assert!(!root.join(".textmark-write-probe").exists());
+
+        // A regular file in the way means the directory can never be created.
+        let blocked = root.join("file");
+        fs::write(&blocked, "x").unwrap();
+        assert!(!is_writable_directory(&blocked.join("nested")));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -2933,37 +4269,54 @@ mod tests {
     }
 
     #[test]
-    fn external_application_catalog_includes_common_editors_and_ai_apps() {
-        let ids = discover_applications()
-            .into_iter()
-            .map(|application| application.id)
+    fn external_application_catalog_lists_launch_services_editors_and_ai_apps() {
+        let applications = discover_applications();
+        let ids = applications
+            .iter()
+            .map(|application| application.id.clone())
             .collect::<HashSet<_>>();
-        for id in [
-            "system",
-            "vscode",
-            "cursor",
-            "windsurf",
-            "trae",
-            "zed",
-            "sublime",
-            "notepadpp",
-            "obsidian",
-            "typora",
-            "markedit",
-            "mellow",
-            "taio",
-            "codex",
-            "claude",
-            "chatgpt",
-        ] {
+        assert_eq!(ids.len(), applications.len(), "application ids must be unique");
+        for id in ["system", "codex", "claude", "chatgpt"] {
             assert!(ids.contains(id), "missing application catalog entry: {id}");
         }
-        let system_default = discover_applications()
-            .into_iter()
+        let system_default = applications
+            .iter()
             .find(|application| application.id == "system")
             .unwrap();
         assert_eq!(system_default.kind, "system");
         assert!(system_default.available);
+
+        let editors = applications
+            .iter()
+            .filter(|application| application.kind == "editor")
+            .collect::<Vec<_>>();
+        #[cfg(target_os = "macos")]
+        {
+            // macOS discovers Launch Services' ordered candidate list, so the
+            // installed set varies by machine; the invariants do not.
+            for editor in &editors {
+                assert!(editor.available);
+                assert!(
+                    editor
+                        .mac_app
+                        .as_deref()
+                        .is_some_and(|path| path.ends_with(".app")),
+                    "{} must carry its bundle path",
+                    editor.id
+                );
+                assert!(!is_own_application_bundle(&editor.id));
+            }
+            if Path::new("/Applications/Visual Studio Code.app").is_dir() {
+                assert!(ids.contains("vscode"), "curated id must survive discovery");
+            }
+            for ignored in IGNORED_OPEN_WITH_BUNDLES {
+                assert!(!ids.contains(*ignored));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        for id in ["vscode", "cursor", "windsurf", "trae", "notepadpp", "obsidian"] {
+            assert!(ids.contains(id), "missing application catalog entry: {id}");
+        }
     }
 
     #[cfg(target_os = "macos")]

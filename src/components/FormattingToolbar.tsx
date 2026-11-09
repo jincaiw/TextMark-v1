@@ -93,8 +93,9 @@ export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: For
           <option value="h5">{t(locale, 'heading5')}</option>
           <option value="h6">{t(locale, 'heading6')}</option>
         </select>
+        <ChevronDown className="formatting-heading-chevron" aria-hidden="true" />
       </div>
-      <div className="formatting-group" role="group" aria-label={t(locale, 'bold')}>
+      <div className="formatting-group formatting-text-group" role="group" aria-label={t(locale, 'bold')}>
         {button('bold', t(locale, 'bold'), <Bold />, state.bold)}
         {button('italic', t(locale, 'italic'), <Italic />, state.italic)}
         {button('strikethrough', t(locale, 'strikethrough'), <Strikethrough />, state.strikethrough)}
@@ -137,7 +138,7 @@ export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: For
           <button type="submit">{locale === 'zh-CN' ? '插入链接' : 'Insert Link'}</button>
         </form>
       </details>
-      <details className="formatting-group formatting-menu" role="group">
+      <details className="formatting-group formatting-menu formatting-list-menu" role="group">
         <summary aria-label={labels.list} title={labels.list}>
           {state.orderedList ? <ListOrdered /> : state.taskList ? <ListChecks /> : <List />}
           <ChevronDown />
@@ -155,7 +156,7 @@ export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: For
           {button('taskList', labels.checklist, <ListChecks />, state.taskList)}
         </div>
       </details>
-      <details className="formatting-group formatting-menu" role="group">
+      <details className="formatting-group formatting-menu formatting-more-menu" role="group">
         <summary aria-label={labels.more} title={labels.more}>
           <Plus />
           <ChevronDown />

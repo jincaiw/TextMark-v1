@@ -9,13 +9,15 @@ import { ToolbarAppearance } from './ToolbarAppearance'
 type AppearanceProps = ComponentProps<typeof ToolbarAppearance>
 
 const presets = [
-  ['normal', 'Normal'],
-  ['charcoal', 'Charcoal'],
-  ['redGraphite', 'Red Graphite'],
-  ['darkGraphite', 'Dark Graphite'],
-  ['solarizedLight', 'Solarized Light'],
-  ['solarizedDark', 'Solarized Dark'],
-  ['dracula', 'Dracula'],
+  ['normal', 'Original'],
+  ['quiet', 'Quiet'],
+  ['paper', 'Paper'],
+  ['bold', 'Bold'],
+  ['calm', 'Calm'],
+  ['focus', 'Focus'],
+  ['graphite', 'Graphite'],
+  ['dusk', 'Dusk'],
+  ['midnight', 'Midnight'],
 ] as const
 
 const makeProps = (overrides: Partial<AppearanceProps> = {}): AppearanceProps => ({
@@ -91,7 +93,8 @@ describe('ToolbarAppearance', () => {
     render(props)
     expectOpen(false)
     const label = t(locale, 'themesAndSettings')
-    expect(element('summary').getAttribute('aria-label')).toBe(label)
+    expect(element('summary').getAttribute('aria-label')).toBe(t(locale, 'themesLabel'))
+    expect(element('summary').getAttribute('title')).toBe(t(locale, 'themesHelp'))
     expect(element('[role="dialog"]').getAttribute('aria-label')).toBe(label)
     expect(element('summary').textContent).toBe('aA')
     open()
@@ -119,14 +122,14 @@ describe('ToolbarAppearance', () => {
     expect(props.onCustomizeAppearance).not.toHaveBeenCalled()
   })
 
-  it.each(presets)('七个预设中 %s 的 aria-pressed 受控更新，点击回调且不关闭浮层', (preset, name) => {
-    const initialPreset = preset === 'normal' ? 'dracula' : 'normal'
+  it.each(presets)('九个预设中 %s 的 aria-pressed 受控更新，点击回调且不关闭浮层', (preset, name) => {
+    const initialPreset = preset === 'normal' ? 'midnight' : 'normal'
     const props = makeProps({ themePreset: initialPreset })
     render(props)
     open()
     const group = element('[role="group"][aria-label="Theme presets"]')
     const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button'))
-    expect(buttons).toHaveLength(7)
+    expect(buttons).toHaveLength(9)
     expect(buttons.map((button) => [button.dataset.themePreset, button.getAttribute('aria-label')])).toEqual(presets)
     const assertSelection = (selected: AppearanceProps['themePreset']) => {
       for (const button of buttons) {
@@ -150,7 +153,7 @@ describe('ToolbarAppearance', () => {
   })
 
   it.each([
-    { zoom: 50, disabled: 'zoomOut', enabled: 'zoomIn', next: 67 },
+    { zoom: 50, disabled: 'zoomOut', enabled: 'zoomIn', next: 60 },
     { zoom: 300, disabled: 'zoomIn', enabled: 'zoomOut', next: 250 },
   ] as const)('zoom=$zoom 时禁用越界按钮，另一方向按档位回调', ({ zoom, disabled, enabled, next }) => {
     const props = makeProps({ zoom })
@@ -171,7 +174,7 @@ describe('ToolbarAppearance', () => {
   })
 
   it.each([
-    { zoom: 67, direction: 'zoomOut', next: 50 },
+    { zoom: 60, direction: 'zoomOut', next: 50 },
     { zoom: 250, direction: 'zoomIn', next: 300 },
     { zoom: 105, direction: 'zoomOut', next: 100 },
     { zoom: 105, direction: 'zoomIn', next: 110 },

@@ -54,6 +54,8 @@ export const MARKDOWN_FILTERS = [
   },
 ]
 
-export const ZOOM_STOPS = [50, 67, 75, 80, 90, 100, 110, 125, 133, 150, 175, 200, 250, 300] as const
+// Discrete zoom stops, mirroring Safari's ⌘+/⌘− cadence and the upstream
+// MarkdownWebView.zoomSteps list. The toolbar popover draws one dot per stop.
+export const ZOOM_STOPS = [50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300] as const
 export const nextZoomStep = (current: number, direction: 1 | -1) =>
   direction > 0 ? (ZOOM_STOPS.find((value) => value > current) ?? 300) : ([...ZOOM_STOPS].reverse().find((value) => value < current) ?? 50)
