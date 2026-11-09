@@ -197,6 +197,9 @@ struct MenuUiState {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+// The menu builder reads these fields only on macOS; other targets parse them
+// to keep the command payload identical.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 struct MenuRefreshRequest {
     locale: String,
     appearance: String,
@@ -343,6 +346,8 @@ fn data_directory() -> AppResult<PathBuf> {
 
 /// True when the process can actually create and remove a file in
 /// `directory`, which is what every settings and session write needs.
+// Only `data_directory`'s macOS branch and the tests call this.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn is_writable_directory(directory: &Path) -> bool {
     if fs::create_dir_all(directory).is_err() {
         return false;
@@ -358,6 +363,8 @@ fn is_writable_directory(directory: &Path) -> bool {
 /// Copies anything the previous data directory still holds into the new one
 /// without overwriting newer values. Used only when the App Group container is
 /// not accessible, so failures are expected and ignored.
+// Only `data_directory`'s macOS branch and the tests call this.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn migrate_legacy_data(from: &Path, to: &Path) {
     for name in ["settings-v3.json", "session-v1.json", "recent.json"] {
         let target = to.join(name);
@@ -2670,6 +2677,9 @@ fn file_icon_data_url(path: String, size: Option<f64>) -> AppResult<String> {
 /// AppKit exposes for it — point size and NSFont.Weight (0 regular, 0.23
 /// semibold, …).
 #[derive(serde::Deserialize)]
+// Only the macOS rasteriser reads these; the other targets answer with empty
+// images so the frontend can keep one code path.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 struct SfSymbolRequest {
     name: String,
     points: f64,
@@ -4286,12 +4296,12 @@ mod tests {
         assert_eq!(system_default.kind, "system");
         assert!(system_default.available);
 
-        let editors = applications
-            .iter()
-            .filter(|application| application.kind == "editor")
-            .collect::<Vec<_>>();
         #[cfg(target_os = "macos")]
         {
+            let editors = applications
+                .iter()
+                .filter(|application| application.kind == "editor")
+                .collect::<Vec<_>>();
             // macOS discovers Launch Services' ordered candidate list, so the
             // installed set varies by machine; the invariants do not.
             for editor in &editors {
