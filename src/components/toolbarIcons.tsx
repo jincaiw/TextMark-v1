@@ -204,15 +204,15 @@ const EditDiscMarkSvg = () => (
   <svg className="disc-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <g
       stroke="rgb(241 255 255)"
-      strokeWidth="1.5"
+      strokeWidth="1.4"
       strokeLinecap="round"
       strokeLinejoin="round"
-      transform="translate(12 12.12) scale(0.97) translate(-12 -12)"
+      transform="translate(12 12.12) scale(1.03 0.97) translate(-12 -12)"
     >
       <path d="M14.97 3.56A2.52 2.52 0 0 1 18.53 7.12L11 14.65L5.15 17.45L5.73 12.7Z" />
-      <path d="M15.27 5.02L18.09 7.84" strokeWidth="1.3" strokeLinecap="butt" />
-      <path d="M7.09 11.44L10.65 15.0" strokeWidth="1.3" strokeLinecap="butt" />
-      <path d="M3.53 20.95H20.74" strokeWidth="1.5" />
+      <path d="M15.27 5.02L18.09 7.84" strokeWidth="1.21" strokeLinecap="butt" />
+      <path d="M7.09 11.44L10.65 15.0" strokeWidth="1.21" strokeLinecap="butt" />
+      <path d="M3.53 20.95H20.74" strokeWidth="1.4" />
     </g>
   </svg>
 )

@@ -1,3 +1,22 @@
+# TextMark v0.10.47
+
+TextMark 0.10.47 brings the dark appearance in line with Markdown Preview 0.0.71. With the reference's 显示 ▸ 外观 set to 深色 and both windows captured at 1050×977 pt, its titlebar is a warm 52,50,49 surface under glass capsules that fill at 84 and turn their rim inside out: a bright specular line along the top and base, a dark refraction hairline at the rounded tangents. Every dark titlebar element now follows that material — capsules, the table-of-contents picker, the search field, the split open button and its divider, the new-document ring, the formatting pills, the single-tab well and the inspector tray — with white glyphs, including the disclosures whose colour the light theme pinned on the SVG itself.
+
+TextMark 0.10.47 将深色外观对齐 Markdown Preview 0.0.71。参考应用在「显示 ▸ 外观」设为深色、两窗口同为 1050×977pt 时截图实测：标题栏是 52,50,49 的暖灰底，其上玻璃胶囊填充 84，描边方向相反——上下边缘是亮色高光、圆角切点是深色折射细线。本次让全部深色标题栏元素遵循同一材质：胶囊、目录选择器、搜索框、分体打开按钮及其分隔线、新建文稿圆环、格式胶囊、单标签凹槽与检查器托盘，字形统一为白色，包括浅色主题把颜色固定在 SVG 元素上的下拉箭头。
+
+## Highlights / 主要更新
+
+- Dark titlebar glass: capsules fill 84 over the 52 surface with a 134 specular line on the long edges and a 38 refraction hairline at the tangents; the dark capsules are a point shorter than their light counterparts (72 device rows against 74), centred on the same row.
+- Split open button: the divider is the dark glass' inner specular line (134 against the reference's 137) and now sits on the reference's column; the tile and chevron halves were a point the wrong way round and are rebalanced to 36/37 pt, which also lands the chevron's ink on the reference's exact columns.
+- New-document ring: dark fill and dark tangent hairline instead of the light theme's paper, and the plus is redrawn at 21 device pixels of ink, the reference's measured cross in both appearances.
+- Dark glyphs: the split, share and overflow chevrons are white, and the selected sidebar toggle no longer stays black — the light theme's `.selected` rule carried the same specificity and came later in the file.
+- Dark chrome: the tab strip, the single-tab recessed well, the inspector divider and tray, the source list's selection plate, the formatting pills and the search placeholder all take the reference's measured tones, and the window title keeps its dimmed label in white.
+- SF Symbols: the rasterised masks now report their whole-pixel bitmap size, so the 2x bitmap is no longer resampled by a fractional box and glyph edges stay crisp.
+- Editor: the dark editor uses the neutral One Dark theme without its syntax tint, so headings keep the body colour and code alone takes the shared highlight palette.
+- Verification: dark and light captures were compared row by row at identical geometry; the dark titlebar's differ only by glyph antialiasing, and the light baseline keeps or improves every band it was measured on.
+
+---
+
 # TextMark v0.10.46
 
 TextMark 0.10.46 refits the titlebar's SF Symbols to Markdown Preview 0.0.71's own optical size. Measured glyph for glyph against a frontmost capture at identical window geometry, the reference draws its toolbar symbols at 17 pt in the regular weight, not the 16 pt medium this app had fitted, which left every glyph a device pixel or two small. Each symbol is rasterised at that size now and every optical offset is refitted, so the table-of-contents, sidebar, copy, search-document and search-field glyphs sit on the reference's exact ink boxes and the folder, share and export glyphs stay within one device pixel on every edge.

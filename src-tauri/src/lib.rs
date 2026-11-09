@@ -2788,10 +2788,15 @@ fn sf_symbol_data_urls(requests: Vec<SfSymbolRequest>) -> Vec<SfSymbolImage> {
             continue;
         };
         let encoded = base64::engine::general_purpose::STANDARD.encode(png.to_vec());
+        // Report the bitmap's own size, not the symbol's fractional natural
+        // size: the webview maps the mask onto a box of this many points, and
+        // only whole-pixel dimensions keep the 2x raster from being resampled
+        // (a fractional box squeezes or stretches the bitmap by up to half a
+        // device pixel, which softens every edge of the glyph).
         images.push(SfSymbolImage {
             url: format!("data:image/png;base64,{encoded}"),
-            width: natural.width,
-            height: natural.height,
+            width: pixels_w as f64 / SCALE,
+            height: pixels_h as f64 / SCALE,
         });
     }
     images

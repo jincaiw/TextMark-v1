@@ -155,8 +155,8 @@
 :root[data-theme='dark'] {
   color: #f2f2f4;
   background: #1e1f22;
-  --toolbar-active-fill: #0a84ff;
-  --toolbar-active-fill-hover: #0a7af5;
+  --toolbar-active-fill: #007aff;
+  --toolbar-active-fill-hover: #0070f6;
   --window: rgba(35, 36, 39, 0.97);
   --chrome: rgba(42, 43, 47, 0.94);
   --sidebar: rgba(39, 40, 44, 0.96);
@@ -170,10 +170,27 @@
   --inspector-card: rgba(255, 255, 255, 0.045);
   --inspector-row-value: rgba(255, 255, 255, 0.45);
   --inspector-separator: rgba(255, 255, 255, 0.09);
-  --inspector-tray: rgba(255, 255, 255, 0.06);
-  --inspector-segment: rgba(255, 255, 255, 0.15);
+  /* The reference's dark well is a glass plate over the 43 material: 108 under
+     its top rim, easing to 98 through the middle and lifting to 103 at the
+     base. Declared as alphas over the material (the compositor lands them about
+     a seventh high, hence the odd numbers). */
+  --inspector-tray: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.269) 0%,
+    rgba(255, 255, 255, 0.26) 4%,
+    rgba(255, 255, 255, 0.248) 10%,
+    rgba(255, 255, 255, 0.238) 20%,
+    rgba(255, 255, 255, 0.232) 35%,
+    rgba(255, 255, 255, 0.227) 50%,
+    rgba(255, 255, 255, 0.229) 65%,
+    rgba(255, 255, 255, 0.234) 78%,
+    rgba(255, 255, 255, 0.24) 88%,
+    rgba(255, 255, 255, 0.248) 100%
+  );
+  --inspector-segment: rgba(255, 255, 255, 0.122);
   --inspector-reveal: rgba(255, 255, 255, 0.3);
-  --inspector-tray-border: rgba(255, 255, 255, 0.12);
+  --inspector-tray-border: rgba(255, 255, 255, 0);
+  --inspector-tray-border-bottom: rgba(255, 255, 255, 0);
   --alert-note: #58a6ff;
   --alert-tip: #3fb950;
   --alert-important: #d2a8ff;
@@ -1650,7 +1667,7 @@ select:focus-visible {
   color: #000;
 }
 :root[data-theme='dark'] .document-tools .formatting-toolbar {
-  color: var(--text);
+  color: #fff;
 }
 .document-tools .formatting-toolbar > * {
   flex-shrink: 0;
@@ -1679,11 +1696,67 @@ select:focus-visible {
   box-shadow: 0 5px 10px -6px rgba(0, 0, 0, 0.035);
   color: inherit;
 }
+:root[data-theme='dark'] .document-tools .formatting-toolbar {
+  /* The reference's dark pills are a point shorter than its light ones: the
+     light fill spans rows 191-248 of the 2x capture, the dark fill rows
+     192-247. Dropping the height re-centres the capsule a half point lower on
+     its own, which is exactly the dark offset, so the margin stays put. */
+  margin-top: 7px;
+}
 :root[data-theme='dark'] .document-tools .formatting-group {
-  background: color-mix(in srgb, #fff 7%, var(--window));
-  box-shadow:
-    0 4px 6px rgba(0, 0, 0, 0.28),
-    0 8px 14px rgba(0, 0, 0, 0.16);
+  /* The reference's dark pills are the light theme's near-white capsule
+     inverted: white glass over the 28-tone page, brightest at both rims and
+     settling to 65 through the middle (white at about 16%). Its rim is the
+     specular line the light pills wear as a shade — a white hairline, a touch
+     stronger at the base — and its glyphs are pure white. */
+  height: 28px;
+  /* The rounded ends keep a dark refraction hairline: the reference samples 7
+     at mid-height, i.e. near-black rather than the light theme's shade. */
+  border-color: rgb(0 0 0 / 0.85);
+  /* The top and base rims are specular lines — 120 at the top and 118..124
+     along the base. The border paints over the gradient's own ends rather than
+     the page, so each alpha is solved against the fill tone underneath it (98
+     at the top, 103 at the base); the base's earlier 0.221 painted a flat 134,
+     the lightest sample in the reference's range. */
+  border-top-color: rgb(255 255 255 / 0.119);
+  border-bottom-color: rgb(255 255 255 / 0.18);
+  /* The compositor lands a translucent white fill about 1.18x its declared
+     alpha over the page, so each measured tone is declared at α/1.18. The
+     reference has no drop shadow here — the page is a clean 28 both one row
+     above and one row below the pill — so none is drawn. Each stop sits on the
+     centre of the reference row it was measured from: 98 at the inner rim, a
+     steep fall through 77/74/73/71/70 to 65 across the upper fifth, a flat
+     middle, then a long rise through 66/67/70/72/73/76 into the 80 base and
+     the 103 last row. */
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.261) 0.93%,
+    rgb(255 255 255 / 0.183) 2.78%,
+    rgb(255 255 255 / 0.172) 4.63%,
+    rgb(255 255 255 / 0.168) 6.48%,
+    rgb(255 255 255 / 0.16) 8.33%,
+    rgb(255 255 255 / 0.157) 10.19%,
+    rgb(255 255 255 / 0.149) 13.89%,
+    rgb(255 255 255 / 0.146) 17.59%,
+    rgb(255 255 255 / 0.142) 19.44%,
+    rgb(255 255 255 / 0.138) 23.15%,
+    rgb(255 255 255 / 0.138) 43.52%,
+    rgb(255 255 255 / 0.142) 45.37%,
+    rgb(255 255 255 / 0.142) 60.19%,
+    rgb(255 255 255 / 0.146) 62.04%,
+    rgb(255 255 255 / 0.146) 73.15%,
+    rgb(255 255 255 / 0.149) 78.7%,
+    rgb(255 255 255 / 0.157) 80.56%,
+    rgb(255 255 255 / 0.16) 84.26%,
+    rgb(255 255 255 / 0.164) 87.96%,
+    rgb(255 255 255 / 0.168) 91.67%,
+    rgb(255 255 255 / 0.175) 93.52%,
+    rgb(255 255 255 / 0.179) 95.37%,
+    rgb(255 255 255 / 0.194) 97.22%,
+    rgb(255 255 255 / 0.28) 99.07%,
+    rgb(255 255 255 / 0.3) 100%
+  );
+  box-shadow: none;
 }
 .document-tools .formatting-style-group {
   width: 70.5px;
@@ -2549,6 +2622,25 @@ select:focus-visible {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
+}
+/* In the dark the well's inner highlight is a faint white line rather than the
+   light theme's full-white one: the reference's dark well reads 145 along the
+   top rim and 106 along the bottom against a 99 body, so the highlight is white
+   at about 30% fading into the tray, and the bottom carries almost nothing. */
+:root[data-theme='dark'] .inspector-panel .inspector-segmented {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.3) 0,
+      rgba(255, 255, 255, 0.3) 1.1px,
+      rgba(255, 255, 255, 0.1) 1.5px,
+      rgba(255, 255, 255, 0) 1.5px,
+      rgba(255, 255, 255, 0) calc(100% - 1.5px),
+      rgba(255, 255, 255, 0.04) calc(100% - 1.5px),
+      rgba(255, 255, 255, 0.04) calc(100% - 1.1px),
+      rgba(255, 255, 255, 0.04) 100%
+    ),
+    var(--inspector-tray);
 }
 .inspector-panel .inspector-segmented button {
   position: relative;
@@ -6094,7 +6186,10 @@ mark.search-match.active {
   --sidebar-material: rgb(240 240 239);
 }
 :root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] {
-  --sidebar-material: rgb(40 41 44);
+  /* The reference's dark sidebar material is a warm neutral (43,39,38); the
+     declared tone sits the one level the compositor lifts the green channel
+     so the capture lands on the reference's. */
+  --sidebar-material: rgb(43 38 38);
 }
 /* The material runs up through the titlebar: upstream's transparent titlebar
    shows the sidebar behind it at the same tone as the sidebar body, while the
@@ -6138,11 +6233,6 @@ mark.search-match.active {
   height: 0.5px;
   background: color-mix(in srgb, var(--text) 8.5%, var(--sidebar-material, var(--sidebar)));
   pointer-events: none;
-}
-:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
-  .workspace-stack:has(> .document-tabs)
-  > .document-shell.with-inspector::before {
-  background: color-mix(in srgb, var(--text) 18%, var(--sidebar-material, var(--sidebar)));
 }
 /* Upstream's split divider is the sidebar material meeting the white page: no
    separate rule line, and the drag handle lives in the pane's last 6pt. */
@@ -6223,11 +6313,12 @@ mark.search-match.active {
   background: color-mix(in srgb, var(--surface) 98%, var(--text));
   color: var(--text);
 }
-/* The reference's plus is a 10.5pt ink cross: the 24-unit glyph scaled to
-   17.5pt draws 10.2pt from 5 to 19, which its AA rows round to the same box. */
+/* The reference's plus is a 10.5pt ink cross, stroke included: the 24-unit
+   glyph's 5..19 bar plus its 2-unit stroke is 16 units of ink, so a 16pt box
+   draws 21 device pixels at 2x, the reference's 21. At 17.5pt it drew 23. */
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .new-tab-button svg {
-  width: 17.5px;
-  height: 17.5px;
+  width: 16px;
+  height: 16px;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-document-tabs.single-document-tab .tab-close {
   display: none;
@@ -6261,6 +6352,13 @@ mark.search-match.active {
      --toolbar-capsule-edge — see the background-origin below — rather than
      beside it, so the rim stays a hairline instead of doubling in width. */
   --toolbar-capsule-rim: rgb(0 0 0 / 0.11);
+  /* The reference's bottom rim samples 214 against the top rim's 216: the
+     specular line inside the lower edge throws one extra level of shade. */
+  --toolbar-capsule-rim-bottom: rgb(0 0 0 / 0.12);
+  /* In the dark titlebar the glass' own edges carry the specular line instead:
+     the reference's dark capsules read a bright 134 along the top and 114 along
+     the bottom against an 84 fill, so the border is the highlight there rather
+     than a shade. See the dark block below. */
   --toolbar-capsule-edge:
     linear-gradient(90deg, rgb(0 0 0 / 0.215) 0 0.5px, rgb(0 0 0 / 0) 0.5px),
     linear-gradient(270deg, rgb(0 0 0 / 0.215) 0 0.5px, rgb(0 0 0 / 0) 0.5px);
@@ -6314,6 +6412,232 @@ mark.search-match.active {
     rgb(255 255 255 / 1) 100%
   );
 }
+/* The same three layers in the dark titlebar, solved from the reference
+   captured with its 显示 ▸ 外观 set to 深色. There the titlebar surface is a
+   warm 52,50,49 and the glass lets more of it through: every capsule fill
+   samples 84 over it and 77 over the sidebar's 43, i.e. white at 16%. The rim
+   turns inside out — the reference's dark glass draws its specular line on the
+   boundary itself (134 along the top, 114 along the bottom) instead of a
+   shade, while the rounded ends keep a strong dark refraction hairline (25 at
+   mid-height, black at 70%) and the sheen decays from 96 to the flat fill
+   within its first four points. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] {
+  /* The declared alpha is the nominal one: the WebView's compositor lands this
+     glass about 1.18 levels of alpha above its declaration (0.16 painted 84
+     over the 52 surface and 84 over the 43 sidebar where a flat 16% solves to
+     85 and 77), so the fill is declared low enough that the capture lands on
+     the reference's 76/77. */
+  --toolbar-capsule-fill: rgb(255 255 255 / 0.134);
+  /* Every dark capsule is a point shorter than its light counterpart: the
+     reference's light glass spans 15..88 in the 2x capture and its dark glass
+     16..87, both centred on the same row. */
+  --toolbar-capsule-height: 36px;
+  /* The rim turns inside out along the rounded ends: the reference's dark
+     glass draws a dark refraction hairline at the tangent (38 over the 52
+     surface, black at 23%) while the long edges carry the specular line
+     (134 top and bottom). The sides therefore take one set and the top and
+     bottom another; the light theme leaves --toolbar-capsule-rim-top unset,
+     so its rim stays the single tone it was tuned to. */
+  /* The side alpha is solved against the fill under the border (85), not the
+     page: the border paints over the capsule's own background, so the 38 the
+     reference reads at the tangent is black at 47% of that fill. */
+  --toolbar-capsule-rim: rgb(0 0 0 / 0.47);
+  --toolbar-capsule-rim-top: rgb(255 255 255 / 0.27);
+  --toolbar-capsule-rim-bottom: rgb(255 255 255 / 0.27);
+  --toolbar-capsule-edge:
+    linear-gradient(90deg, rgb(0 0 0 / 0.7) 0 0.5px, rgb(0 0 0 / 0) 0.5px),
+    linear-gradient(270deg, rgb(0 0 0 / 0.7) 0 0.5px, rgb(0 0 0 / 0) 0.5px);
+  --toolbar-capsule-rim-page: rgb(0 0 0 / 0.47);
+  --toolbar-capsule-rim-page-bottom: rgb(255 255 255 / 0.27);
+  --toolbar-capsule-edge-page:
+    linear-gradient(90deg, rgb(0 0 0 / 0.7) 0 0.5px, rgb(0 0 0 / 0) 0.5px),
+    linear-gradient(270deg, rgb(0 0 0 / 0.7) 0 0.5px, rgb(0 0 0 / 0) 0.5px);
+  --toolbar-capsule-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.075) 0%,
+    rgb(255 255 255 / 0.035) 4%,
+    rgb(255 255 255 / 0.015) 8%,
+    rgb(255 255 255 / 0) 14%,
+    rgb(255 255 255 / 0) 62%,
+    rgb(255 255 255 / 0.01) 70%,
+    rgb(255 255 255 / 0.02) 80%,
+    rgb(255 255 255 / 0.04) 91%,
+    rgb(255 255 255 / 0.075) 100%
+  );
+}
+/* The dark titlebar surface itself: one warm neutral across the page side and
+   the sidebar material up to the pane's edge, exactly as the reference draws
+   it. Declaring it opaque also keeps the WebView's own body tone from showing
+   through the gaps between capsules. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .native-toolbar {
+  background: rgb(52 50 49);
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .app-shell[data-sidebar-visible='true']
+  .native-toolbar {
+  background: linear-gradient(
+    to right,
+    var(--sidebar-material) 0 calc(var(--sidebar-width) + 6px),
+    rgb(52 50 49) calc(var(--sidebar-width) + 6px)
+  );
+}
+/* The tab strip under the titlebar shares that surface, and its single-tab
+   field is the same 16% glass: the reference's dark field samples 84 with a
+   half-point brighter rim. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .native-document-tabs {
+  background: rgb(52 50 49);
+  /* The divider turns into a light step in the dark: the reference samples 65
+     under the 52 surface. That is 6.5% white, but the compositor lifts a
+     translucent white by about 1.2x, so it is declared at 5.3% to land on 65
+     rather than 68. */
+  border-bottom-color: rgb(255 255 255 / 0.053);
+}
+/* Above the inspector the same row is lighter than the page's hairline: the
+   reference samples 61,57,56 over the 43,39,38 material. That is a single
+   opaque layer — an 8.5% white lift over the material — so it is declared
+   opaque; a translucent white here would instead composite over the strip's
+   own border row underneath and read far too bright (85). */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .workspace-stack:has(> .document-tabs)
+  > .document-shell.with-inspector::before {
+  background: rgb(61 57 56);
+}
+/* The dark single-tab field is a recessed well, not the light theme's raised
+   capsule: the reference profile down the field is 92 at the outer AA, a
+   1.5pt band of 76, a half-point 138 specular, a short fall from 112 to 91,
+   an 81 body, then the mirror of all of it back to 92. A single border and
+   inset ring cannot express that, so in dark the border is made transparent
+   (the gradient paints under it) and the profile is drawn as one gradient. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .native-document-tabs.single-document-tab
+  .document-tab {
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .native-document-tabs.single-document-tab
+  .document-tab.active {
+  background: linear-gradient(
+    180deg,
+    rgb(92 90 88) 0.89%,
+    rgb(76 74 72) 2.68%,
+    rgb(76 74 72) 6.25%,
+    rgb(138 138 138) 8.04%,
+    rgb(112 111 109) 9.82%,
+    rgb(91 89 86) 11.61%,
+    rgb(88 86 84) 13.39%,
+    rgb(86 84 82) 15.18%,
+    rgb(85 83 81) 16.96%,
+    rgb(84 82 79) 18.75%,
+    rgb(84 82 79) 20.54%,
+    rgb(83 81 78) 22.32%,
+    rgb(83 81 78) 24.11%,
+    rgb(82 80 77) 25.89%,
+    rgb(82 80 77) 29.46%,
+    rgb(81 79 76) 31.25%,
+    rgb(81 79 76) 68.75%,
+    rgb(82 80 77) 70.54%,
+    rgb(82 80 77) 74.11%,
+    rgb(83 81 78) 75.89%,
+    rgb(83 81 78) 77.68%,
+    rgb(84 82 79) 79.46%,
+    rgb(84 82 79) 81.25%,
+    rgb(85 83 81) 83.04%,
+    rgb(86 84 82) 84.82%,
+    rgb(88 86 84) 86.61%,
+    rgb(91 89 86) 88.39%,
+    rgb(109 107 105) 90.18%,
+    rgb(126 126 124) 92%,
+    rgb(76 74 72) 93.75%,
+    rgb(76 74 72) 97.32%,
+    rgb(92 90 88) 99.11%
+  );
+  /* The border is transparent, so the gradient has to start at the border box:
+     left on the default padding box it loses the half point the border takes
+     at each end and the whole profile sits a point short. */
+  background-origin: border-box;
+  background-clip: border-box;
+}
+/* The dark "new document" ring follows the glass, not the light theme's paper:
+   the reference fills it with the same white as the capsules (86 over the
+   strip's 52), rims the tangent with a dark hairline and the long edges with
+   the specular line, and draws the plus in white. Left to the light rule it
+   inherits --surface, which paints it 33 — darker than the strip it sits on. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .native-document-tabs.single-document-tab
+  .new-tab-button {
+  border-color: rgb(0 0 0 / 0.45);
+  border-top-color: rgb(255 255 255 / 0.2);
+  border-bottom-color: rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+}
+/* The split button's separator is the dark glass' inner specular line: the
+   reference reads 137 over the 85 fill, white at 26%, where the light theme's
+   rule paints the 20% black of its own paper. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .open-actions-split
+  > .open-with
+  summary::before {
+  background: rgb(255 255 255 / 0.26);
+}
+/* Dark titlebar glyphs: AppKit switches the label colour to white, including
+   the picker's symbols and the selected segment's mark. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-item-button,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-group button,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-group summary,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .sidebar-control > button,
+/* The selected toggle repeats the selector with its state class: the light
+   theme's `.sidebar-control > button.selected { color: #000 }` carries the same
+   specificity and comes later in the file, so without this the selected
+   sidebar glyph would stay black in the dark. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .sidebar-control > button.selected,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .history-buttons,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .more-menu > summary,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .document-search,
+/* The disclosures are real SVGs, and the light theme pins their own colour at
+   `#000` on the `svg` element, so inheriting white from the button never
+   reaches them: the split, share and overflow chevrons stayed black in the
+   dark until they were named here too. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-group svg,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-item-button svg,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .sidebar-control svg,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .history-buttons svg,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .more-menu svg {
+  color: #fff;
+}
+/* The window title keeps the light theme's dimmed label but in white: the
+   reference's dark ink peaks at 237 over the 52 surface, i.e. 92%. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .toolbar-document-title {
+  color: #fff;
+  opacity: 0.92;
+}
+/* The picker's selected segment is white at 12% in the dark (99 over the 77
+   fill), not the light theme's 9% black. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .sidebar-mode-picker
+  button.selected::before {
+  background: rgb(255 255 255 / 0.124);
+}
+/* Hovering a dark capsule lifts it: the reference's dark hover plate is white
+   at 8%, blended normally (plus-darker would subtract light instead). */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-capsule='true']
+  > .toolbar-item-button::after,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
+  .native-actions
+  > [data-capsule='true']
+  > .toolbar-group::after,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker button::after,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .themes-and-settings > summary::after {
+  background: rgb(255 255 255 / 0.08);
+  mix-blend-mode: normal;
+}
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .document-search input::placeholder {
+  color: rgb(255 255 255 / 0.45);
+}
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions {
   /* The leading content edge is upstream's 96pt: 92pt of traffic-light
      reservation plus the 4pt gap that replaces the base 7.5pt column gap.
@@ -6359,7 +6683,8 @@ mark.search-match.active {
   border: 0.5px solid var(--toolbar-capsule-rim);
   /* The reference's bottom rim samples 214 against the top rim's 216: the
      specular line inside the lower edge throws one extra level of shade. */
-  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-top-color: var(--toolbar-capsule-rim-top, var(--toolbar-capsule-rim));
+  border-bottom-color: var(--toolbar-capsule-rim-bottom);
   border-radius: 999px;
   background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
   /* The ends' second hairline is drawn *in* the rim's half point, not beside
@@ -6514,9 +6839,13 @@ mark.search-match.active {
    colour (which the capsule sets to the accent). */
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] .info-circle-fill > .disc-mark {
   background-color: rgb(241 255 255);
-  /* The reference's i sits half a device pixel above and right of the flex
-     centre; the mask's own AA rows are what make the offset visible. */
-  transform: translate(0.25px, -0.5px);
+  /* The reference's i sits a half device pixel above and right of the flex
+     centre; the mask's own AA rows are what make the offset visible. The
+     rasterised i is one device pixel taller than the reference's, so the mask
+     is squeezed about its top edge and the squeeze's own upward drift is
+     compensated in the same translate. */
+  transform: translate(0.25px, 0px) scaleY(0.97);
+  transform-origin: center top;
 }
 /* Per-symbol offsets. AppKit positions each titlebar symbol by its alignment
    rect rather than by centring its ink, so the copies, info, share and pencil
@@ -6536,15 +6865,21 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] .info-circle-fill {
   width: 30px;
   height: 29px;
-  transform: translate(0.5px, -0.15px);
+  transform: translate(0.5px, -0.05px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] svg,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] .sf-glyph {
-  transform: translate(-0.5px, -1.4px);
+  /* The reference draws this symbol's ink one device pixel narrower than the
+     same symbol rasterised through NSImageSymbolConfiguration at 17pt. The
+     mask is squeezed about its left edge (which already lands on the
+     reference's ink) by the one device pixel of excess width. */
+  transform: translate(-0.5px, -1.4px) scaleX(0.967);
+  transform-origin: left center;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] svg,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] .sf-glyph {
-  transform: translate(-2.5px, 1px);
+  transform: translate(-2.5px, 1px) scaleX(0.97);
+  transform-origin: left center;
 }
 /* The leading controls centre their symbols in a 16pt box; at 17pt each mask
    settles half a point away from the reference's ink, so they keep their own
@@ -6554,7 +6889,11 @@ mark.search-match.active {
   transform: translate(0.5px, -0.5px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker > button:last-child .sf-glyph {
-  transform: translate(-0.5px, -0.25px);
+  /* Same one-device-pixel excess as share/export, on the bottom edge: the
+     folder's ink measures one row taller than the reference's, so the mask is
+     squeezed about its top edge. */
+  transform: translate(-0.5px, 0px) scaleY(0.968);
+  transform-origin: center top;
 }
 :root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button:last-child .sf-glyph {
   transform: translate(0.5px, -0.5px);
@@ -6591,7 +6930,8 @@ mark.search-match.active {
   border: 0.5px solid var(--toolbar-capsule-rim);
   /* The reference's bottom rim samples 214 against the top rim's 216: the
      specular line inside the lower edge throws one extra level of shade. */
-  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-top-color: var(--toolbar-capsule-rim-top, var(--toolbar-capsule-rim));
+  border-bottom-color: var(--toolbar-capsule-rim-bottom);
   border-radius: 999px;
   background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
   background-origin: padding-box, border-box, border-box;
@@ -6614,6 +6954,7 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions .history-buttons,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions .more-menu > summary {
   border-color: var(--toolbar-capsule-rim-page);
+  border-top-color: var(--toolbar-capsule-rim-top, var(--toolbar-capsule-rim-page));
   border-bottom-color: var(--toolbar-capsule-rim-page-bottom);
   background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge-page), var(--toolbar-capsule-fill);
   background-origin: padding-box, border-box, border-box;
@@ -6672,7 +7013,8 @@ mark.search-match.active {
   border: 0.5px solid var(--toolbar-capsule-rim);
   /* The reference's bottom rim samples 214 against the top rim's 216: the
      specular line inside the lower edge throws one extra level of shade. */
-  border-bottom-color: rgb(0 0 0 / 0.12);
+  border-top-color: var(--toolbar-capsule-rim-top, var(--toolbar-capsule-rim));
+  border-bottom-color: var(--toolbar-capsule-rim-bottom);
   border-radius: 999px;
   background: var(--toolbar-capsule-sheen), var(--toolbar-capsule-edge), var(--toolbar-capsule-fill);
   background-origin: padding-box, border-box, border-box;
@@ -6827,13 +7169,16 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button:hover::after {
   opacity: 1;
 }
-/* Upstream's split open menu is one 73.5pt capsule: a 37pt tile segment, a
-   36pt chevron segment and the 0.5pt group rim on each side, with the divider
-   on their shared edge. AppKit centres the app tile 19pt from the leading edge
+/* Upstream's split open menu is one capsule: a 36pt tile segment, a 37pt
+   chevron segment and the 0.5pt group rim on each side, with the divider on
+   their shared edge. AppKit centres the app tile 19pt from the leading edge
    and the chevron 17.5pt after the divider (the reference's icon box and
-   chevron measured at 653.5 and 688.75pt). */
+   chevron measured at 653.5 and 688.75pt). The two halves were a point the
+   wrong way round: the reference's divider lands on device column 1181 in the
+   2x capture and ours sat on 1183, which also carried the chevron a point
+   right. */
 :root[data-runtime='tauri'][data-platform='macos'] .open-actions-split > .open-actions-primary {
-  width: 37px;
+  width: 36px;
   padding: 0;
   border-radius: 999px 0 0 999px;
 }
@@ -6853,7 +7198,7 @@ mark.search-match.active {
      here: the reference draws a 1pt, 20pt-tall separator centred on the halves'
      boundary, so it is painted by the pseudo-element below and the padding
      carries the point of border this rule used to have. */
-  width: 36px;
+  width: 37px;
   padding: 0 0 0 10.75px;
   justify-content: flex-start;
   border-radius: 0 999px 999px 0;
@@ -7092,6 +7437,13 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .native-file-tree .tree-row.active {
   background: var(--hover);
   color: var(--text);
+}
+/* The dark source list's selected row is a stronger plate than its hover: the
+   reference's row samples 76,73,73 over the material's 43,39,38, i.e. white at
+   about 16%, while the hover plate is the titlebar's 8%. */
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .native-outline .outline-row.active,
+:root[data-theme='dark'][data-runtime='tauri'][data-platform='macos'] .native-file-tree .tree-row.active {
+  background: rgb(255 255 255 / 0.135);
 }
 /* Upstream's source-list disclosure is a 16pt-wide stroked chevron that sits
    flush in the row's leading edge, so a level-1 heading's text starts ~17pt in

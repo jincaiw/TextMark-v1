@@ -3,7 +3,12 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { oneDark } from '@codemirror/theme-one-dark'
+// The reference's dark editor is the same neutral surface as its reading view:
+// headings stay the body colour and only fenced code takes the shared --hl-*
+// palette. One Dark's *theme* supplies the dark UI chrome, but its highlight
+// style would tint markdown headings coral (#e06c75), so only the theme half is
+// used here and codeHighlight below owns every syntax colour.
+import { oneDarkTheme } from '@codemirror/theme-one-dark'
 import { tags } from '@lezer/highlight'
 import { EditorView } from '@codemirror/view'
 import { Check, Copy, WrapText } from 'lucide-react'
@@ -813,7 +818,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         <CodeMirror
           value={props.value}
           height="100%"
-          theme={props.theme === 'dark' ? oneDark : 'light'}
+          theme={props.theme === 'dark' ? oneDarkTheme : 'light'}
           extensions={[
             markdown({ codeLanguages: languages }),
             syntaxHighlighting(codeHighlight),
