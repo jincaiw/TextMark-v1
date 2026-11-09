@@ -110,7 +110,12 @@ export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: For
       </div>
       <div className="formatting-group formatting-text-group" role="group" aria-label={t(locale, 'bold')}>
         {button('bold', t(locale, 'bold'), <SfGlyph name="bold" points={BOLD_SYMBOL_POINTS} weight={0} fallback={<Bold />} />, state.bold)}
-        {button('italic', t(locale, 'italic'), <SfGlyph name="italic" points={ITALIC_SYMBOL_POINTS} weight={0} fallback={<Italic />} />, state.italic)}
+        {button(
+          'italic',
+          t(locale, 'italic'),
+          <SfGlyph name="italic" points={ITALIC_SYMBOL_POINTS} weight={0} fallback={<Italic />} />,
+          state.italic,
+        )}
         {button(
           'strikethrough',
           t(locale, 'strikethrough'),
