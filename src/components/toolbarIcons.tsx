@@ -15,18 +15,22 @@ const base = {
   'aria-hidden': true,
 }
 
-/** The reference's titlebar symbols are all one point size and weight: at 16pt
- * semibold each symbol's ink lands on the reference's to within a device pixel
- * (copy 32x40 against 34x41, share 28x36 against 29x37, export 34x37 against
- * 35x38), which is how the size was pinned. */
-const SYMBOL_POINTS = 16
-const SYMBOL_WEIGHT = 0.23
+/** The reference's titlebar symbols are all one point size and weight. At 17pt
+ * regular each symbol's ink lands on the reference's to within a device pixel
+ * (copy 34x42 against 34x42, share 30x37 against 29x37, export 36x39 against
+ * 35x39, folder 38x31 against 38x30, sidebar 39x31 against 39x31), which is how
+ * the size was pinned. */
+const SYMBOL_POINTS = 17
+const SYMBOL_WEIGHT = 0
 
 /** A selected toggle knocks its symbol out of the accent ellipse, and AppKit
  * draws that knock-out symbol a size larger than the bare toolbar glyph: the
  * reference's white i measures 15x32 device pixels against the bare i's 14x29,
  * which is the 16pt raster's ink at a 17.5pt point size. */
 const DISC_SYMBOL_POINTS = 17.5
+/** The knocked-out mark keeps the medium weight the reference shows inside the
+ * disc; the bare toolbar glyphs beside it are regular. */
+const DISC_SYMBOL_WEIGHT = 0.23
 
 /** `doc.on.doc`: two pages, each with a folded top-right corner. The front
     page's top edge is cut by the fold diagonal and the fold is drawn as an L
@@ -78,7 +82,7 @@ export const InfoCircleFillIcon = () => (
     <svg viewBox="0 -0.5 30 29" fill="none" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
       <ellipse cx="15" cy="14" rx="15" ry="14" fill="var(--toolbar-active-fill)" />
     </svg>
-    <SfGlyph name="info" points={DISC_SYMBOL_POINTS} weight={SYMBOL_WEIGHT} className="disc-mark" fallback={<InfoDiscMarkSvg />} />
+    <SfGlyph name="info" points={DISC_SYMBOL_POINTS} weight={DISC_SYMBOL_WEIGHT} className="disc-mark" fallback={<InfoDiscMarkSvg />} />
   </span>
 )
 

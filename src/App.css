@@ -6525,7 +6525,7 @@ mark.search-match.active {
    measured on the ink's bounding box in device pixels. */
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='copy'] svg,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='copy'] .sf-glyph {
-  transform: translate(1.8px, -0.65px);
+  transform: translate(1.55px, -0.4px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='inspector'] > .toolbar-item-button > svg {
   transform: translate(0.5px, -1.15px);
@@ -6540,11 +6540,24 @@ mark.search-match.active {
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] svg,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='share'] .sf-glyph {
-  transform: translate(-0.5px, -2.4px);
+  transform: translate(-0.5px, -1.4px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] svg,
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='export'] .sf-glyph {
-  transform: translate(-3.25px, 1px);
+  transform: translate(-2.5px, 1px);
+}
+/* The leading controls centre their symbols in a 16pt box; at 17pt each mask
+   settles half a point away from the reference's ink, so they keep their own
+   nudges. The picker's first button is the table-of-contents symbol and its
+   second the folder; the toggle after them is the sidebar symbol. */
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker > button:first-child .sf-glyph {
+  transform: translate(0.5px, -0.5px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-mode-picker > button:last-child .sf-glyph {
+  transform: translate(-0.5px, -0.25px);
+}
+:root[data-runtime='tauri'][data-platform='macos'] .sidebar-control > button:last-child .sf-glyph {
+  transform: translate(0.5px, -0.5px);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='edit'] > .toolbar-item-button > svg {
   /* The pencil's strokes are lighter than the 1.5pt action symbols beside it:
@@ -6933,10 +6946,10 @@ mark.search-match.active {
 :root[data-runtime='tauri'][data-platform='macos'] .document-search svg {
   /* The field's magnifier is the 13pt search symbol: 12.5pt of ink, stroked at
      1.5pt, so it is a touch smaller than the 22pt action glyphs. */
-  width: 14.75px;
-  height: 14.75px;
+  width: 15.25px;
+  height: 15.25px;
   stroke-width: 1.64;
-  transform: translate(-0.5px, -0.25px);
+  transform: translate(0.25px, 0);
 }
 :root[data-runtime='tauri'][data-platform='macos'] .document-search input,
 :root[data-runtime='tauri'][data-platform='macos'] .document-search.is-expanded input,
@@ -6969,7 +6982,7 @@ mark.search-match.active {
 }
 /* The rasterised mask sits half a device pixel below the traced path's centre. */
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='documentSearch'] .sf-glyph {
-  transform: translateY(0.25px);
+  transform: translate(0.5px, 0.5px);
 }
 /* The size item is AppKit's localized text control: 41pt wide with 大小
    centred in it, the label's ink measuring 23 by 13pt in the reference. The
