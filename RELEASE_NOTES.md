@@ -1,3 +1,17 @@
+# TextMark v0.10.49
+
+TextMark 0.10.49 finishes the dark single-tab field. The reference's field is a recessed well whose rounded ends carry their own sideways profile — an 89 specular column at the tangent, a three-device-pixel band of 74 inside it, then the 78 body — and the earlier pass had painted only the vertical profile, leaving the ends flat where the reference turns them. The ends now read 89 and 74 on both sides at mid-height, matching the reference within a single level.
+
+TextMark 0.10.49 补完深色单标签输入框。参考应用的输入框是一块凹陷的槽，其圆角两端另有横向剖面：切线处一列 89 的高光，其内是三个设备像素宽的 74 暗带，再接 78 的主体；此前只绘制了纵向剖面，两端在参考应用的转折处仍是平的。现在两端在中线高度两侧均为 89 与 74，与参考应用的差不超过一级灰度。
+
+## Highlights / 主要更新
+
+- Dark field ends: the border stays clear along the long edges — the vertical gradient paints those — but now paints the left and right end columns in white at 6%, and two 1.5pt inset shadows draw the 74 bands just inside.
+- Measured: at mid-height the left end reads 50, 89, 74, 75, 74 against the reference's 50, 89, 74, 74, 74, and the right end 74, 74, 74, 88, 50 against 74, 74, 74, 89, 50.
+- Light appearance: the whole block is scoped to the dark theme, so the light field, its rim and its two-tone border are unchanged.
+
+---
+
 # TextMark v0.10.48
 
 TextMark 0.10.48 replaces the outline icons in the formatting capsule with the reference's own letterforms. Markdown Preview 0.0.71 draws its Bold, Italic and Strikethrough buttons with AppKit's typography symbols — a solid B, a serifed italic I and a struck-through S whose bar runs the full width of the letter — not with the thin outline set this app had stretched to fit. TextMark now rasterises those same symbols through AppKit at the sizes the reference's ink measures (13, 12.5 and 13.5 pt), so the B lands on the reference's exact ink box in both appearances, the I and S differ by a single device pixel, and the strike bar grows from 18 to 21 device pixels against the reference's 22.

@@ -6523,12 +6523,20 @@ mark.search-match.active {
    1.5pt band of 76, a half-point 138 specular, a short fall from 112 to 91,
    an 81 body, then the mirror of all of it back to 92. A single border and
    inset ring cannot express that, so in dark the border is made transparent
-   (the gradient paints under it) and the profile is drawn as one gradient. */
+   (the gradient paints under it) and the profile is drawn as one gradient.
+   The rounded ends carry their own profile sideways: an 89 specular column at
+   the tangent over a three-device-pixel band of 74, where the body reads 78.
+   The border stays clear along the long edges but paints those end columns,
+   and the band is the two inset shadows. */
 :root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
   .native-document-tabs.single-document-tab
   .document-tab {
   border-color: transparent;
-  box-shadow: none;
+  border-left-color: rgb(255 255 255 / 0.06);
+  border-right-color: rgb(255 255 255 / 0.06);
+  box-shadow:
+    inset 1.5px 0 0 rgb(0 0 0 / 0.05),
+    inset -1.5px 0 0 rgb(0 0 0 / 0.05);
 }
 :root[data-theme='dark'][data-runtime='tauri'][data-platform='macos']
   .native-document-tabs.single-document-tab
