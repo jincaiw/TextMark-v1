@@ -3,26 +3,42 @@ import type { ReactNode } from 'react'
 import { homeDir } from '@tauri-apps/api/path'
 import { ChevronRight } from 'lucide-react'
 import { t } from '../lib/i18n'
+import { SfGlyph } from './SfGlyph'
 import type { SelectionStats } from '../lib/inspectorSelection'
 import type { DocumentStats, FrontmatterEntry, InspectorMode, Locale, TextDocument } from '../types'
 
 // The reference's inspector has exactly two segments: the document summary and
-// the front-matter ("Properties") pane. Its icons are a blank page with a
-// folded corner and a bare serifed "i" — SF Symbols "doc" and "info" — rather
-// than the circled information glyph the web icon set ships.
+// the front-matter ("Properties") pane, drawn with SF Symbols "doc" and
+// "info" at 13pt. Those symbols are rasterised by AppKit and used as a mask so
+// the ink is the system's own artwork; the hand-drawn paths remain as the
+// fallback for other platforms and for the first frame before the mask lands.
 const Segments = {
   document: () => (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M3 1.75h5.5l4.5 4.5v8H3z" fill="none" stroke="currentColor" strokeWidth="1.15" />
-      <path d="M7.75 1.75v4.5h5.25" fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
-    </svg>
+    <SfGlyph
+      name="doc"
+      points={13}
+      weight={0}
+      fallback={
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 1.75h5.5l4.5 4.5v8H3z" fill="none" stroke="currentColor" strokeWidth="1.15" />
+          <path d="M7.75 1.75v4.5h5.25" fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
+        </svg>
+      }
+    />
   ),
   properties: () => (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <ellipse cx="7.6" cy="2.8" rx="0.8" ry="1.1" fill="currentColor" />
-      <path d="M4.8 6.25h3.5v6.75h-1V7.15H4.8z" fill="currentColor" />
-      <rect x="4.8" y="13" width="6" height="1" fill="currentColor" />
-    </svg>
+    <SfGlyph
+      name="info"
+      points={13}
+      weight={0}
+      fallback={
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <ellipse cx="7.6" cy="2.8" rx="0.8" ry="1.1" fill="currentColor" />
+          <path d="M4.8 6.25h3.5v6.75h-1V7.15H4.8z" fill="currentColor" />
+          <rect x="4.8" y="13" width="6" height="1" fill="currentColor" />
+        </svg>
+      }
+    />
   ),
 }
 

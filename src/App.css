@@ -36,23 +36,45 @@
   --inspector-card: rgba(0, 0, 0, 0.031);
   --inspector-row-value: rgba(0, 0, 0, 0.41);
   --inspector-separator: rgba(0, 0, 0, 0.045);
+  /* The reference's well is 29pt tall; its 58 device rows were sampled one by
+     one from the capture and folded into stops so the shading runs through the
+     same greys as the material behind it. */
   --inspector-tray: linear-gradient(
     180deg,
-    #f7f6f5 0%,
-    #f5f4f3 5%,
-    #f1f0ef 12%,
-    #eeedec 26%,
-    #eeedec 40%,
-    #f0efee 53%,
-    #f0f0f0 67%,
-    #f1f0ef 88%,
-    #fcfbfb 95%,
-    #f7f6f5 100%
+    #f3f3f3 0%,
+    #f2f2f2 6%,
+    #f1f1f1 7.8%,
+    #f0f0f0 9.5%,
+    #efefef 11.2%,
+    #efefef 12.9%,
+    #eeeeee 14.7%,
+    #eeeeee 19.8%,
+    #ececec 21.6%,
+    #ececec 26.7%,
+    #ebebeb 28.4%,
+    #ebebeb 44%,
+    #ececec 45.7%,
+    #ececec 50.9%,
+    #ededed 52.6%,
+    #ededed 57.8%,
+    #eeeeee 59.5%,
+    #eeeeee 66.4%,
+    #efefef 68.1%,
+    #efefef 85.3%,
+    #f0f0f0 90.5%,
+    #f1f1f1 92.2%,
+    #f2f2f2 94%,
+    #f3f3f3 96%,
+    #f4f4f4 100%
   );
-  --inspector-segment: rgba(0, 0, 0, 0.096);
+  --inspector-segment: rgba(0, 0, 0, 0.088);
   --inspector-reveal: rgba(0, 0, 0, 0.44);
-  --inspector-tray-border: rgba(0, 0, 0, 0.145);
-  --inspector-tray-ring: rgba(255, 255, 255, 0.95);
+  --inspector-tray-border: rgba(0, 0, 0, 0.16);
+  --inspector-tray-border-bottom: rgba(0, 0, 0, 0.17);
+  /* The well's left and right edges read darker than its top and bottom, where
+     the inner highlight lifts the hairline, so the outline is painted as a
+     clipped gradient rather than a single stroke colour. */
+  --inspector-tray-side-border: rgba(0, 0, 0, 0.29);
   /* Semantic status colors */
   --danger: #d73737;
   --positive: #32c759;
@@ -152,7 +174,6 @@
   --inspector-segment: rgba(255, 255, 255, 0.15);
   --inspector-reveal: rgba(255, 255, 255, 0.3);
   --inspector-tray-border: rgba(255, 255, 255, 0.12);
-  --inspector-tray-ring: rgba(255, 255, 255, 0.14);
   --alert-note: #58a6ff;
   --alert-tip: #3fb950;
   --alert-important: #d2a8ff;
@@ -2478,15 +2499,56 @@ select:focus-visible {
   /* Upstream's well is a capsule, not a rounded rectangle: the ends are true
      semicircles. The selection is inset a point and a half at the sides and
      sits flush with the well's top and bottom, so the padding is asymmetric. */
+  position: relative;
   padding: 2.5px 1.5px;
   border-radius: 999px;
-  background: var(--inspector-tray);
-  /* The outline is a hairline all round; the bright inner edge only runs along
-     the top and bottom, where it fades out around the capsule's ends. */
+  /* The bright inner edge runs along the top and bottom only, fading out a
+     point in from each end; the reference's rim rows are 255 and 251, so the
+     highlight is painted as a gradient whose fade lands mid-row rather than as
+     an inset shadow, which snaps to whole device pixels. */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 1) 0,
+      rgba(255, 255, 255, 1) 1.1px,
+      rgba(255, 255, 255, 0.4) 1.5px,
+      rgba(255, 255, 255, 0) 1.5px,
+      rgba(255, 255, 255, 0) calc(100% - 1.5px),
+      rgba(255, 255, 255, 0.4) calc(100% - 1.5px),
+      rgba(255, 255, 255, 1) calc(100% - 1.1px),
+      rgba(255, 255, 255, 1) 100%
+    ),
+    var(--inspector-tray);
   box-shadow:
-    inset 0 0 0 0.5px var(--inspector-tray-border),
-    inset 0 0.75px 0 var(--inspector-tray-ring),
-    inset 0 -1px 0 var(--inspector-tray-ring);
+    inset 0 0.5px 0 var(--inspector-tray-border),
+    inset 0 -0.5px 0 var(--inspector-tray-border-bottom);
+}
+/* The outline is painted as a half-point ring: a dark hairline down each
+   capsule end and a lighter one along the top and bottom, where the inner
+   highlight sits just inside the stroke. Masking the box down to its padding
+   edge keeps the gradient inside that ring. */
+.inspector-panel .inspector-segmented::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.5px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--inspector-tray-side-border) 0,
+    transparent 4px,
+    transparent calc(100% - 4px),
+    var(--inspector-tray-side-border) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 .inspector-panel .inspector-segmented button {
   position: relative;
@@ -2516,10 +2578,27 @@ select:focus-visible {
   position: relative;
   top: -0.5px;
 }
+/* AppKit's rasterised symbols keep their own advance and bearing, so the mask
+   box is the symbol's natural size and only the vertical nudge is needed. */
+.inspector-panel .inspector-segmented button .sf-glyph {
+  position: relative;
+  top: -0.5px;
+}
 /* The page symbol's artwork carries more bearing on its right than its left,
-   so its ink sits a point and a half inside the segment's centre. */
+   so its ink sits two points inside the segment's centre. */
 .inspector-panel .inspector-segmented button:first-child svg {
   transform: translateX(-2px);
+}
+.inspector-panel .inspector-segmented button:first-child .sf-glyph {
+  /* The raster's fold stroke lands on the same subpixel phase as the
+     reference's when the box sits two points to the left. */
+  transform: translateX(-2px);
+}
+/* The "i" sits half a point lower and righter inside its symbol box than the
+   page does; nudge it onto the reference's pixel grid. */
+.inspector-panel .inspector-segmented button:last-child .sf-glyph {
+  top: -1px;
+  transform: translateX(-0.5px);
 }
 .inspector-panel .inspector-segmented button.active::before {
   content: '';
