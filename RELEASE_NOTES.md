@@ -1,8 +1,8 @@
-# TextMark v0.10.42
+# TextMark v0.10.43
 
-TextMark 0.10.42 aligns the macOS desktop with Markdown Preview 0.0.71. The window chrome, toolbar, sidebar, tab bar and inspector now use the reference's measured geometry and symbols, the menus carry its tab commands, and tables open in their own expandable window. Settings gain the reference's pane layout and appearance editor, the sidebar lists files with Finder's icons, and the editor and preview share the reference's page metrics.
+TextMark 0.10.43 aligns the macOS desktop with Markdown Preview 0.0.71. The window chrome, toolbar, sidebar, tab bar and inspector now use the reference's measured geometry and symbols, the menus carry its tab commands, and tables open in their own expandable window. Settings gain the reference's pane layout and appearance editor, the sidebar lists files with Finder's icons, and the editor and preview share the reference's page metrics.
 
-TextMark 0.10.42 对 macOS 桌面版完成与 Markdown Preview 0.0.71 的对齐：窗口外观、工具栏、侧栏、标签栏与检查器均采用参考应用的实测几何与符号，菜单补齐其标签命令，表格可在独立窗口中展开。设置窗口采用参考应用的分页布局与外观编辑器，侧栏使用 Finder 图标列出文件，编辑器与预览共用参考应用的版心度量。
+TextMark 0.10.43 对 macOS 桌面版完成与 Markdown Preview 0.0.71 的对齐：窗口外观、工具栏、侧栏、标签栏与检查器均采用参考应用的实测几何与符号，菜单补齐其标签命令，表格可在独立窗口中展开。设置窗口采用参考应用的分页布局与外观编辑器，侧栏使用 Finder 图标列出文件，编辑器与预览共用参考应用的版心度量。
 
 ## Highlights / 主要更新
 
@@ -13,7 +13,7 @@ TextMark 0.10.42 对 macOS 桌面版完成与 Markdown Preview 0.0.71 的对齐�
 - Settings: the dedicated settings window uses the reference's General/Reading/Appearance/Privacy/Advanced/About panes, including the appearance preset and per-slot colour editor, and the About pane reports the running version.
 - Sidebar and files: create files and folders, rename in place, and import dropped or picked files from the source list; the open-with menu lists discovered Markdown editors.
 - Updates: an update pill surfaces available downloads in the toolbar, with channel selection and automatic checks in Settings.
-- Verification: 591 tests across 60 files pass, the production build succeeds, and the first-screen bundle stays within the 320 KiB gzip budget.
+- Verification: 591 tests across 60 files pass, the production build succeeds, and the first-screen bundle stays within the 320 KiB gzip budget; menu-only dialogs load on demand so the release build keeps comfortable headroom under the gate.
 
 ---
 
