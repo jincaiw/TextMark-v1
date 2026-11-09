@@ -6980,7 +6980,8 @@ mark.search-match.active {
   width: 22.5px;
   height: 22.5px;
 }
-/* The rasterised mask sits half a device pixel below the traced path's centre. */
+/* The rasterised mask settles half a point right of and below the traced path's
+   centre, matching the reference's column and row. */
 :root[data-runtime='tauri'][data-platform='macos'] .native-actions > [data-toolbar-item='documentSearch'] .sf-glyph {
   transform: translate(0.5px, 0.5px);
 }
