@@ -1,3 +1,19 @@
+# TextMark v0.10.46
+
+TextMark 0.10.46 refits the titlebar's SF Symbols to Markdown Preview 0.0.71's own optical size. Measured glyph for glyph against a frontmost capture at identical window geometry, the reference draws its toolbar symbols at 17 pt in the regular weight, not the 16 pt medium this app had fitted, which left every glyph a device pixel or two small. Each symbol is rasterised at that size now and every optical offset is refitted, so the table-of-contents, sidebar, copy, search-document and search-field glyphs sit on the reference's exact ink boxes and the folder, share and export glyphs stay within one device pixel on every edge.
+
+TextMark 0.10.46 按 Markdown Preview 0.0.71 的实际光学尺寸重排标题栏 SF Symbols。以相同窗口几何的参考应用前台截图逐字形实测，参考应用以 17pt 常规字重绘制工具栏符号，而非此前采用的 16pt 中等字重，因此每个字形都偏小一到两个设备像素。本次以该尺寸重新栅格化全部符号并重测每个光学偏移：目录、边栏、拷贝、搜索文稿与搜索框字形均落在参考应用相同的墨迹框内，文件夹、共享与导出字形每条边均控制在一个设备像素以内。
+
+## Highlights / 主要更新
+
+- Titlebar symbols: every toolbar glyph is rasterised by AppKit at 17 pt regular, the size the reference uses, instead of the 16 pt medium the earlier fit had settled on.
+- Optical offsets: the per-symbol nudges were refitted at the new size, and the leading picker's table-of-contents and folder symbols and the sidebar toggle gained their own half-point corrections.
+- Search field: the traced magnifier now draws the reference's full 25-device-pixel ink instead of 24, and the search-document glyph sits on its measured column.
+- Measurements: against the frontmost reference at 1050x977 pt, five of the nine titlebar glyphs share the reference's ink box exactly and the rest differ by one antialias row or column (0.5 pt).
+- Verification: 591 frontend tests, lint and the formatting check pass, and the production build stays within the 320 KiB gzip budget.
+
+---
+
 # TextMark v0.10.45
 
 TextMark 0.10.45 finishes the inspector and toolbar against Markdown Preview 0.0.71. The inspector's document and properties segments now draw AppKit's own SF Symbols, and the recessed tray is rebuilt from a row-by-row sample of the reference so its fill, rim and capsule outline land on the same greys. The native menu bar and the titlebar icons were re-verified command for command, glyph for glyph.
