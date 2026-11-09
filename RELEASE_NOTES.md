@@ -1,3 +1,19 @@
+# TextMark v0.10.45
+
+TextMark 0.10.45 finishes the inspector and toolbar against Markdown Preview 0.0.71. The inspector's document and properties segments now draw AppKit's own SF Symbols, and the recessed tray is rebuilt from a row-by-row sample of the reference so its fill, rim and capsule outline land on the same greys. The native menu bar and the titlebar icons were re-verified command for command, glyph for glyph.
+
+TextMark 0.10.45 完成对照 Markdown Preview 0.0.71 的检查器与工具栏收尾：检查器的文稿与属性切换改用 AppKit 原生 SF Symbols，凹陷托盘按参考应用逐行采样重建，填充、亮边与胶囊描边落在同一灰度；原生菜单栏与标题栏图标逐项、逐字形复核一致。
+
+## Highlights / 主要更新
+
+- Inspector segments: the two tab icons are SF Symbols `doc` and `info` at 13 pt, rasterised by AppKit and tinted through a CSS mask, so the page and the serifed "i" match the reference's ink boxes, stroke weights and pixel grid.
+- Inspector tray: the 29 pt well's gradient follows the reference's 58 device rows (242 → 235 → 242) within one level on every row; the bright inner rim fades mid-row and the capsule outline reads 180 on the sides against the reference's 180.
+- Menus: an accessibility-tree diff of both menu bars shows identical titles, nesting and key equivalents for every command, with only the app-name-derived labels (About/Hide/Quit/Help) naming TextMark itself.
+- Toolbar icons: the titlebar glyphs remain AppKit symbol masks with per-icon optical offsets; the edit toggle's accent disc and knocked-out pencil match the reference in both preview and edit states.
+- Verification: 591 frontend tests, the Rust suite and clippy pass, the bundle stays within the 320 KiB gzip budget, and the inspector tray and glyphs were measured against a frontmost capture of the reference at identical window geometry.
+
+---
+
 # TextMark v0.10.44
 
 TextMark 0.10.44 aligns the macOS desktop with Markdown Preview 0.0.71. The window chrome, toolbar, sidebar, tab bar and inspector now use the reference's measured geometry and symbols, the menus carry its tab commands, and tables open in their own expandable window. Settings gain the reference's pane layout and appearance editor, the sidebar lists files with Finder's icons, and the editor and preview share the reference's page metrics.
