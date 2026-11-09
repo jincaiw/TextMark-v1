@@ -1,3 +1,19 @@
+# TextMark v0.10.48
+
+TextMark 0.10.48 replaces the outline icons in the formatting capsule with the reference's own letterforms. Markdown Preview 0.0.71 draws its Bold, Italic and Strikethrough buttons with AppKit's typography symbols — a solid B, a serifed italic I and a struck-through S whose bar runs the full width of the letter — not with the thin outline set this app had stretched to fit. TextMark now rasterises those same symbols through AppKit at the sizes the reference's ink measures (13, 12.5 and 13.5 pt), so the B lands on the reference's exact ink box in both appearances, the I and S differ by a single device pixel, and the strike bar grows from 18 to 21 device pixels against the reference's 22.
+
+TextMark 0.10.48 用参考应用自己的字形替换格式胶囊中的线性图标。Markdown Preview 0.0.71 的粗体、斜体、删除线按钮使用的是 AppKit 的字体排版符号——实心的 B、带衬线的斜体 I，以及删除线横贯字形的 S——而不是此前被拉伸对齐的细线图标。现在 TextMark 通过 AppKit 栅格化同一组符号，并按参考应用墨迹实测的尺寸（13、12.5、13.5pt）绘制：粗体 B 在浅色与深色下都落在参考应用完全相同的墨迹框内，斜体 I 与删除线 S 仅差一个设备像素，删除线宽度由 18 个设备像素增至 21，参考应用为 22。
+
+## Highlights / 主要更新
+
+- Formatting letterforms: the B, I and S are SF Symbols `bold`, `italic` and `strikethrough`, rasterised by AppKit and tinted through the same CSS mask as the titlebar glyphs, with the outline icons kept as the non-macOS fallback.
+- Measured ink: at 2x the B reads 15×18 device pixels on the reference's exact columns and rows, the italic I 13×18 against the reference's 14×18, and the struck S 21×20 against 22×19, all on the reference's baseline.
+- Nudges: the B's symbol frame carries one device pixel of left padding and the italic's one row of headroom, so each glyph gets its own half-point correction onto the reference's grid.
+- Menus: the full menu tree of both applications was dumped through the accessibility API and compared item by item — every menu, item, submenu, separator and keyboard shortcut matches, with only the application name and the window's own document list differing.
+- Verification: light and dark captures at identical geometry, 591 frontend tests, lint, the formatting check, the bundle budget and the Rust tests and clippy all pass.
+
+---
+
 # TextMark v0.10.47
 
 TextMark 0.10.47 brings the dark appearance in line with Markdown Preview 0.0.71. With the reference's 显示 ▸ 外观 set to 深色 and both windows captured at 1050×977 pt, its titlebar is a warm 52,50,49 surface under glass capsules that fill at 84 and turn their rim inside out: a bright specular line along the top and base, a dark refraction hairline at the rounded tangents. Every dark titlebar element now follows that material — capsules, the table-of-contents picker, the search field, the split open button and its divider, the new-document ring, the formatting pills, the single-tab well and the inspector tray — with white glyphs, including the disclosures whose colour the light theme pinned on the SVG itself.

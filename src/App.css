@@ -1837,6 +1837,22 @@ select:focus-visible {
 .document-tools .formatting-text-group button:nth-of-type(3) svg line {
   stroke-width: 1.3;
 }
+/* The reference's B, I and S are AppKit's typography symbols, delivered here as
+   rasters, so their box is the symbol's own image and needs no rescale; only
+   the half-point lift that centres the ink on the reference's rows applies.
+   The B's ink sits one device pixel right of the reference's inside its own
+   symbol frame, and the italic I's frame carries one pixel more headroom, so
+   each is nudged onto the reference's rows and columns. */
+.document-tools .formatting-text-group button .sf-glyph {
+  position: relative;
+  top: -0.5px;
+}
+.document-tools .formatting-text-group button:nth-of-type(1) .sf-glyph {
+  left: -0.5px;
+}
+.document-tools .formatting-text-group button:nth-of-type(2) .sf-glyph {
+  top: 0;
+}
 .document-tools .formatting-group > span {
   width: 1px;
   height: 16px;

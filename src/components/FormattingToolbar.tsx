@@ -3,6 +3,19 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import type { EditorFormattingState, FormatCommand, Locale } from '../types'
 import { t } from '../lib/i18n'
+import { SfGlyph } from './SfGlyph'
+
+/** The reference draws its three letterform buttons with AppKit's own typography
+ * symbols, not with its outline icons: the B is a solid letterform and the
+ * strike bar runs the full width of the S. AppKit rasterises the same symbols
+ * here, so the letterforms, their weight and the bar's reach are the
+ * reference's; the outline icons stand in off macOS and until the raster
+ * arrives. The point sizes are the reference's ink at 2x: the solid B is a
+ * 15-by-18 pixel letterform at 13pt, the italic I 18 pixels tall at 12.5, and
+ * the struck-through S 22 pixels wide at 13.5. */
+const BOLD_SYMBOL_POINTS = 13
+const ITALIC_SYMBOL_POINTS = 12.5
+const STRIKETHROUGH_SYMBOL_POINTS = 13.5
 
 interface FormattingToolbarProps {
   onFormat: (command: FormatCommand) => void
@@ -96,9 +109,14 @@ export function FormattingToolbar({ onFormat, onInsertLink, locale, state }: For
         <ChevronDown className="formatting-heading-chevron" aria-hidden="true" />
       </div>
       <div className="formatting-group formatting-text-group" role="group" aria-label={t(locale, 'bold')}>
-        {button('bold', t(locale, 'bold'), <Bold />, state.bold)}
-        {button('italic', t(locale, 'italic'), <Italic />, state.italic)}
-        {button('strikethrough', t(locale, 'strikethrough'), <Strikethrough />, state.strikethrough)}
+        {button('bold', t(locale, 'bold'), <SfGlyph name="bold" points={BOLD_SYMBOL_POINTS} weight={0} fallback={<Bold />} />, state.bold)}
+        {button('italic', t(locale, 'italic'), <SfGlyph name="italic" points={ITALIC_SYMBOL_POINTS} weight={0} fallback={<Italic />} />, state.italic)}
+        {button(
+          'strikethrough',
+          t(locale, 'strikethrough'),
+          <SfGlyph name="strikethrough" points={STRIKETHROUGH_SYMBOL_POINTS} weight={0} fallback={<Strikethrough />} />,
+          state.strikethrough,
+        )}
       </div>
       <details className="formatting-group formatting-menu formatting-link-menu" role="group">
         <summary aria-label={t(locale, 'link')} title={t(locale, 'link')} aria-pressed={state.link}>

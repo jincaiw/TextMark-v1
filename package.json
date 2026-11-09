@@ -1,7 +1,7 @@
 {
   "name": "textmark",
   "private": true,
-  "version": "0.10.47",
+  "version": "0.10.48",
   "license": "MIT",
   "type": "module",
   "scripts": {
