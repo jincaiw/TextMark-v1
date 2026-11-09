@@ -1,3 +1,17 @@
+# TextMark v0.10.50
+
+TextMark 0.10.50 puts the editing canvas on the reference's whitespace model. CodeMirror hides its own `break-spaces` wrapping in the base theme, which keeps a line's trailing spaces inside the measure and can push the last word onto the next line; Markdown Preview overrides it to `pre-wrap` so trailing spaces hang outside the final glyph, exactly as its reading page does. The canvas now does the same, so editable trailing spaces wrap identically in both surfaces.
+
+TextMark 0.10.50 让编辑画布采用参考应用的空白模型。CodeMirror 基础主题自带 `break-spaces` 折行，会把行尾空格计入可用宽度，可能把最后一个词挤到下一行；Markdown Preview 用 `pre-wrap` 覆盖它，使行尾空格悬于最后一个字形之外，与它的阅读页一致。现在编辑画布也如此，两种视图中的行尾空格折行表现完全相同。
+
+## Highlights / 主要更新
+
+- Canvas wrapping: the editor's content now declares `white-space: pre-wrap`, the same value the reference's own `#editor .cm-content.cm-lineWrapping` rule sets, instead of inheriting CodeMirror's `break-spaces`.
+- Rendered measurement: at the reference's 1050×977 pt geometry both surfaces still land on the same glyph columns and rows; the change only removes the extra measure that trailing spaces would occupy.
+- Verification: 591 frontend tests, lint, the formatting check, the bundle budget, the build, the Rust tests and clippy all pass.
+
+---
+
 # TextMark v0.10.49
 
 TextMark 0.10.49 finishes the dark single-tab field. The reference's field is a recessed well whose rounded ends carry their own sideways profile — an 89 specular column at the tangent, a three-device-pixel band of 74 inside it, then the 78 body — and the earlier pass had painted only the vertical profile, leaving the ends flat where the reference turns them. The ends now read 89 and 74 on both sides at mid-height, matching the reference within a single level.

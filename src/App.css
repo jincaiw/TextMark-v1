@@ -3087,6 +3087,11 @@ select:focus-visible {
   caret-color: var(--accent);
   font-family: inherit;
   overflow-wrap: break-word;
+  /* CodeMirror's own theme wraps with `break-spaces`, which keeps trailing
+     spaces inside the measure and can push a line's last word onto the next
+     one; the reference overrides it to `pre-wrap`, so trailing spaces hang
+     outside the last glyph exactly as they do on the reading page. */
+  white-space: pre-wrap;
   /* The reference's editing canvas breaks lines exactly like its rendered
      page: `pretty` moves the tail word down rather than leaving a short last
      line. Without it the first paragraph fits one more glyph per line and
