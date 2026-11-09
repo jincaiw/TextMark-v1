@@ -6,18 +6,13 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import './App.css'
 import './code-theme.css'
 import type { EditorPaneHandle } from './components/EditorPane'
-import { ConflictDialog } from './components/ConflictDialog'
-import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
-import { DocumentOverview } from './components/DocumentOverview'
 import { FindBar } from './components/FindBar'
-import { ProjectDocumentSearch } from './components/ProjectDocumentSearch'
 import { DocumentTools } from './components/DocumentTools'
 import { FormattingToolbar } from './components/FormattingToolbar'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
 import { PanelResizer } from './components/PanelResizer'
-import { UnsavedCloseDialog } from './components/UnsavedCloseDialog'
 import { UpdatePill } from './components/UpdatePill'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
@@ -86,12 +81,21 @@ const EditorPane = lazy(() => import('./components/EditorPane').then((module) =>
 // The settings window and toolbar customizer are opened from the menu, never on
 // first paint, so their bundles stay out of the first-screen budget.
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
-// Update notes and the export sheet only appear on demand; keep them off the
-// first-screen bundle as well.
-const WhatsNewDialog = lazy(() => import('./components/WhatsNewDialog').then((module) => ({ default: module.WhatsNewDialog })))
-const ExportDialog = lazy(() => import('./components/ExportDialog').then((module) => ({ default: module.ExportDialog })))
 const SettingsWindow = lazy(() => import('./components/SettingsWindow').then((module) => ({ default: module.SettingsWindow })))
 const ToolbarCustomizer = lazy(() => import('./components/ToolbarCustomizer').then((module) => ({ default: module.ToolbarCustomizer })))
+// Update notes, the export sheet and the remaining dialogs only appear on
+// demand; keep them off the first-screen bundle as well.
+const WhatsNewDialog = lazy(() => import('./components/WhatsNewDialog').then((module) => ({ default: module.WhatsNewDialog })))
+const ExportDialog = lazy(() => import('./components/ExportDialog').then((module) => ({ default: module.ExportDialog })))
+const ProjectDocumentSearch = lazy(() =>
+  import('./components/ProjectDocumentSearch').then((module) => ({ default: module.ProjectDocumentSearch })),
+)
+const DocumentOverview = lazy(() => import('./components/DocumentOverview').then((module) => ({ default: module.DocumentOverview })))
+const ConflictDialog = lazy(() => import('./components/ConflictDialog').then((module) => ({ default: module.ConflictDialog })))
+const DraftRecoveryDialog = lazy(() =>
+  import('./components/DraftRecoveryDialog').then((module) => ({ default: module.DraftRecoveryDialog })),
+)
+const UnsavedCloseDialog = lazy(() => import('./components/UnsavedCloseDialog').then((module) => ({ default: module.UnsavedCloseDialog })))
 import { nextZoomStep as nextZoom } from './constants'
 function DocumentApp() {
   const {
@@ -1476,30 +1480,34 @@ function DocumentApp() {
         onClose={requestClose}
       />
       {projectSearchOpen ? (
-        <ProjectDocumentSearch
-          files={documents.files}
-          activePath={documents.document.path}
-          locale={locale}
-          onOpenPath={(path) => void documents.openPath(path, true)}
-          onOpenCurrent={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
-          onOpenInTab={(path) => void documents.openPath(path, true)}
-          onOpenInWindow={(path) => void openDocumentWindow(path)}
-          onOpenFolder={() => {
-            void documents.openFolder()
-            setSidebarMode('files')
-            setSidebarVisible(true)
-          }}
-          onClose={() => setProjectSearchOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <ProjectDocumentSearch
+            files={documents.files}
+            activePath={documents.document.path}
+            locale={locale}
+            onOpenPath={(path) => void documents.openPath(path, true)}
+            onOpenCurrent={(path) => void documents.openWorkspacePath(path, previewScrollTop())}
+            onOpenInTab={(path) => void documents.openPath(path, true)}
+            onOpenInWindow={(path) => void openDocumentWindow(path)}
+            onOpenFolder={() => {
+              void documents.openFolder()
+              setSidebarMode('files')
+              setSidebarVisible(true)
+            }}
+            onClose={() => setProjectSearchOpen(false)}
+          />
+        </Suspense>
       ) : null}
       {tabsOverviewOpen ? (
-        <DocumentOverview
-          sessions={documents.sessions}
-          activeId={documents.activeId}
-          locale={locale}
-          onActivate={activateDocumentTab}
-          onClose={() => setTabsOverviewOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <DocumentOverview
+            sessions={documents.sessions}
+            activeId={documents.activeId}
+            locale={locale}
+            onActivate={activateDocumentTab}
+            onClose={() => setTabsOverviewOpen(false)}
+          />
+        </Suspense>
       ) : null}
       <div
         className={`workspace-stack ${sidebarVisible ? 'with-sidebar' : ''}`}
@@ -1739,44 +1747,54 @@ function DocumentApp() {
           <WhatsNewDialog locale={locale} previousVersion={whatsNewPreviousVersion} onClose={() => setWhatsNewOpen(false)} />
         </Suspense>
       ) : null}
-      <ConflictDialog change={documents.externalChange} locale={locale} onResolve={documents.resolveExternal} />
+      <Suspense fallback={null}>
+        <ConflictDialog change={documents.externalChange} locale={locale} onResolve={documents.resolveExternal} />
+      </Suspense>
       {documents.pendingDraft ? (
-        <DraftRecoveryDialog
-          record={documents.pendingDraft.record}
-          locale={locale}
-          onRestore={documents.restorePendingDraft}
-          onDiscard={documents.discardPendingDraft}
-        />
+        <Suspense fallback={null}>
+          <DraftRecoveryDialog
+            record={documents.pendingDraft.record}
+            locale={locale}
+            onRestore={documents.restorePendingDraft}
+            onDiscard={documents.discardPendingDraft}
+          />
+        </Suspense>
       ) : null}
       {closeGuard ? (
-        <UnsavedCloseDialog
-          locale={locale}
-          dirtyCount={closeGuard.dirty}
-          canSaveAll={closeGuard.canSaveAll}
-          onSave={() => void saveAndClose()}
-          onDiscard={discardAndClose}
-          onCancel={() => setCloseGuard(null)}
-        />
+        <Suspense fallback={null}>
+          <UnsavedCloseDialog
+            locale={locale}
+            dirtyCount={closeGuard.dirty}
+            canSaveAll={closeGuard.canSaveAll}
+            onSave={() => void saveAndClose()}
+            onDiscard={discardAndClose}
+            onCancel={() => setCloseGuard(null)}
+          />
+        </Suspense>
       ) : null}
       {tabCloseGuard ? (
-        <UnsavedCloseDialog
-          locale={locale}
-          dirtyCount={1}
-          canSaveAll={tabCloseGuard.canSave}
-          onSave={() => void saveTabAndClose()}
-          onDiscard={discardTabAndClose}
-          onCancel={() => setTabCloseGuard(null)}
-        />
+        <Suspense fallback={null}>
+          <UnsavedCloseDialog
+            locale={locale}
+            dirtyCount={1}
+            canSaveAll={tabCloseGuard.canSave}
+            onSave={() => void saveTabAndClose()}
+            onDiscard={discardTabAndClose}
+            onCancel={() => setTabCloseGuard(null)}
+          />
+        </Suspense>
       ) : null}
       {navigationGuard ? (
-        <UnsavedCloseDialog
-          locale={locale}
-          dirtyCount={1}
-          canSaveAll={navigationGuard.canSave}
-          onSave={() => void saveAndNavigate()}
-          onDiscard={discardAndNavigate}
-          onCancel={() => setNavigationGuard(null)}
-        />
+        <Suspense fallback={null}>
+          <UnsavedCloseDialog
+            locale={locale}
+            dirtyCount={1}
+            canSaveAll={navigationGuard.canSave}
+            onSave={() => void saveAndNavigate()}
+            onDiscard={discardAndNavigate}
+            onCancel={() => setNavigationGuard(null)}
+          />
+        </Suspense>
       ) : null}
       <Suspense fallback={null}>
         <ExportDialog
