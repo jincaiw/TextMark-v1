@@ -19,13 +19,17 @@ import { clampScrollFraction } from '../lib/scrollFraction'
 import { caretToOffset } from '../lib/readingPosition'
 import { loadLocalAsset } from '../lib/platform'
 import { orderedMatchesFrom, replaceAllMatches, searchMatchOffsets, selectionMatches } from '../lib/search'
-import type { ContentWidth, EditorSessionState, FormatCommand, SearchMode } from '../types'
+import type { ContentWidth, DocumentStats, EditorSessionState, FormatCommand, SearchMode } from '../types'
 
 export interface EditorPaneHandle {
   focus: () => void
   find: (query: string, matchCase: boolean, backwards?: boolean) => boolean
   replace: (query: string, replacement: string, options: ReplaceOptions) => number
   revealLine: (line: number) => void
+  /** The currently selected source text, or '' when the caret has no range. */
+  getSelectionText: () => string
+  /** Center the current selection in the editor viewport (Jump to Selection). */
+  revealSelection: () => void
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
   format: (command: FormatCommand) => void
@@ -69,6 +73,10 @@ interface EditorPaneProps {
   onInitialPositionApplied?: () => void
   initialFormat?: FormatCommand | null
   onInitialFormatApplied?: () => void
+  /** Center the restored selection once the editor mounts (Jump to Selection
+   * from the preview, where the editor arrives through Suspense). */
+  initialRevealSelection?: boolean
+  onInitialSelectionRevealed?: () => void
   onChange: (value: string) => void
   /** Returns Markdown to insert after a clipboard image has been saved safely. */
   onPasteImage?: (file: File) => Promise<string | null>
@@ -77,6 +85,9 @@ interface EditorPaneProps {
   onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
   onStateChange?: (state: EditorSessionState) => void
+  /** Reports the selection's word/character/line counts (null when the caret
+   * has no range) so the inspector can show selection-aware totals. */
+  onSelectionStatsChange?: (stats: DocumentStats | null) => void
   /** Find-bar state. The preview pane highlights matches in rendered text;
    * the editor highlights the same matches in source text so the match
    * counter, the cycle order and “replace” stay in step while editing. */
@@ -132,6 +143,22 @@ function getEditorState(view: EditorView): EditorSessionState {
     },
     topLine: editorTopLine(view),
     scrollFraction: dom.scrollHeight <= dom.clientHeight ? 0 : clampScrollFraction(dom.scrollTop / (dom.scrollHeight - dom.clientHeight)),
+  }
+}
+
+/** Words/characters/lines of the current selection, or null when the caret
+ * has no range. Drives the inspector's "- Selected" count rows. */
+function getSelectionStats(view: EditorView): DocumentStats | null {
+  const selection = view.state.selection.main
+  if (selection.empty) return null
+  const selected = view.state.sliceDoc(selection.from, selection.to)
+  return {
+    words: selected.trim().split(/\s+/u).filter(Boolean).length,
+    characters: selected.length,
+    lines: selected.split(/\r?\n/).length,
+    headings: 0,
+    links: 0,
+    images: 0,
   }
 }
 
@@ -214,11 +241,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   initialSelectionRef.current = props.initialSelection
   const onStateChangeRef = useRef(props.onStateChange)
   onStateChangeRef.current = props.onStateChange
+  const onSelectionStatsChangeRef = useRef(props.onSelectionStatsChange)
+  onSelectionStatsChangeRef.current = props.onSelectionStatsChange
   // The parent callback is recreated on every render. Keeping it in the
   // dependency list would re-apply a pending format command on unrelated
   // renders before the parent has cleared it.
   const onInitialFormatAppliedRef = useRef(props.onInitialFormatApplied)
   onInitialFormatAppliedRef.current = props.onInitialFormatApplied
+  const onInitialSelectionRevealedRef = useRef(props.onInitialSelectionRevealed)
+  onInitialSelectionRevealedRef.current = props.onInitialSelectionRevealed
   const [activeFence, setActiveFence] = useState<EditableCodeFence | null>(null)
   const imagePasteExtension = useMemo(
     () =>
@@ -344,6 +375,19 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) })
         view.focus()
       },
+      getSelectionText: () => {
+        const view = viewRef.current
+        if (!view) return ''
+        const selection = view.state.selection.main
+        return view.state.sliceDoc(selection.from, selection.to)
+      },
+      revealSelection: () => {
+        const view = viewRef.current
+        if (!view) return
+        const head = view.state.selection.main.head
+        view.dispatch({ effects: EditorView.scrollIntoView(head, { y: 'center' }) })
+        view.focus()
+      },
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
       },
@@ -434,6 +478,22 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     }
   }, [ready, props.initialFormat])
 
+  useEffect(() => {
+    if (!ready || !props.initialRevealSelection) return
+    // Queue after the initial-position effect's frame so the restored selection
+    // is in place before we center it (Jump to Selection from the preview).
+    const frame = requestAnimationFrame(() => {
+      const view = viewRef.current
+      if (view) {
+        const head = view.state.selection.main.head
+        view.dispatch({ effects: EditorView.scrollIntoView(head, { y: 'center' }) })
+        view.focus()
+      }
+      onInitialSelectionRevealedRef.current?.()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [ready, props.initialRevealSelection])
+
   return (
     <section className={`editor-pane content-${props.contentWidth}`} aria-label="Markdown editor">
       <div className="editor-page">
@@ -480,6 +540,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             setActiveFence(editableCodeFenceAtLine(view.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
             onStateChangeRef.current?.(getEditorState(view))
+            onSelectionStatsChangeRef.current?.(getSelectionStats(view))
             setReady(true)
           }}
           onChange={props.onChange}
@@ -490,6 +551,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             setActiveFence(editableCodeFenceAtLine(update.state.doc, line.number))
             props.onCursorChange(line.number, head - line.from + 1)
             onStateChangeRef.current?.(getEditorState(update.view))
+            onSelectionStatsChangeRef.current?.(getSelectionStats(update.view))
           }}
           basicSetup={{
             lineNumbers: false,

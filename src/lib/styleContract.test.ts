@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { documentCss } from './export'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
-describe('v0.0.49 visual and print contract', () => {
+describe('v0.0.71 visual and print contract', () => {
   it('uses the frozen 900px page, 820px content column and exact page gutters', () =>
     expect(UPSTREAM_DOCUMENT_TOKENS).toMatchObject({
       pageColumnWidth: 900,
@@ -11,7 +11,7 @@ describe('v0.0.49 visual and print contract', () => {
       pagePaddingHorizontal: 40,
       pagePaddingBottom: 48,
     }))
-  it('uses the upstream 15px/1.52 typography', () => expect(UPSTREAM_DOCUMENT_TOKENS).toMatchObject({ fontSize: 15, lineHeight: 1.52 }))
+  it('uses the upstream 15px/1.6 typography', () => expect(UPSTREAM_DOCUMENT_TOKENS).toMatchObject({ fontSize: 15, lineHeight: 1.6 }))
   it('uses the upstream Apple document palette', () =>
     expect(UPSTREAM_DOCUMENT_TOKENS.light).toEqual({
       text: '#1d1d1f',
@@ -21,11 +21,11 @@ describe('v0.0.49 visual and print contract', () => {
       grid: '#d2d2d7',
     }))
   it('uses the full source line height for all but the final blank in a run', () =>
-    expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(22.8))
+    expect(UPSTREAM_DOCUMENT_TOKENS.sourceLineHeight).toBe(24))
   it('keeps system preview typography aligned with the app', () => expect(UPSTREAM_DOCUMENT_TOKENS.fontFamily).toContain('SF Pro Text'))
   it('forces a light print palette and removes screen controls', () => {
     expect(documentCss).toContain('color-scheme:light')
-    expect(documentCss).toContain('.copy-code-button,.diagram-hud{display:none!important}')
+    expect(documentCss).toContain('.md-code-header,.diagram-hud{display:none!important}')
     expect(documentCss).toContain('break-inside:avoid')
   })
 })

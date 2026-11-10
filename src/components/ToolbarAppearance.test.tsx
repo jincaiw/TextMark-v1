@@ -9,20 +9,22 @@ import { ToolbarAppearance } from './ToolbarAppearance'
 type AppearanceProps = ComponentProps<typeof ToolbarAppearance>
 
 const presets = [
-  ['normal', 'Normal'],
-  ['charcoal', 'Charcoal'],
-  ['redGraphite', 'Red Graphite'],
-  ['darkGraphite', 'Dark Graphite'],
-  ['solarizedLight', 'Solarized Light'],
-  ['solarizedDark', 'Solarized Dark'],
-  ['dracula', 'Dracula'],
+  ['original', 'Original'],
+  ['quiet', 'Quiet'],
+  ['paper', 'Paper'],
+  ['bold', 'Bold'],
+  ['calm', 'Calm'],
+  ['focus', 'Focus'],
+  ['graphite', 'Graphite'],
+  ['dusk', 'Dusk'],
+  ['midnight', 'Midnight'],
 ] as const
 
 const makeProps = (overrides: Partial<AppearanceProps> = {}): AppearanceProps => ({
   locale: 'en',
   zoom: 100,
   theme: 'system',
-  themePreset: 'normal',
+  themePreset: 'original',
   onZoomChange: vi.fn(),
   onThemeChange: vi.fn(),
   onThemePresetChange: vi.fn(),
@@ -119,14 +121,14 @@ describe('ToolbarAppearance', () => {
     expect(props.onCustomizeAppearance).not.toHaveBeenCalled()
   })
 
-  it.each(presets)('七个预设中 %s 的 aria-pressed 受控更新，点击回调且不关闭浮层', (preset, name) => {
-    const initialPreset = preset === 'normal' ? 'dracula' : 'normal'
+  it.each(presets)('九个预设中 %s 的 aria-pressed 受控更新，点击回调且不关闭浮层', (preset, name) => {
+    const initialPreset: AppearanceProps['themePreset'] = preset === 'original' ? 'midnight' : 'original'
     const props = makeProps({ themePreset: initialPreset })
     render(props)
     open()
     const group = element('[role="group"][aria-label="Theme presets"]')
     const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button'))
-    expect(buttons).toHaveLength(7)
+    expect(buttons).toHaveLength(9)
     expect(buttons.map((button) => [button.dataset.themePreset, button.getAttribute('aria-label')])).toEqual(presets)
     const assertSelection = (selected: AppearanceProps['themePreset']) => {
       for (const button of buttons) {

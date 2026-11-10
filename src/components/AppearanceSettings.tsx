@@ -1,23 +1,57 @@
-import { RotateCcw } from 'lucide-react'
 import { t } from '../lib/i18n'
-import { resolvedThemePalette, THEME_COLOR_SLOTS, THEME_PRESETS } from '../lib/theme'
-import type { Locale, ThemeColorScheme, ThemeColorSlot, ThemeColors, ThemeMode, ThemePreset } from '../types'
+import { DOCUMENT_FONT_FAMILIES } from '../lib/designTokens'
+import { THEME_PRESETS } from '../lib/theme'
+import type { Locale, ThemeMode, ThemePreset } from '../types'
 
 interface AppearanceSettingsProps {
   locale: Locale
   theme: ThemeMode
   themePreset: ThemePreset
-  themeColors: ThemeColors
   onThemeChange: (theme: ThemeMode) => void
   onThemePresetChange: (preset: ThemePreset) => void
-  onThemeColorChange: (scheme: ThemeColorScheme, slot: ThemeColorSlot, color: string) => void
-  onThemeColorsReset: () => void
+  onCustomizeTheme?: () => void
 }
 
+/** The Settings > Appearance pane mirrors the upstream Themes popover: a
+ * 3×3 preset gallery plus the appearance picker. Deeper per-theme edits live
+ * in the Customize Theme sheet, reached from the document toolbar. */
 export function AppearanceSettings(props: AppearanceSettingsProps) {
-  const hasOverrides = Object.keys(props.themeColors).length > 0
   return (
     <div className="appearance-settings">
+      <section className="theme-presets" aria-labelledby="theme-presets-title">
+        <strong id="theme-presets-title">{t(props.locale, 'themePresets')}</strong>
+        <div className="theme-preset-grid" role="group" aria-label={t(props.locale, 'themePresets')}>
+          {(Object.entries(THEME_PRESETS) as Array<[ThemePreset, (typeof THEME_PRESETS)[ThemePreset]]>).map(([id, preset]) => {
+            const scheme = preset.flavor === 'dark' ? 'dark' : 'light'
+            const colors = preset[scheme]
+            return (
+              <button
+                key={id}
+                type="button"
+                data-theme-preset={id}
+                className={props.themePreset === id ? 'selected' : ''}
+                aria-pressed={props.themePreset === id}
+                title={preset.name}
+                aria-label={preset.name}
+                onClick={() => props.onThemePresetChange(id)}
+              >
+                <span
+                  className="theme-preset-preview"
+                  style={{
+                    background: colors.windowBackground,
+                    color: colors.textColor,
+                    fontFamily: DOCUMENT_FONT_FAMILIES[preset.font],
+                    fontWeight: preset.boldText ? 600 : 400,
+                  }}
+                >
+                  <span className="theme-preset-aa">Aa</span>
+                </span>
+                <span>{preset.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
       <label>
         <span>{t(props.locale, 'appearance')}</span>
         <select value={props.theme} onChange={(event) => props.onThemeChange(event.target.value as ThemeMode)}>
@@ -26,77 +60,11 @@ export function AppearanceSettings(props: AppearanceSettingsProps) {
           <option value="dark">{t(props.locale, 'dark')}</option>
         </select>
       </label>
-      <section className="theme-presets" aria-labelledby="theme-presets-title">
-        <strong id="theme-presets-title">{props.locale === 'zh-CN' ? '主题预设' : 'Theme presets'}</strong>
-        <div className="theme-preset-grid">
-          {(Object.entries(THEME_PRESETS) as Array<[ThemePreset, (typeof THEME_PRESETS)[ThemePreset]]>).map(([id, preset]) => {
-            const scheme = preset.flavor === 'dark' ? 'dark' : 'light'
-            const colors = preset[scheme]
-            return (
-              <button
-                key={id}
-                type="button"
-                className={props.themePreset === id ? 'selected' : ''}
-                aria-pressed={props.themePreset === id}
-                onClick={() => props.onThemePresetChange(id)}
-              >
-                <span className="theme-preset-preview" style={{ background: colors.windowBackground, color: colors.textColor }}>
-                  <i style={{ background: colors.linkColor }} />
-                  <i style={{ background: colors.codeBlockBackground }} />
-                  <i style={{ background: colors.textColor }} />
-                </span>
-                <span>{preset.name}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-      <div className="theme-colors" aria-label={props.locale === 'zh-CN' ? '主题颜色' : 'Theme colors'}>
-        <div className="theme-colors-heading">
-          <strong>{props.locale === 'zh-CN' ? '自定义颜色' : 'Custom colors'}</strong>
-          <button type="button" disabled={!hasOverrides} onClick={props.onThemeColorsReset}>
-            <RotateCcw />
-            {props.locale === 'zh-CN' ? '恢复默认' : 'Reset'}
-          </button>
-        </div>
-        {(['light', 'dark'] as const).map((scheme) => {
-          const colors = resolvedThemePalette(props.themePreset, scheme, props.themeColors)
-          return (
-            <fieldset key={scheme}>
-              <legend>{scheme === 'light' ? t(props.locale, 'light') : t(props.locale, 'dark')}</legend>
-              {THEME_COLOR_SLOTS.map((slot) => (
-                <label key={slot}>
-                  <span>{themeSlotLabel(slot, props.locale)}</span>
-                  <input
-                    type="color"
-                    aria-label={`${scheme === 'light' ? t(props.locale, 'light') : t(props.locale, 'dark')} ${themeSlotLabel(slot, props.locale)}`}
-                    value={colors[slot]}
-                    onChange={(event) => props.onThemeColorChange(scheme, slot, event.target.value)}
-                  />
-                </label>
-              ))}
-            </fieldset>
-          )
-        })}
-      </div>
+      {props.onCustomizeTheme ? (
+        <button type="button" className="settings-customize-theme" onClick={props.onCustomizeTheme}>
+          {t(props.locale, 'customizeTheme')}…
+        </button>
+      ) : null}
     </div>
   )
-}
-
-function themeSlotLabel(slot: ThemeColorSlot, locale: Locale) {
-  const zh: Record<ThemeColorSlot, string> = {
-    windowBackground: '窗口背景',
-    editorBackground: '编辑器背景',
-    codeBlockBackground: '代码背景',
-    textColor: '正文文字',
-    linkColor: '链接颜色',
-  }
-  const en: Record<ThemeColorSlot, string> = {
-    windowBackground: 'Window background',
-    editorBackground: 'Editor background',
-    codeBlockBackground: 'Code background',
-    textColor: 'Text',
-    linkColor: 'Links',
-  }
-  return (locale === 'zh-CN' ? zh : en)[slot]
 }

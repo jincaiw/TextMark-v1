@@ -1,34 +1,29 @@
-import { Info, Palette, Settings2, ShieldCheck, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { BookOpen, Cog, Info, Palette, Settings2, ShieldCheck, X } from 'lucide-react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { t } from '../lib/i18n'
-import { LINE_HEIGHT_RANGE, PAGE_PADDING_RANGE } from '../lib/settings'
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import { AppearanceSettings } from './AppearanceSettings'
 import type {
   AppSettings,
   ContentWidth,
-  DocumentFont,
   ExternalApplication,
   Locale,
   ThemeColorScheme,
   ThemeColorSlot,
-  ThemeColors,
   ThemeMode,
   ThemePreset,
 } from '../types'
 import type { UpdateStatus } from '../hooks/useUpdater'
 
+export type SettingsPane = 'general' | 'reading' | 'appearance' | 'privacy' | 'advanced' | 'about'
+
 interface SettingsDialogProps {
   open: boolean
-  initialPane?: 'general' | 'appearance' | 'privacy' | 'about'
+  initialPane?: SettingsPane
   theme: ThemeMode
   contentWidth: ContentWidth
-  editorFontSize: number
-  lineHeight: number
-  pagePaddingHorizontal: number
-  documentFont: DocumentFont
   themePreset: ThemePreset
-  themeColors: ThemeColors
+  themeColors: AppSettings['themeColors']
   autoSaveIntervalMinutes: number
   openDocumentsInTabs: boolean
   alwaysOnTop: boolean
@@ -48,25 +43,36 @@ interface SettingsDialogProps {
   onAutoCheckUpdatesChange: (enabled: boolean) => void
   onCheckUpdate: () => void
   onInstallUpdate: () => void
+  onRelaunchUpdate?: () => void
   onThemeChange: (theme: ThemeMode) => void
   onContentWidthChange: (width: ContentWidth) => void
-  onEditorFontSizeChange: (size: number) => void
-  onLineHeightChange: (value: number) => void
-  onPagePaddingHorizontalChange: (value: number) => void
-  onDocumentFontChange: (font: DocumentFont) => void
   onThemePresetChange: (preset: ThemePreset) => void
   onThemeColorChange: (scheme: ThemeColorScheme, slot: ThemeColorSlot, color: string) => void
   onThemeColorsReset: () => void
+  onCustomizeTheme?: () => void
   onAutoSaveIntervalChange: (minutes: number) => void
   onOpenDocumentsInTabsChange: (enabled: boolean) => void
   onAlwaysOnTopChange: (enabled: boolean) => void
   onZoomChange: (zoom: number) => void
   onDefaultOpenTargetChange: (target: string) => void
+  onInstallCli: () => void
   onClose: () => void
 }
 
+/** Upstream SettingsPane order: General gearshape, Reading book, Appearance
+ * paintpalette, Privacy hand.raised, Advanced gearshape.2, About info.circle —
+ * toolbar tabs, the way Safari's and Xcode's Settings are. */
+const PANES: Array<{ pane: SettingsPane; titleKey: Parameters<typeof t>[1]; icon: ComponentType }> = [
+  { pane: 'general', titleKey: 'settingsGeneral', icon: Settings2 },
+  { pane: 'reading', titleKey: 'settingsReading', icon: BookOpen },
+  { pane: 'appearance', titleKey: 'appearance', icon: Palette },
+  { pane: 'privacy', titleKey: 'settingsPrivacy', icon: ShieldCheck },
+  { pane: 'advanced', titleKey: 'settingsAdvanced', icon: Cog },
+  { pane: 'about', titleKey: 'settingsAbout', icon: Info },
+]
+
 export function SettingsDialog(props: SettingsDialogProps) {
-  const [pane, setPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>(props.initialPane ?? 'general')
+  const [pane, setPane] = useState<SettingsPane>(props.initialPane ?? 'general')
   useEffect(() => {
     if (props.open) setPane(props.initialPane ?? 'general')
   }, [props.initialPane, props.open])
@@ -101,9 +107,22 @@ export function SettingsDialog(props: SettingsDialogProps) {
           ? t(props.locale, 'updateAvailable', { version: props.updateStatus.version ?? '' })
           : props.updateStatus.state === 'downloading'
             ? t(props.locale, 'downloadingUpdate', { progress: props.updateStatus.progress ?? 0 })
-            : props.updateStatus.state === 'error'
-              ? t(props.locale, updateErrorKey)
-              : ''
+            : props.updateStatus.state === 'preparing'
+              ? t(props.locale, 'updatePreparing')
+              : props.updateStatus.state === 'ready'
+                ? t(props.locale, 'updateInstalled')
+                : props.updateStatus.state === 'installing'
+                  ? t(props.locale, 'updateInstalling')
+                  : props.updateStatus.state === 'updated'
+                    ? t(props.locale, 'updatedTo', { version: props.updateStatus.version ?? '' })
+                    : props.updateStatus.state === 'error'
+                      ? t(props.locale, updateErrorKey)
+                      : ''
+  const lastChecked = props.lastUpdateCheckAt
+    ? new Intl.DateTimeFormat(props.locale, { dateStyle: 'medium', timeStyle: 'short' }).format(props.lastUpdateCheckAt)
+    : t(props.locale, 'never')
+  const editorApps = props.applications.filter((application) => application.available && application.kind === 'editor')
+  const aiApps = props.applications.filter((application) => application.available && application.kind === 'llm')
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={close} ref={backdropRef}>
       <section
@@ -113,129 +132,42 @@ export function SettingsDialog(props: SettingsDialogProps) {
         aria-labelledby="settings-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header>
-          <h2 id="settings-title">TextMark {t(props.locale, 'preferences')}</h2>
-          <button onClick={close} aria-label={t(props.locale, 'close')}>
+        <h2 id="settings-title" className="visually-hidden">
+          TextMark {t(props.locale, 'preferences')}
+        </h2>
+        <nav className="settings-tabs" aria-label={t(props.locale, 'preferences')}>
+          {PANES.map((entry) => {
+            const Icon = entry.icon
+            return (
+              <button
+                key={entry.pane}
+                type="button"
+                className={pane === entry.pane ? 'selected' : ''}
+                aria-current={pane === entry.pane}
+                onClick={() => setPane(entry.pane)}
+              >
+                <Icon />
+                <span>{t(props.locale, entry.titleKey)}</span>
+              </button>
+            )
+          })}
+          <button type="button" className="settings-close" aria-label={t(props.locale, 'close')} onClick={close}>
             <X />
           </button>
-        </header>
-        <div className="settings-layout">
-          <nav className="settings-nav" aria-label="Settings sections">
-            <button className={pane === 'general' ? 'selected' : ''} onClick={() => setPane('general')}>
-              <Settings2 />
-              {props.locale === 'zh-CN' ? '通用' : 'General'}
-            </button>
-            <button className={pane === 'appearance' ? 'selected' : ''} onClick={() => setPane('appearance')}>
-              <Palette />
-              {t(props.locale, 'appearance')}
-            </button>
-            <button className={pane === 'privacy' ? 'selected' : ''} onClick={() => setPane('privacy')}>
-              <ShieldCheck />
-              {props.locale === 'zh-CN' ? '隐私' : 'Privacy'}
-            </button>
-            <button className={pane === 'about' ? 'selected' : ''} onClick={() => setPane('about')}>
-              <Info />
-              {props.locale === 'zh-CN' ? '关于' : 'About'}
-            </button>
-          </nav>
-          <div className="settings-pane">
-            {pane === 'general' ? (
-              <>
-                <label>
-                  <span>{t(props.locale, 'language')}</span>
-                  <select value={props.locale} onChange={(event) => props.onLocaleChange(event.target.value as Locale)}>
-                    <option value="zh-CN">{t(props.locale, 'chinese')}</option>
-                    <option value="en">{t(props.locale, 'english')}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'contentWidth')}</span>
-                  <select value={props.contentWidth} onChange={(event) => props.onContentWidthChange(event.target.value as ContentWidth)}>
-                    <option value="normal">{t(props.locale, 'normal')}</option>
-                    <option value="full">{t(props.locale, 'fullWidth')}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'documentFont')}</span>
-                  <select value={props.documentFont} onChange={(event) => props.onDocumentFontChange(event.target.value as DocumentFont)}>
-                    <option value="system">{t(props.locale, 'fontSystem')}</option>
-                    <option value="serif">{t(props.locale, 'fontSerif')}</option>
-                    <option value="rounded">{t(props.locale, 'fontRounded')}</option>
-                    <option value="monospace">{t(props.locale, 'fontMonospace')}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'defaultOpenTarget')}</span>
-                  <select value={props.defaultOpenTarget} onChange={(event) => props.onDefaultOpenTargetChange(event.target.value)}>
-                    <option value="system">{t(props.locale, 'systemDefault')}</option>
-                    {props.applications
-                      .filter((application) => application.available && application.id !== 'system' && application.kind !== 'llm')
-                      .map((application) => (
-                        <option key={application.id} value={application.id}>
-                          {application.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'editorFontSize')}</span>
-                  <div className="setting-range">
-                    <input
-                      type="range"
-                      min="12"
-                      max="24"
-                      value={props.editorFontSize}
-                      onChange={(event) => props.onEditorFontSizeChange(Number(event.target.value))}
-                    />
-                    <output>{props.editorFontSize}px</output>
-                  </div>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'lineHeight')}</span>
-                  <div className="setting-range">
-                    <input
-                      type="range"
-                      min={LINE_HEIGHT_RANGE.min}
-                      max={LINE_HEIGHT_RANGE.max}
-                      step={LINE_HEIGHT_RANGE.step}
-                      value={props.lineHeight}
-                      aria-label={t(props.locale, 'lineHeight')}
-                      onChange={(event) => props.onLineHeightChange(Number(event.target.value))}
-                    />
-                    <output>{props.lineHeight.toFixed(2)}</output>
-                  </div>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'pagePaddingHorizontal')}</span>
-                  <div className="setting-range">
-                    <input
-                      type="range"
-                      min={PAGE_PADDING_RANGE.min}
-                      max={PAGE_PADDING_RANGE.max}
-                      step={PAGE_PADDING_RANGE.step}
-                      value={props.pagePaddingHorizontal}
-                      aria-label={t(props.locale, 'pagePaddingHorizontal')}
-                      onChange={(event) => props.onPagePaddingHorizontalChange(Number(event.target.value))}
-                    />
-                    <output>{props.pagePaddingHorizontal}px</output>
-                  </div>
-                </label>
-                <label>
-                  <span>{t(props.locale, 'autoSave')}</span>
-                  <select
-                    value={props.autoSaveIntervalMinutes}
-                    onChange={(event) => props.onAutoSaveIntervalChange(Number(event.target.value))}
-                  >
-                    <option value={0}>{t(props.locale, 'autoSaveOff')}</option>
-                    <option value={-30}>{t(props.locale, 'autoSaveThirtySeconds')}</option>
-                    <option value={1}>{t(props.locale, 'autoSaveOneMinute')}</option>
-                    <option value={5}>{t(props.locale, 'autoSaveFiveMinutes')}</option>
-                    <option value={10}>{t(props.locale, 'autoSaveTenMinutes')}</option>
-                    <option value={15}>{t(props.locale, 'autoSaveFifteenMinutes')}</option>
-                    <option value={30}>{t(props.locale, 'autoSaveThirtyMinutes')}</option>
-                    <option value={60}>{t(props.locale, 'autoSaveSixtyMinutes')}</option>
-                  </select>
-                </label>
+        </nav>
+        <div className="settings-pane">
+          {pane === 'general' ? (
+            <>
+              <label>
+                <span>{t(props.locale, 'languageSection')}</span>
+                <select value={props.locale} onChange={(event) => props.onLocaleChange(event.target.value as Locale)}>
+                  <option value="zh-CN">{t(props.locale, 'chinese')}</option>
+                  <option value="en">{t(props.locale, 'english')}</option>
+                </select>
+              </label>
+              <p className="settings-caption">{t(props.locale, 'languageEffectNote')}</p>
+              <div className="settings-group">
+                <span className="settings-group-label">{t(props.locale, 'openingFiles')}</span>
                 <label>
                   <span>{t(props.locale, 'openDocumentsInTabs')}</span>
                   <input
@@ -245,6 +177,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   />
                 </label>
                 <label>
+                  <span>{t(props.locale, 'openMarkdownLinksInNewWindows')}</span>
+                  <input type="checkbox" checked={false} disabled onChange={() => undefined} />
+                </label>
+              </div>
+              <div className="settings-group">
+                <span className="settings-group-label">{t(props.locale, 'windows')}</span>
+                <label>
                   <span>{t(props.locale, 'alwaysOnTop')}</span>
                   <input
                     type="checkbox"
@@ -252,118 +191,180 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     onChange={(event) => props.onAlwaysOnTopChange(event.target.checked)}
                   />
                 </label>
-                <label>
-                  <span>{t(props.locale, 'textSize')}</span>
-                  <div className="settings-text-size">
-                    {(
-                      [
-                        { stop: 90, key: 'textSizeSmall', sample: 10 },
-                        { stop: 100, key: 'textSizeMedium', sample: 12 },
-                        { stop: 125, key: 'textSizeLarge', sample: 15 },
-                      ] as const
-                    ).map(({ stop, key, sample }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={props.zoom === stop ? 'selected' : ''}
-                        aria-pressed={props.zoom === stop}
-                        onClick={() => props.onZoomChange(stop)}
-                      >
-                        <span className="settings-text-size-sample" style={{ fontSize: sample }}>
-                          Aa
-                        </span>
-                        {t(props.locale, key)}
-                      </button>
+              </div>
+              <label>
+                <span>{t(props.locale, 'automaticSaving')}</span>
+                <select
+                  value={props.autoSaveIntervalMinutes}
+                  onChange={(event) => props.onAutoSaveIntervalChange(Number(event.target.value))}
+                >
+                  <option value={0}>{t(props.locale, 'autoSaveOff')}</option>
+                  <option value={-30}>{t(props.locale, 'autoSaveThirtySeconds')}</option>
+                  <option value={1}>{t(props.locale, 'autoSaveOneMinute')}</option>
+                  <option value={5}>{t(props.locale, 'autoSaveFiveMinutes')}</option>
+                  <option value={10}>{t(props.locale, 'autoSaveTenMinutes')}</option>
+                  <option value={15}>{t(props.locale, 'autoSaveFifteenMinutes')}</option>
+                  <option value={30}>{t(props.locale, 'autoSaveThirtyMinutes')}</option>
+                  <option value={60}>{t(props.locale, 'autoSaveSixtyMinutes')}</option>
+                </select>
+              </label>
+              <label>
+                <span>{t(props.locale, 'openDocumentsIn')}</span>
+                <select value={props.defaultOpenTarget} onChange={(event) => props.onDefaultOpenTargetChange(event.target.value)}>
+                  <option value="system">{t(props.locale, 'systemDefault')}</option>
+                  {aiApps.length ? (
+                    <optgroup label={t(props.locale, 'aiAppsSection')}>
+                      {aiApps.map((application) => (
+                        <option key={application.id} value={application.id}>
+                          {application.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  <optgroup label={t(props.locale, 'editorsSection')}>
+                    {editorApps.map((application) => (
+                      <option key={application.id} value={application.id}>
+                        {application.name}
+                      </option>
                     ))}
-                  </div>
-                </label>
-              </>
-            ) : null}
-            {pane === 'appearance' ? (
-              <AppearanceSettings
-                locale={props.locale}
-                theme={props.theme}
-                themePreset={props.themePreset}
-                themeColors={props.themeColors}
-                onThemeChange={props.onThemeChange}
-                onThemePresetChange={props.onThemePresetChange}
-                onThemeColorChange={props.onThemeColorChange}
-                onThemeColorsReset={props.onThemeColorsReset}
-              />
-            ) : null}
-            {pane === 'privacy' ? (
-              <>
-                <label>
-                  <span>{t(props.locale, 'crashReports')}</span>
-                  <span className="setting-toggle">
-                    <input
-                      type="checkbox"
-                      checked={props.crashReports}
-                      disabled={!props.crashReportsAvailable}
-                      onChange={(event) => props.onCrashReportsChange(event.target.checked)}
-                      aria-label={t(props.locale, 'crashReports')}
-                    />
-                    {!props.crashReportsAvailable ? <small>{t(props.locale, 'unavailable')}</small> : null}
-                  </span>
-                </label>
-                <p>
-                  {props.locale === 'zh-CN'
-                    ? '崩溃报告仅在你明确启用后发送；Markdown 文件内容不会随设置同步。'
-                    : 'Crash reports are sent only when you explicitly enable them. Markdown contents are never synchronized with settings.'}
-                </p>
-              </>
-            ) : null}
-            {pane === 'about' ? (
-              <>
-                <div className="settings-about">
-                  <strong>TextMark</strong>
-                  <span>v{__APP_VERSION__}</span>
-                  <small>
-                    {props.locale === 'zh-CN' ? '本地优先的 Markdown 阅读与编辑。' : 'A local-first Markdown reader and editor.'}
-                  </small>
+                  </optgroup>
+                </select>
+              </label>
+            </>
+          ) : null}
+          {pane === 'reading' ? (
+            <>
+              <label>
+                <span>{t(props.locale, 'textSize')}</span>
+                <div className="settings-text-size">
+                  {(
+                    [
+                      { stop: 90, key: 'textSizeSmall', sample: 10 },
+                      { stop: 100, key: 'textSizeMedium', sample: 12 },
+                      { stop: 125, key: 'textSizeLarge', sample: 15 },
+                    ] as const
+                  ).map(({ stop, key, sample }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={props.zoom === stop ? 'selected' : ''}
+                      aria-pressed={props.zoom === stop}
+                      onClick={() => props.onZoomChange(stop)}
+                    >
+                      <span className="settings-text-size-sample" style={{ fontSize: sample }}>
+                        Aa
+                      </span>
+                      {t(props.locale, key)}
+                    </button>
+                  ))}
                 </div>
-                <label>
-                  <span>{t(props.locale, 'updateChannel')}</span>
-                  <select
-                    value={props.updateChannel}
-                    onChange={(event) => props.onUpdateChannelChange(event.target.value as AppSettings['updateChannel'])}
-                  >
-                    <option value="stable">{t(props.locale, 'stable')}</option>
-                    <option value="beta">{t(props.locale, 'beta')}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{props.locale === 'zh-CN' ? '自动检查更新' : 'Automatically check for updates'}</span>
+              </label>
+              <label>
+                <span>{t(props.locale, 'contentWidth')}</span>
+                <select value={props.contentWidth} onChange={(event) => props.onContentWidthChange(event.target.value as ContentWidth)}>
+                  <option value="normal">{t(props.locale, 'normal')}</option>
+                  <option value="full">{t(props.locale, 'fullWidth')}</option>
+                </select>
+              </label>
+              <p className="settings-caption">{t(props.locale, 'readingNote')}</p>
+            </>
+          ) : null}
+          {pane === 'appearance' ? (
+            <AppearanceSettings
+              locale={props.locale}
+              theme={props.theme}
+              themePreset={props.themePreset}
+              onThemeChange={props.onThemeChange}
+              onThemePresetChange={props.onThemePresetChange}
+              onCustomizeTheme={props.onCustomizeTheme}
+            />
+          ) : null}
+          {pane === 'privacy' ? (
+            <>
+              <label>
+                <span>{t(props.locale, 'crashReports')}</span>
+                <span className="setting-toggle">
+                  <input
+                    type="checkbox"
+                    checked={props.crashReports}
+                    disabled={!props.crashReportsAvailable}
+                    onChange={(event) => props.onCrashReportsChange(event.target.checked)}
+                    aria-label={t(props.locale, 'crashReports')}
+                  />
+                  {!props.crashReportsAvailable ? <small>{t(props.locale, 'unavailable')}</small> : null}
+                </span>
+              </label>
+              <p className="settings-caption">{t(props.locale, 'crashReportsCaption')}</p>
+            </>
+          ) : null}
+          {pane === 'advanced' ? (
+            <>
+              <div className="settings-group">
+                <span className="settings-group-label">{t(props.locale, 'commandLineTools')}</span>
+                <button type="button" className="settings-button" onClick={props.onInstallCli}>
+                  {t(props.locale, 'installCliButton')}
+                </button>
+                <p className="settings-caption">{t(props.locale, 'installCliCaption')}</p>
+              </div>
+            </>
+          ) : null}
+          {pane === 'about' ? (
+            <>
+              <div className="settings-about">
+                <strong>TextMark</strong>
+                <span>v{__APP_VERSION__}</span>
+                <small>{props.locale === 'zh-CN' ? '本地优先的 Markdown 阅读与编辑。' : 'A local-first Markdown reader and editor.'}</small>
+              </div>
+              <label>
+                <span>{t(props.locale, 'version')}</span>
+                <span>v{__APP_VERSION__}</span>
+              </label>
+              <label>
+                <span>{t(props.locale, 'updates')}</span>
+                <span className="setting-toggle">
                   <input
                     type="checkbox"
                     checked={props.autoCheckUpdates}
                     onChange={(event) => props.onAutoCheckUpdatesChange(event.target.checked)}
                   />
-                </label>
-                <div className="settings-update">
-                  <span>
-                    {updateText ||
-                      (props.lastUpdateCheckAt
-                        ? `${props.locale === 'zh-CN' ? '上次检查：' : 'Last checked: '}${new Intl.DateTimeFormat(props.locale, { dateStyle: 'medium', timeStyle: 'short' }).format(props.lastUpdateCheckAt)}`
-                        : props.locale === 'zh-CN'
-                          ? '尚未检查更新'
-                          : 'Not checked yet')}
-                  </span>
-                  {props.updateStatus.state === 'available' ? (
-                    <button onClick={props.onInstallUpdate}>{t(props.locale, 'installUpdate')}</button>
-                  ) : (
-                    <button
-                      disabled={props.updateStatus.state === 'checking' || props.updateStatus.state === 'downloading'}
-                      onClick={props.onCheckUpdate}
-                    >
-                      {t(props.locale, 'checkForUpdates')}
-                    </button>
-                  )}
-                </div>
-                <p>{t(props.locale, 'settingsStored')}</p>
-              </>
-            ) : null}
-          </div>
+                  <select
+                    value={props.updateChannel}
+                    onChange={(event) => props.onUpdateChannelChange(event.target.value as AppSettings['updateChannel'])}
+                    aria-label={t(props.locale, 'updateChannel')}
+                  >
+                    <option value="stable">{t(props.locale, 'stable')}</option>
+                    <option value="beta">{t(props.locale, 'beta')}</option>
+                  </select>
+                </span>
+              </label>
+              <label>
+                <span>{t(props.locale, 'lastChecked')}</span>
+                <span className="settings-caption-inline">{lastChecked}</span>
+              </label>
+              <div className="settings-update">
+                <span>{updateText || t(props.locale, 'checkForUpdatesPrompt')}</span>
+                {props.updateStatus.state === 'available' ? (
+                  <button onClick={props.onInstallUpdate}>{t(props.locale, 'download')}</button>
+                ) : props.updateStatus.state === 'ready' && props.onRelaunchUpdate ? (
+                  <button onClick={props.onRelaunchUpdate}>{t(props.locale, 'relaunchNow')}</button>
+                ) : (
+                  <button
+                    disabled={['checking', 'downloading', 'preparing', 'installing'].includes(props.updateStatus.state)}
+                    onClick={props.onCheckUpdate}
+                  >
+                    {t(props.locale, 'checkForUpdatesShort')}
+                  </button>
+                )}
+              </div>
+              <div className="settings-links">
+                <span>{t(props.locale, 'linksSection')}</span>
+                <a href="https://github.com/jincaiw/TextMark-v1#readme" target="_blank" rel="noreferrer">
+                  {t(props.locale, 'githubProject')}
+                </a>
+              </div>
+              <p className="settings-caption">{t(props.locale, 'settingsStored')}</p>
+            </>
+          ) : null}
         </div>
       </section>
     </div>

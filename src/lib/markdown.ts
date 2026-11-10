@@ -48,7 +48,8 @@ function makeRenderer() {
     breaks: false,
     highlight(code, language): string {
       const normalized = parseCodeFenceInfo(language).highlightLanguage
-      return `<pre class="hljs"><code${normalized ? ` data-highlight-language="${escapeHtml(normalized)}" data-highlight-source="${encodeURIComponent(code)}"` : ''}>${escapeHtml(code)}</code></pre>`
+      const label = parseCodeFenceInfo(language).language || language
+      return `<pre class="hljs"${label ? ` data-code-language="${escapeHtml(label)}"` : ''}><code${normalized ? ` data-highlight-language="${escapeHtml(normalized)}" data-highlight-source="${encodeURIComponent(code)}"` : ''}>${escapeHtml(code)}</code></pre>`
     },
   })
 

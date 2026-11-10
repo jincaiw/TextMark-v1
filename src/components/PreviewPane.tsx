@@ -9,6 +9,7 @@ import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
 import { clampScrollFraction } from '../lib/scrollFraction'
 import { attachDiagramInteractions, getDiagramController } from '../lib/diagramInteractions'
+import { blockIcon } from '../lib/blockIcons'
 import { editableMarkdownTables, synchronizeTableHeaderAccessibility, synchronizeTableSourceCoordinates } from '../lib/table'
 import { buildSearchPattern } from '../lib/search'
 import type { ContentWidth, Locale, RenderedMarkdown, SearchMode, TableEdit, TableEditRequest } from '../types'
@@ -284,12 +285,38 @@ export function PreviewPane(props: PreviewPaneProps) {
     })
 
     root.querySelectorAll('pre').forEach((pre) => {
-      const button = document.createElement('button')
-      button.className = 'copy-code-button'
-      button.type = 'button'
-      button.textContent = t(props.locale, 'copy')
-      button.setAttribute('aria-label', t(props.locale, 'copyCode'))
-      pre.append(button)
+      if (pre.parentElement?.classList.contains('md-code-wrap')) return
+      // The upstream code card: a hairline tray with a header row carrying the
+      // language and a pill of Wrap + Copy icon buttons (`decorateCodeBlocks`).
+      const wrap = document.createElement('div')
+      wrap.className = 'md-code-wrap'
+      pre.parentNode?.insertBefore(wrap, pre)
+      wrap.appendChild(pre)
+      const header = document.createElement('div')
+      header.className = 'md-code-header'
+      const language = document.createElement('span')
+      language.className = 'md-code-language'
+      language.textContent = pre.dataset.codeLanguage || 'text'
+      header.appendChild(language)
+      const actions = document.createElement('span')
+      actions.className = 'md-code-actions'
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.className = 'md-code-action md-code-toggle-wrap'
+      toggle.innerHTML = blockIcon('wrap')
+      toggle.title = t(props.locale, 'wrapCode')
+      toggle.setAttribute('aria-label', t(props.locale, 'wrapCode'))
+      toggle.setAttribute('aria-pressed', 'false')
+      actions.appendChild(toggle)
+      const copy = document.createElement('button')
+      copy.type = 'button'
+      copy.className = 'md-code-action md-code-copy'
+      copy.innerHTML = blockIcon('copy')
+      copy.title = t(props.locale, 'copyCode')
+      copy.setAttribute('aria-label', t(props.locale, 'copyCode'))
+      actions.appendChild(copy)
+      header.appendChild(actions)
+      wrap.insertBefore(header, pre)
     })
 
     if (props.searchQuery) {
@@ -363,22 +390,30 @@ export function PreviewPane(props: PreviewPaneProps) {
                   node.dataset.mermaidRendered = 'true'
                   const figure = node.closest('figure')
                   if (figure && !figure.querySelector('.diagram-hud')) {
+                    // The upstream diagram HUD: a zoom pill (out / level / in)
+                    // and an actions pill (copy / open in window), top-trailing,
+                    // revealed on hover (`mermaid-hud`).
                     const hud = document.createElement('div')
                     hud.className = 'diagram-hud'
-                    hud.innerHTML = `<button data-diagram-action="out" aria-label="${t(props.locale, 'zoomOut')}">−</button><output>100%</output><button data-diagram-action="in" aria-label="${t(props.locale, 'zoomIn')}">+</button><button data-diagram-action="reset" title="${t(props.locale, 'actualSize')}">1:1</button><button data-diagram-action="fit" title="${t(props.locale, 'actualSize')}" aria-pressed="true">↔</button><button data-diagram-action="open" title="${t(props.locale, 'openDiagramWindow')}">↗</button>`
+                    hud.setAttribute('aria-hidden', 'true')
+                    hud.innerHTML =
+                      `<div class="diagram-hud-group diagram-hud-zoom">` +
+                      `<button type="button" class="diagram-hud-btn" data-diagram-action="out" tabindex="-1" aria-label="${t(props.locale, 'zoomOut')}">${blockIcon('out')}</button>` +
+                      `<button type="button" class="diagram-hud-btn diagram-hud-level" data-diagram-action="reset" tabindex="-1" aria-label="${t(props.locale, 'resetZoom')}">100%</button>` +
+                      `<button type="button" class="diagram-hud-btn" data-diagram-action="in" tabindex="-1" aria-label="${t(props.locale, 'zoomIn')}">${blockIcon('in')}</button>` +
+                      `</div>` +
+                      `<div class="diagram-hud-group diagram-hud-actions">` +
+                      `<button type="button" class="diagram-hud-btn diagram-hud-copy" data-diagram-action="copy" tabindex="-1" aria-label="${t(props.locale, 'copy')}" title="${t(props.locale, 'copy')}">${blockIcon('copy')}</button>` +
+                      `<button type="button" class="diagram-hud-btn diagram-hud-popup" data-diagram-action="open" tabindex="-1" aria-label="${t(props.locale, 'openInWindow')}" title="${t(props.locale, 'openInWindow')}">${blockIcon('popup')}</button>` +
+                      `</div>`
                     figure.append(hud)
                   }
                   if (figure) {
-                    const output = figure.querySelector<HTMLOutputElement>('.diagram-hud output')
-                    const fit = figure.querySelector<HTMLButtonElement>('[data-diagram-action="fit"]')
+                    const level = figure.querySelector<HTMLButtonElement>('.diagram-hud-level')
                     diagramControllers.push(
                       attachDiagramInteractions(figure, node, {
                         onChange: (state) => {
-                          if (output) output.value = `${state.zoom}%`
-                          if (fit) {
-                            fit.setAttribute('aria-pressed', String(state.fitWidth))
-                            fit.title = t(props.locale, state.fitWidth ? 'actualSize' : 'fitWidth')
-                          }
+                          if (level) level.textContent = `${state.zoom}%`
                         },
                       }),
                     )
@@ -544,10 +579,29 @@ export function PreviewPane(props: PreviewPaneProps) {
         onClick={(event) => {
           setTableMenu(null)
           const target = event.target as HTMLElement
-          const copy = target.closest<HTMLButtonElement>('.copy-code-button')
-          if (copy) {
-            void navigator.clipboard.writeText(copy.parentElement?.querySelector('code')?.textContent ?? '')
-            copy.textContent = t(props.locale, 'copied')
+          const codeCopy = target.closest<HTMLButtonElement>('.md-code-copy')
+          if (codeCopy) {
+            const code = codeCopy.closest('.md-code-wrap')?.querySelector('pre > code')
+            void navigator.clipboard.writeText(code?.textContent ?? '').then(() => {
+              codeCopy.innerHTML = blockIcon('check')
+              codeCopy.classList.add('is-copied')
+              codeCopy.title = t(props.locale, 'codeCopied')
+              codeCopy.setAttribute('aria-label', t(props.locale, 'codeCopied'))
+              window.setTimeout(() => {
+                codeCopy.innerHTML = blockIcon('copy')
+                codeCopy.classList.remove('is-copied')
+                codeCopy.title = t(props.locale, 'copyCode')
+                codeCopy.setAttribute('aria-label', t(props.locale, 'copyCode'))
+              }, 1100)
+            })
+            return
+          }
+          const codeWrap = target.closest<HTMLButtonElement>('.md-code-toggle-wrap')
+          if (codeWrap) {
+            const wrapped = codeWrap.closest('.md-code-wrap')?.classList.toggle('is-wrapped') ?? false
+            codeWrap.setAttribute('aria-pressed', String(wrapped))
+            codeWrap.title = t(props.locale, wrapped ? 'unwrapCode' : 'wrapCode')
+            codeWrap.innerHTML = blockIcon(wrapped ? 'unwrap' : 'wrap')
             return
           }
           const diagramAction = target.closest<HTMLButtonElement>('[data-diagram-action]')
@@ -559,11 +613,28 @@ export function PreviewPane(props: PreviewPaneProps) {
               void openDiagram(figure)
               return
             }
+            if (action === 'copy') {
+              const sourceNode = figure.querySelector<HTMLElement>('.mermaid[data-mermaid-source]')
+              const source = sourceNode?.dataset.mermaidSource
+                ? decodeURIComponent(sourceNode.dataset.mermaidSource).replace(/\s+$/, '')
+                : ''
+              if (source)
+                void navigator.clipboard.writeText(source).then(() => {
+                  diagramAction.innerHTML = blockIcon('check')
+                  diagramAction.classList.add('is-copied')
+                  diagramAction.setAttribute('aria-label', t(props.locale, 'copied'))
+                  window.setTimeout(() => {
+                    diagramAction.innerHTML = blockIcon('copy')
+                    diagramAction.classList.remove('is-copied')
+                    diagramAction.setAttribute('aria-label', t(props.locale, 'copy'))
+                  }, 1100)
+                })
+              return
+            }
             const controller = getDiagramController(figure)
             if (action === 'in') controller?.zoomIn()
             else if (action === 'out') controller?.zoomOut()
             else if (action === 'reset') controller?.reset()
-            else if (action === 'fit') controller?.toggleFitWidth()
             return
           }
           const formula = target.closest<HTMLElement>('.katex')

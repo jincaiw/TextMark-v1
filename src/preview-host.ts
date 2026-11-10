@@ -3,7 +3,7 @@ import { renderMarkdownEnhanced } from './lib/markdown'
 import type { DocumentFont, Locale, ThemeColors, ThemeMode, ThemePreset } from './types'
 import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { loadOptionalRendererStyles } from './lib/optionalStyles'
-import { applyThemeColors } from './lib/theme'
+import { applyThemeColors, migrateThemePreset } from './lib/theme'
 import { sanitizeMermaidSvg } from './lib/sanitize'
 
 export interface PreviewRequest {
@@ -56,7 +56,7 @@ export async function renderPreview(request: PreviewRequest) {
   document.documentElement.lang = locale
   document.documentElement.dataset.theme = appearance
   applyUpstreamDocumentTokens(document.documentElement, request.documentFont)
-  applyThemeColors(document.documentElement, request.themePreset ?? 'normal', appearance, request.themeColors)
+  applyThemeColors(document.documentElement, migrateThemePreset(request.themePreset) ?? 'original', appearance, request.themeColors)
   const result = await renderMarkdownEnhanced(request.source, locale)
   await loadOptionalRendererStyles(result.optionalRenderers)
   root.dir = result.direction

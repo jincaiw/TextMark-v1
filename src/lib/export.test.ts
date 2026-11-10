@@ -30,7 +30,7 @@ describe('self-contained HTML export', () => {
     const root = document.createElement('article')
     root.className = 'markdown-body'
     root.innerHTML =
-      '<h1>导出</h1><img alt="local" src="data:image/png;base64,AA=="><img alt="missing" src=""><button class="copy-code-button">Copy</button><mark class="search-match">命中</mark>'
+      '<h1>导出</h1><img alt="local" src="data:image/png;base64,AA=="><img alt="missing" src=""><div class="md-code-header"><span class="md-code-language">ts</span><button class="md-code-copy">Copy</button></div><mark class="search-match">命中</mark>'
     document.body.append(root)
     const html = await buildSelfContainedHtml('示例.md', root)
     expect(html).toContain('<html lang="zh-CN">')
@@ -38,7 +38,8 @@ describe('self-contained HTML export', () => {
     expect(html).toContain('.injected-export-style')
     expect(html).toContain('<img alt="missing" class="asset-error">')
     expect(html).toContain("default-src 'none'")
-    expect(html).not.toContain('copy-code-button">Copy')
+    expect(html).not.toContain('md-code-language')
+    expect(html).not.toContain('md-code-copy')
     expect(html).not.toContain('search-match')
     expect(html).toContain('命中')
     root.remove()

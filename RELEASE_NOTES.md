@@ -1,3 +1,20 @@
+# TextMark v0.10.9
+
+TextMark 0.10.9 aligns the desktop reading and document chrome with Markdown Preview v0.0.71: a Customize Theme sheet, an update capsule, a share popover, code-block and diagram control pills, and the Find/tab menu shortcuts.
+
+TextMark 0.10.9 继续对标 Markdown Preview v0.0.71 的桌面阅读与文档界面：新增自定义主题面板、更新胶囊、分享浮层、代码块与图示控件胶囊，并补齐查找与标签切换菜单快捷键。
+
+## Highlights / 主要更新
+
+- 阅读外观：新增 Apple Books 式「自定义主题」面板，含字体列表、四个颜色槽与字距/词距/页边距滑杆；主题预设与调色板按明暗解析。
+- 更新胶囊：窗口右下角的 UpdatePill 承载检查/可用/下载/准备/就绪/安装/最新/已更新/失败九态，下载进度环、up-to-date 4 秒自动消失，取代关于页内的更新 UI。
+- 分享浮层：ToolbarShare 以文档图标、名称与「N 词 · 大小」副标题开头，Export/Print 行在上、Share/Copy 服务在下，支持外部点击与 Escape 关闭、焦点回补。
+- 代码与图示控件：代码块改为圆角卡片，头部含语言标签与换行/拷贝胶囊；图示悬停揭示缩放与动作两组 HUD；线图标复刻上游形状，导出与打印剥离这些屏幕控件。
+- 菜单：Edit 菜单补齐 Find and Replace…（⌘⌥F）、Use Selection for Find、Jump to Selection（⌘J），Help/应用菜单新增 Release Notes；⌘1–⌘8 选对应标签、⌘9 选最后一个（Safari 式）。
+- 门禁：前端 48 个测试文件、471 项测试，TypeScript、ESLint、生产构建、Rust `cargo check` 通过；13 个浏览器/CDP 场景（含 search-replace、tabs-find、tabs、find）均 `failures=[]`。浏览器证据不替代原生 AppKit 实机验收；详见 `outputs/desktop-review-20260918/TextMark-v0.0.71-对标交付记录-v1.0.md`。
+
+---
+
 # TextMark v0.10.8
 
 TextMark 0.10.8 keeps the document name in one place per window and repairs the browser acceptance scenario that had been timing out since the alignment capture script was rewritten.

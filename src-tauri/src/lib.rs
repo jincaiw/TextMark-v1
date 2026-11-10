@@ -351,6 +351,13 @@ fn clear_recent_files() -> AppResult<()> {
     Ok(())
 }
 
+/// The recent-files list for the project navigator's "Show Only Recent Files"
+/// toggle (upstream ProjectNavigatorFilterBar).
+#[tauri::command]
+fn list_recent_files() -> Vec<String> {
+    load_recent_files()
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionWindowGeometry {
@@ -870,6 +877,24 @@ fn build_menu(
         "Find Previous",
         Some("CmdOrCtrl+Shift+G"),
     )?;
+    let find_replace = item(
+        "find-replace",
+        "查找和替换…",
+        "Find and Replace…",
+        Some("CmdOrCtrl+Alt+F"),
+    )?;
+    let use_selection_find = item(
+        "use-selection-find",
+        "使用所选内容查找",
+        "Use Selection for Find",
+        None,
+    )?;
+    let jump_to_selection = item(
+        "jump-to-selection",
+        "跳到所选内容",
+        "Jump to Selection",
+        Some("CmdOrCtrl+J"),
+    )?;
     let edit_mode = item(
         "edit-mode",
         "切换编辑模式",
@@ -885,7 +910,14 @@ fn build_menu(
         .paste_with_text(if zh { "粘贴" } else { "Paste" })
         .select_all_with_text(if zh { "全选" } else { "Select All" })
         .separator()
-        .items(&[&find, &find_next, &find_prev])
+        .items(&[
+            &find,
+            &find_replace,
+            &find_next,
+            &find_prev,
+            &use_selection_find,
+            &jump_to_selection,
+        ])
         .separator()
         .item(&edit_mode);
     #[cfg(not(target_os = "macos"))]
@@ -1109,6 +1141,7 @@ fn build_menu(
         None,
     )?;
     let report_issue = item("report-issue", "报告问题…", "Report an Issue…", None)?;
+    let release_notes = item("release-notes", "发布说明", "Release Notes", None)?;
     let check_updates = item("check-updates", "检查更新…", "Check for Updates…", None)?;
     let install_cli = item("install-cli", "安装命令行工具…", "Install CLI…", None)?;
     let crash_reports = item(
@@ -1118,7 +1151,10 @@ fn build_menu(
         None,
     )?;
     #[cfg(target_os = "macos")]
-    let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" }).item(&help_item);
+    let help_builder = SubmenuBuilder::new(app, if zh { "帮助" } else { "Help" })
+        .item(&help_item)
+        .separator()
+        .item(&release_notes);
     #[cfg(not(target_os = "macos"))]
     let about = item("about", "关于 TextMark", "About TextMark", None)?;
     #[cfg(not(target_os = "macos"))]
@@ -1128,6 +1164,7 @@ fn build_menu(
         .items(&[
             &project_home,
             &releases,
+            &release_notes,
             &report_issue,
             &check_updates,
             &install_cli,
@@ -1889,6 +1926,83 @@ fn list_directory(path: String) -> AppResult<Vec<FileNode>> {
     scan_directory(&canonical, 5)
 }
 
+/// Picks a name that does not collide with an existing entry, appending
+/// " 2", " 3", … as the upstream project navigator's `uniqueURL` does.
+fn unique_navigator_path(folder: &Path, base: &str, extension: Option<&str>) -> PathBuf {
+    let candidate = |name: &str| match extension {
+        Some(ext) if !ext.is_empty() => folder.join(format!("{name}.{ext}")),
+        _ => folder.join(name),
+    };
+    let mut target = candidate(base);
+    let mut number = 2;
+    while target.exists() {
+        target = candidate(&format!("{base} {number}"));
+        number += 1;
+    }
+    target
+}
+
+/// Creates a new Markdown file (with `contents`) or a folder (when `contents`
+/// is None) under `folder`, returning the created path. Mirrors the upstream
+/// project navigator's `createItem`: a unique default name, no overwrite.
+#[tauri::command]
+fn create_navigator_item(
+    folder: String,
+    base: String,
+    extension: Option<String>,
+    contents: Option<String>,
+) -> AppResult<String> {
+    let directory = PathBuf::from(folder)
+        .canonicalize()
+        .map_err(|_| AppError { code: "not_found" })?;
+    if !directory.is_dir() {
+        return Err(AppError {
+            code: "invalid_path",
+        });
+    }
+    let target = unique_navigator_path(&directory, &base, extension.as_deref());
+    match contents {
+        Some(text) => {
+            let mut file = AtomicWriteFile::open(&target).map_err(io_error)?;
+            file.write_all(text.as_bytes()).map_err(io_error)?;
+            file.commit().map_err(io_error)?;
+        }
+        None => {
+            fs::create_dir(&target).map_err(io_error)?;
+        }
+    }
+    Ok(target.to_string_lossy().to_string())
+}
+
+/// Copies the reader's picked files into `folder`, giving each a unique name
+/// so an existing file is never overwritten (upstream `addFiles`).
+#[tauri::command]
+fn copy_files_to_folder(folder: String, sources: Vec<String>) -> AppResult<()> {
+    let directory = PathBuf::from(folder)
+        .canonicalize()
+        .map_err(|_| AppError { code: "not_found" })?;
+    if !directory.is_dir() {
+        return Err(AppError {
+            code: "invalid_path",
+        });
+    }
+    for source in sources {
+        let from = PathBuf::from(&source);
+        if !from.is_file() {
+            continue;
+        }
+        let base = from
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .unwrap_or("Untitled");
+        let extension = from.extension().and_then(|value| value.to_str());
+        let target = unique_navigator_path(&directory, base, extension);
+        fs::copy(&from, &target).map_err(io_error)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn read_local_asset(
     base_dir: String,
@@ -2493,6 +2607,8 @@ pub fn run() {
             rename_pasted_image,
             temp_export_path,
             list_directory,
+            create_navigator_item,
+            copy_files_to_folder,
             read_local_asset,
             check_update_channel,
             install_update_channel,
@@ -2504,6 +2620,7 @@ pub fn run() {
             refresh_menu,
             record_recent_file,
             clear_recent_files,
+            list_recent_files,
             discover_applications,
             share_source,
             load_settings,

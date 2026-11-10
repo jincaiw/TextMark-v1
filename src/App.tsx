@@ -15,15 +15,17 @@ import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
 import { PanelResizer } from './components/PanelResizer'
 import { SettingsDialog } from './components/SettingsDialog'
+import { CustomizeThemeSheet } from './components/CustomizeThemeSheet'
 import { UnsavedCloseDialog } from './components/UnsavedCloseDialog'
 import { SettingsWindow } from './components/SettingsWindow'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
 import { ToolbarCustomizer } from './components/ToolbarCustomizer'
+import { UpdatePill } from './components/UpdatePill'
 import { useDocument } from './hooks/useDocument'
 import { useSettings } from './hooks/useSettings'
 import { useTheme } from './hooks/useTheme'
-import { useUpdater } from './hooks/useUpdater'
+import { useUpdater, type UpdateStatus } from './hooks/useUpdater'
 import { useMarkdownRenderer } from './hooks/useMarkdownRenderer'
 import { useTextmarkDeepLinks } from './hooks/useTextmarkDeepLinks'
 import { clampScrollFraction } from './lib/scrollFraction'
@@ -31,12 +33,13 @@ import { anchorForOffset, caretForReturnToEditor, lineForAnchor, offsetForLine, 
 import { createPreviewHydrationGate, type PreviewHydrationGate } from './lib/previewHydration'
 import { resolveAlwaysOnTopTransition } from './lib/alwaysOnTop'
 import { t } from './lib/i18n'
-import { externalMenuUrl } from './lib/menuCommands'
+import { externalMenuUrl, tabIndexForShortcut } from './lib/menuCommands'
 import {
   clearRecentFiles,
   detectPlatform,
   detectRuntime,
   discoverApplications,
+  getAppVersion,
   isMacos,
   isTauri,
   installCli,
@@ -63,28 +66,64 @@ import { applyUpstreamDocumentTokens } from './lib/designTokens'
 import { applyThemeColors, THEME_PRESETS } from './lib/theme'
 import { shareMarkdownSource } from './lib/share'
 import { pdfCapability } from './lib/pdfCapability'
-import type { EditorSessionState, ExternalApplication, FormatCommand, InspectorMode, SearchMode, SidebarMode, ViewMode } from './types'
+import type {
+  DocumentStats,
+  EditorSessionState,
+  ExternalApplication,
+  FormatCommand,
+  InspectorMode,
+  SearchMode,
+  SidebarMode,
+  ViewMode,
+} from './types'
 
 const EditorPane = lazy(() => import('./components/EditorPane').then((module) => ({ default: module.EditorPane })))
 import { nextZoomStep as nextZoom } from './constants'
 function DocumentApp() {
-  const {
-    settings,
-    setLocale,
-    setTheme,
-    setContentWidth,
-    setZoom,
-    setEditorFontSize,
-    setLineHeight,
-    setPagePaddingHorizontal,
-    setDocumentFont,
-    patch,
-  } = useSettings()
+  const { settings, setLocale, setTheme, setContentWidth, setZoom, patch } = useSettings()
   const documents = useDocument(settings.locale, {
     autoSaveIntervalMinutes: settings.autoSaveIntervalMinutes,
     openDocumentsInTabs: settings.openDocumentsInTabs,
   })
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
+  // Greet a relaunch into a new version with the upstream "Updated to …"
+  // capsule; the first launch only records the version silently.
+  useEffect(() => {
+    let active = true
+    void getAppVersion().then((version) => {
+      if (!active || !version) return
+      const previous = localStorage.getItem('textmark.lastSeenVersion')
+      localStorage.setItem('textmark.lastSeenVersion', version)
+      if (previous && previous !== version) updater.showUpdated(version)
+    })
+    return () => {
+      active = false
+    }
+  }, [updater.showUpdated])
+  const openWhatsNew = () => {
+    const url = 'https://github.com/jincaiw/TextMark-v1/releases'
+    if (isTauri()) void openUrl(url)
+    else window.open(url, '_blank', 'noreferrer')
+  }
+  // Dev-only capsule demo (upstream's -MarkdownPreview.updatePillDemo): the
+  // capture harness photographs each phase without a real release.
+  const [demoStatus, setDemoStatus] = useState<UpdateStatus | null>(null)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const demo = new URLSearchParams(window.location.search).get('updatePillDemo')
+    if (!demo) return
+    const phases: Record<string, UpdateStatus> = {
+      checking: { state: 'checking' },
+      available: { state: 'available', version: '9.9.9' },
+      downloading: { state: 'downloading', version: '9.9.9', progress: 42 },
+      preparing: { state: 'preparing', version: '9.9.9', progress: 100 },
+      ready: { state: 'ready', version: '9.9.9' },
+      upToDate: { state: 'current' },
+      failed: { state: 'error', errorCode: 'update_network' },
+      updated: { state: 'updated', version: '9.9.9' },
+    }
+    if (phases[demo]) setDemoStatus(phases[demo])
+  }, [])
   const [viewMode, setViewMode] = useState<ViewMode>('preview')
   const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('textmark.sidebarVisible') !== 'false')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
@@ -95,16 +134,20 @@ function DocumentApp() {
   )
   // Inspector 默认关闭，因此只有显式存过 'true' 才恢复——与 sidebarVisible 的「默认开」相反。
   const [inspectorVisible, setInspectorVisible] = useState(() => localStorage.getItem('textmark.inspectorVisible') === 'true')
-  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(
-    () => (localStorage.getItem('textmark.inspectorMode') as InspectorMode) || 'document',
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() =>
+    // The inspector converged to Document/Properties; older persisted modes
+    // (outline/tags/outgoing/backlinks) fall back to Document.
+    localStorage.getItem('textmark.inspectorMode') === 'properties' ? 'properties' : 'document',
   )
   const [inspectorWidth, setInspectorWidth] = useState(() =>
     Math.min(500, Math.max(270, Number(localStorage.getItem('textmark.inspectorWidth')) || 270)),
   )
   const [toolbarVisible, setToolbarVisible] = useState(true)
   const [pendingFormat, setPendingFormat] = useState<FormatCommand | null>(null)
+  const [pendingRevealSelection, setPendingRevealSelection] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsPane, setSettingsPane] = useState<'general' | 'appearance' | 'privacy' | 'about'>('general')
+  const [settingsPane, setSettingsPane] = useState<'general' | 'reading' | 'appearance' | 'privacy' | 'advanced' | 'about'>('general')
+  const [customizeThemeOpen, setCustomizeThemeOpen] = useState(false)
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const alwaysOnTop = settings.alwaysOnTop
   // Ref keeps the keydown/menu closures reading the live value without adding
@@ -119,6 +162,7 @@ function DocumentApp() {
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
   const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
   const [pendingEditorSelection, setPendingEditorSelection] = useState<EditorSessionState['selection'] | null>(null)
+  const [selectionStats, setSelectionStats] = useState<DocumentStats | null>(null)
   const [pendingPreviewLine, setPendingPreviewLine] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [replacement, setReplacement] = useState('')
@@ -197,11 +241,30 @@ function DocumentApp() {
     void configureCrashReporting(settings.crashReports)
   }, [settings.crashReports])
   useEffect(() => {
-    applyUpstreamDocumentTokens(document.documentElement, settings.documentFont, {
+    // A theme is a whole reading look: the preset carries its reading face and
+    // body weight (upstream ThemePreset.font/boldText), applied on top of the
+    // explicit user preferences from the Customize panel.
+    const preset = THEME_PRESETS[settings.themePreset]
+    applyUpstreamDocumentTokens(document.documentElement, settings.documentFont || preset.font, {
       lineHeight: settings.lineHeight,
       pagePaddingHorizontal: settings.pagePaddingHorizontal,
+      boldText: settings.boldText || preset.boldText,
+      readerCustomized: settings.readerCustomized,
+      characterSpacingPercent: settings.characterSpacingPercent,
+      wordSpacingPercent: settings.wordSpacingPercent,
+      marginsPercent: settings.marginsPercent,
     })
-  }, [settings.documentFont, settings.lineHeight, settings.pagePaddingHorizontal])
+  }, [
+    settings.documentFont,
+    settings.lineHeight,
+    settings.pagePaddingHorizontal,
+    settings.themePreset,
+    settings.boldText,
+    settings.readerCustomized,
+    settings.characterSpacingPercent,
+    settings.wordSpacingPercent,
+    settings.marginsPercent,
+  ])
   useEffect(() => {
     applyThemeColors(document.documentElement, settings.themePreset, resolvedTheme, settings.themeColors)
   }, [resolvedTheme, settings.themeColors, settings.themePreset])
@@ -418,7 +481,7 @@ function DocumentApp() {
       else flash(settings.locale === 'zh-CN' ? '安装命令行工具失败。' : 'Could not install the command-line tools.')
     })
   }
-  const openSettings = (pane: 'general' | 'appearance' | 'privacy' | 'about' = 'general') => {
+  const openSettings = (pane: 'general' | 'reading' | 'appearance' | 'privacy' | 'advanced' | 'about' = 'general') => {
     setSettingsPane(pane)
     // Use the already-loaded document WebView on Windows. On some WebView2
     // runtimes a freshly-created secondary settings window can show only a
@@ -691,6 +754,9 @@ function DocumentApp() {
     else if (command === 'find') setFindOpen(true)
     else if (command === 'find-next') nextMatch(1)
     else if (command === 'find-prev') nextMatch(-1)
+    else if (command === 'find-replace') openFindReplace()
+    else if (command === 'use-selection-find') useSelectionForFind()
+    else if (command === 'jump-to-selection') jumpToSelection()
     else if (command === 'edit-mode') switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
     else if (command === 'sidebar') setSidebarVisible((value) => !value)
     else if (command === 'sidebar-hide') setSidebarVisible(false)
@@ -750,6 +816,32 @@ function DocumentApp() {
   }
   const nextMatch = (direction: 1 | -1) =>
     setSearchIndex((current) => (searchCount ? (current + direction + searchCount) % searchCount : 0))
+  // Upstream Find and Replace… opens the find bar with the replace field; the
+  // replace actions only apply in the editor, so bring the editor forward too.
+  const openFindReplace = () => {
+    switchViewMode('edit')
+    setFindOpen(true)
+  }
+  const useSelectionForFind = () => {
+    const text = editorRef.current?.getSelectionText() || window.getSelection()?.toString() || ''
+    if (text) {
+      setSearchQuery(text)
+      setSearchIndex(0)
+    }
+    setFindOpen(true)
+  }
+  const jumpToSelection = () => {
+    if (viewModeRef.current === 'edit') {
+      editorRef.current?.revealSelection()
+      return
+    }
+    // From the preview the editor mounts through Suspense; restore the last
+    // selection and center it once the editor has applied its initial position.
+    const saved = editorExitSelectionRef.current ?? editorState?.selection ?? null
+    switchViewMode('edit')
+    setPendingEditorSelection(saved)
+    setPendingRevealSelection(true)
+  }
   const replaceCurrent = () => {
     if (viewMode !== 'edit' || !searchQuery) return
     const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, mode: searchMode }) ?? 0
@@ -899,6 +991,14 @@ function DocumentApp() {
         toggleAlwaysOnTop()
         return
       }
+      // Safari-style tab switching: ⌘1–⌘8 pick that tab, ⌘9 the last one.
+      // Shift stays free for ⌘⇧7/⌘⇧9 list formats; alt for heading levels.
+      if (!event.altKey && !event.shiftKey && !(event.ctrlKey && event.metaKey) && /^[1-9]$/.test(key)) {
+        event.preventDefault()
+        const index = tabIndexForShortcut(key, documents.sessions.length)
+        if (index != null) activateDocumentTab(documents.sessions[index].id)
+        return
+      }
       if (key === 's' && event.shiftKey) {
         event.preventDefault()
         void documents.saveAs()
@@ -931,12 +1031,18 @@ function DocumentApp() {
       } else if (key === 'w') {
         event.preventDefault()
         documents.closeSession(documents.activeId)
+      } else if (key === 'f' && event.altKey) {
+        event.preventDefault()
+        openFindReplace()
       } else if (key === 'f') {
         event.preventDefault()
         setFindOpen(true)
       } else if (key === 'g') {
         event.preventDefault()
         nextMatch(event.shiftKey ? -1 : 1)
+      } else if (key === 'j') {
+        event.preventDefault()
+        jumpToSelection()
       } else if (key === 'p') {
         event.preventDefault()
         void printDocument()
@@ -1143,9 +1249,30 @@ function DocumentApp() {
   }
 
   const chooseThemePreset = (themePreset: keyof typeof THEME_PRESETS) => {
-    const flavor = THEME_PRESETS[themePreset].flavor
-    patch({ themePreset, theme: flavor, themeColors: {} })
+    const preset = THEME_PRESETS[themePreset]
+    // Upstream: applying a preset fills its whole look — appearance, reading
+    // face, body weight — and clears color overrides; Original clears all
+    // overrides so the look matches a fresh install.
+    patch({
+      themePreset,
+      theme: preset.flavor,
+      themeColors: {},
+      documentFont: preset.font,
+      boldText: preset.boldText,
+    })
   }
+  // Customize Theme (upstream CustomizeThemeView): edits apply as one draft on
+  // Done; Reset Theme restores the preset's whole look in one step.
+  const readingLook = {
+    documentFont: settings.documentFont,
+    themeColors: settings.themeColors,
+    boldText: settings.boldText,
+    readerCustomized: settings.readerCustomized,
+    characterSpacingPercent: settings.characterSpacingPercent,
+    wordSpacingPercent: settings.wordSpacingPercent,
+    marginsPercent: settings.marginsPercent,
+  }
+  const applyReadingLook = (look: typeof readingLook) => patch(look)
   const chooseSidebarMode = (mode: SidebarMode) => {
     setSidebarMode(mode)
     setSidebarVisible(true)
@@ -1171,6 +1298,9 @@ function DocumentApp() {
         alwaysOnTop={alwaysOnTop}
         zoom={settings.zoom}
         searchQuery={searchQuery}
+        documentName={documents.document.name}
+        wordCount={stats.words}
+        sizeBytes={documents.document.sizeBytes ?? new TextEncoder().encode(documents.document.contents).byteLength}
         onToggleSidebar={() => setSidebarVisible((value) => !value)}
         onSidebarModeChange={chooseSidebarMode}
         onViewModeChange={switchViewMode}
@@ -1204,7 +1334,7 @@ function DocumentApp() {
         themePreset={settings.themePreset}
         onThemeChange={setTheme}
         onThemePresetChange={chooseThemePreset}
-        onCustomizeAppearance={() => openSettings('appearance')}
+        onCustomizeAppearance={() => setCustomizeThemeOpen(true)}
         onSettings={() => openSettings()}
         onCustomizeToolbar={() => setToolbarOpen(true)}
         onClose={requestClose}
@@ -1244,6 +1374,9 @@ function DocumentApp() {
                 onCopyFilePath={(path) => void navigator.clipboard.writeText(path)}
                 onCopyFileContents={(path) => void readDocument(path).then((file) => navigator.clipboard.writeText(file.contents))}
                 onOutlineSelect={selectOutline}
+                newFileFolder={documents.newFileFolder}
+                onCreateItem={(contents) => void documents.createItem(contents)}
+                onAddFiles={() => void documents.addFiles()}
               />
               <PanelResizer side="sidebar" width={sidebarWidth} min={230} max={400} onWidthChange={setSidebarWidth} />
             </>
@@ -1294,8 +1427,11 @@ function DocumentApp() {
                   initialSelection={pendingEditorSelection}
                   onInitialPositionApplied={clearPendingEditorPosition}
                   onStateChange={documents.reportEditorState}
+                  onSelectionStatsChange={setSelectionStats}
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
+                  initialRevealSelection={pendingRevealSelection}
+                  onInitialSelectionRevealed={() => setPendingRevealSelection(false)}
                   onChange={documents.updateContents}
                   onPasteImage={documents.pasteImage}
                   baseDirectory={documents.baseDirectory}
@@ -1338,6 +1474,14 @@ function DocumentApp() {
               />
             )}
             {viewMode === 'edit' ? <div className="editor-status" aria-label={`Line ${cursor.line}, column ${cursor.column}`} /> : null}
+            <UpdatePill
+              status={demoStatus ?? updater.status}
+              locale={settings.locale}
+              onDownload={() => void updater.install()}
+              onRelaunch={() => void updater.relaunch()}
+              onWhatsNew={openWhatsNew}
+              onClose={updater.dismiss}
+            />
           </div>
           {inspectorVisible ? (
             <>
@@ -1345,18 +1489,16 @@ function DocumentApp() {
               <Inspector
                 locale={settings.locale}
                 mode={inspectorMode}
-                outline={rendered.outline}
                 document={documents.document}
                 stats={stats}
+                selectionStats={viewMode === 'edit' ? selectionStats : null}
                 frontmatter={rendered.frontmatter}
                 onModeChange={(mode) => {
                   setInspectorMode(mode)
                   setInspectorVisible(true)
                 }}
-                onOutlineSelect={selectOutline}
                 onCopyPath={(path) => void navigator.clipboard.writeText(path)}
                 onRevealPath={(path) => void revealInFileManager(path)}
-                onClose={() => setInspectorVisible(false)}
               />
             </>
           ) : null}
@@ -1441,10 +1583,35 @@ function DocumentApp() {
         onDisplayModeChange={(toolbarDisplay) => patch({ toolbarDisplay })}
         onClose={() => setToolbarOpen(false)}
       />
+      <CustomizeThemeSheet
+        open={customizeThemeOpen}
+        locale={settings.locale}
+        theme={settings.theme}
+        themePreset={settings.themePreset}
+        look={readingLook}
+        onApply={(look) => {
+          applyReadingLook(look)
+          setCustomizeThemeOpen(false)
+        }}
+        onCancel={() => setCustomizeThemeOpen(false)}
+        onResetTheme={() => {
+          chooseThemePreset(settings.themePreset)
+          applyReadingLook({
+            documentFont: THEME_PRESETS[settings.themePreset].font,
+            themeColors: {},
+            boldText: THEME_PRESETS[settings.themePreset].boldText,
+            readerCustomized: false,
+            characterSpacingPercent: 0,
+            wordSpacingPercent: 0,
+            marginsPercent: 0,
+          })
+        }}
+      />
       <SettingsDialog
         open={settingsOpen}
         initialPane={settingsPane}
         locale={settings.locale}
+
         crashReports={settings.crashReports}
         crashReportsAvailable={crashReportingAvailable}
         updateChannel={settings.updateChannel}
@@ -1453,12 +1620,9 @@ function DocumentApp() {
         updateStatus={updater.status}
         onCheckUpdate={() => void updater.checkNow()}
         onInstallUpdate={() => void updater.install()}
+        onRelaunchUpdate={() => void updater.relaunch()}
         theme={settings.theme}
         contentWidth={settings.contentWidth}
-        editorFontSize={settings.editorFontSize}
-        lineHeight={settings.lineHeight}
-        pagePaddingHorizontal={settings.pagePaddingHorizontal}
-        documentFont={settings.documentFont}
         themePreset={settings.themePreset}
         themeColors={settings.themeColors}
         autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
@@ -1473,20 +1637,18 @@ function DocumentApp() {
         onAutoCheckUpdatesChange={(autoCheckUpdates) => patch({ autoCheckUpdates })}
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
-        onEditorFontSizeChange={setEditorFontSize}
-        onLineHeightChange={setLineHeight}
-        onPagePaddingHorizontalChange={setPagePaddingHorizontal}
-        onDocumentFontChange={setDocumentFont}
         onThemePresetChange={chooseThemePreset}
         onThemeColorChange={(scheme, slot, color) =>
           patch({ themeColors: { ...settings.themeColors, [scheme]: { ...settings.themeColors[scheme], [slot]: color.toUpperCase() } } })
         }
         onThemeColorsReset={() => patch({ themeColors: {} })}
+        onCustomizeTheme={() => setCustomizeThemeOpen(true)}
         onAutoSaveIntervalChange={(autoSaveIntervalMinutes) => patch({ autoSaveIntervalMinutes })}
         onOpenDocumentsInTabsChange={(openDocumentsInTabs) => patch({ openDocumentsInTabs })}
         onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
         onZoomChange={setZoom}
         onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
+        onInstallCli={installCliAction}
         onClose={() => {
           setSettingsOpen(false)
         }}

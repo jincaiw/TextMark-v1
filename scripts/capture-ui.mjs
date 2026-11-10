@@ -237,7 +237,7 @@ if (toolbarFixtures[scenario]) {
   await waitFor("isVisible(document.querySelector('.markdown-body h1'))", '配置场景初始化')
   await send('Runtime.evaluate', {
     expression: `(() => {
-      const key = 'textmark.settings.v7';
+      const key = 'textmark.settings.v8';
       localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) || '{}'), ...${JSON.stringify(toolbarFixtures[scenario])} }));
       localStorage.setItem('textmark.sidebarWidth', '400');
       location.reload();
@@ -271,13 +271,13 @@ if (scenario === 'edit') {
 } else if (scenario === 'appearance' || scenario === 'appearance-dark') {
   const summarySelector = 'details.themes-and-settings > summary'
   const panelSelector = 'details.themes-and-settings > div.appearance-popover'
-  const settingsExpression = "JSON.parse(localStorage.getItem('textmark.settings.v7') || '{}')"
+  const settingsExpression = "JSON.parse(localStorage.getItem('textmark.settings.v8') || '{}')"
   const openCondition = `([...document.querySelectorAll(${JSON.stringify(summarySelector)})].some((summary) =>
     isVisible(summary) && summary.parentElement.open && summary.getAttribute('aria-expanded') === 'true' &&
     isVisible(summary.parentElement.querySelector('div.appearance-popover'))))`
   const closedCondition = `![...document.querySelectorAll('details.themes-and-settings')].some((details) => details.open) &&
     ![...document.querySelectorAll(${JSON.stringify(panelSelector)})].some(isVisible)`
-  const presetIds = ['normal', 'charcoal', 'redGraphite', 'darkGraphite', 'solarizedLight', 'solarizedDark', 'dracula']
+  const presetIds = ['original', 'quiet', 'paper', 'bold', 'calm', 'focus', 'graphite', 'dusk', 'midnight']
   appearance = {
     assertions: {},
     actions: [],
@@ -381,6 +381,16 @@ if (scenario === 'edit') {
           selectedPane: settingsDialog?.querySelector('.settings-nav button.selected')?.textContent.trim() ?? null,
           appearancePaneVisible: isVisible(settingsDialog?.querySelector('.settings-pane .appearance-settings')),
         },
+        customizeSheet: {
+          visible: isVisible(document.querySelector('.customize-theme-sheet')),
+          fontRows: document.querySelectorAll('.customize-theme-fonts button').length,
+          fontFacesDistinct: (() => {
+            const faces = [...document.querySelectorAll('.customize-theme-fonts button')].map(
+              (button) => button.style.fontFamily,
+            );
+            return faces.length > 0 && new Set(faces).size === faces.length;
+          })(),
+        },
       };
     })()`)
   }
@@ -399,12 +409,12 @@ if (scenario === 'edit') {
       `${phase}.threeColumns`,
       geometry.columns.length === 3 &&
         geometry.gridTemplateColumns.split(/\s+/).length === 3 &&
-        JSON.stringify(geometry.rowCounts) === '[3,3,1]',
+        JSON.stringify(geometry.rowCounts) === '[3,3,3]',
     )
     assert(`${phase}.popoverWithinViewport`, snapshot.panel.visible && snapshot.panel.withinViewport)
     assert(
       `${phase}.presetsWithinViewport`,
-      geometry.presets.length === 7 && geometry.presets.every((preset) => preset.visible && preset.withinViewport),
+      geometry.presets.length === 9 && geometry.presets.every((preset) => preset.visible && preset.withinViewport),
     )
     assert(
       `${phase}.controlsWithinViewport`,
@@ -452,7 +462,7 @@ if (scenario === 'edit') {
     assertOpen('initial', initial)
     assertGeometry('initial', initial)
     assert('initial.zoom100', initial.settings.zoom === 100)
-    assert('initial.normalSystem', initial.settings.themePreset === 'normal' && initial.settings.theme === 'system')
+    assert('initial.normalSystem', initial.settings.themePreset === 'original' && initial.settings.theme === 'system')
     // 文案来自 src/lib/i18n.ts，避免命中旧的文本大小或顶部缩放控件。
     await mouseClick(
       `${panelSelector} .appearance-text-size button[aria-label="放大"], ${panelSelector} .appearance-text-size button[aria-label="Zoom In"]`,
@@ -462,21 +472,21 @@ if (scenario === 'edit') {
     const zoomed = await capture('zoomIn')
     assert('zoomIn.100To110', initial.settings.zoom === 100 && zoomed.settings.zoom === 110)
     assertOpen('zoomIn', zoomed)
-    await selectPreset('dracula', 'selectDracula')
-    await checkTheme('dracula', 'dracula', 'dark', 'dark', '#363846')
-    await selectPreset('normal', 'selectNormal')
-    await checkTheme('normal', 'normal', 'system', 'light', '#FFFFFF')
+    await selectPreset('midnight', 'selectMidnight')
+    await checkTheme('midnight', 'midnight', 'dark', 'dark', '#363846')
+    await selectPreset('original', 'selectOriginal')
+    await checkTheme('original', 'original', 'system', 'light', '#FFFFFF')
     for (const [mode, resolved, color] of [
       ['light', 'light', '#FFFFFF'],
-      ['dark', 'dark', '#1E1E1E'],
+      ['dark', 'dark', '#1C1C1C'],
       ['system', 'light', '#FFFFFF'],
     ]) {
       await mouseClick(`${panelSelector} .appearance-cycle`, `cycle.${mode}`)
-      await checkTheme(`cycle.${mode}`, 'normal', mode, resolved, color)
+      await checkTheme(`cycle.${mode}`, 'original', mode, resolved, color)
     }
     for (const [index, scheme] of ['light', 'dark', 'light'].entries()) {
       await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] })
-      const snapshot = await checkTheme(`media.${index}.${scheme}`, 'normal', 'system', scheme, scheme === 'dark' ? '#1E1E1E' : '#FFFFFF')
+      const snapshot = await checkTheme(`media.${index}.${scheme}`, 'original', 'system', scheme, scheme === 'dark' ? '#1C1C1C' : '#FFFFFF')
       assert(`media.${index}.matchMedia`, snapshot.prefersDark === (scheme === 'dark'))
       appearance.mediaEmulation.samples.push({ requested: scheme, ...snapshot })
     }
@@ -487,8 +497,8 @@ if (scenario === 'edit') {
         light.css['--window'] !== dark.css['--window'] &&
         light.css['--window'] === lightAgain.css['--window'],
     )
-    await selectPreset('dracula', 'selectDraculaBeforeReload')
-    const beforeReload = await checkTheme('beforeReload', 'dracula', 'dark', 'dark', '#363846')
+    await selectPreset('midnight', 'selectMidnightBeforeReload')
+    const beforeReload = await checkTheme('beforeReload', 'midnight', 'dark', 'dark', '#363846')
     // 不改写存储；必须穿过真实 reload，避免读到旧文档而误报持久化成功。
     await send('Page.reload')
     await delay(200)
@@ -499,7 +509,7 @@ if (scenario === 'edit') {
         'reload 后新文档预览就绪',
       ),
     )
-    const reloaded = await checkTheme('reloaded', 'dracula', 'dark', 'dark', '#363846', false)
+    const reloaded = await checkTheme('reloaded', 'midnight', 'dark', 'dark', '#363846', false)
     assert('reload.timeOriginChanged', reloaded.timeOrigin !== beforeReload.timeOrigin)
     assert(
       'reload.colorsPersisted',
@@ -507,7 +517,7 @@ if (scenario === 'edit') {
     )
     await openPopover('afterReloadOpen')
     // 先将焦点移入浮层，确保 Escape 的焦点恢复不是原本就在 summary 上的假阳性。
-    await selectPreset('dracula', 'focusPresetBeforeEscape')
+    await selectPreset('midnight', 'focusPresetBeforeEscape')
     const beforeEscape = await capture('beforeEscape')
     assertOpen('beforeEscape', beforeEscape)
     assert('escape.focusStartedInsidePopover', beforeEscape.focus.inPopover)
@@ -553,35 +563,29 @@ if (scenario === 'edit') {
     }
     await openPopover('afterOutsideOpen')
     await mouseClick(`${panelSelector} .appearance-customize`, 'customize')
-    await waitFor(
-      "isVisible(document.querySelector('.settings-dialog .settings-pane .appearance-settings'))",
-      '自定义按钮打开设置 appearance pane',
-    )
+    await waitFor("isVisible(document.querySelector('.customize-theme-sheet'))", '自定义按钮打开自定主题面板')
+    await mouseClick('.customize-theme-sheet .customize-theme-font-header', 'expandFontList')
     const customized = await capture('customize')
-    assert(
-      'customize.appearancePane',
-      customized.settingsDialog.visible &&
-        customized.settingsDialog.appearancePaneVisible &&
-        /^(外观|Appearance)$/.test(customized.settingsDialog.selectedPane ?? ''),
-    )
+    assert('customize.customizeSheet', customized.customizeSheet.visible && customized.customizeSheet.fontRows === 12)
+    assert('customize.fontFaceApplied', customized.customizeSheet.fontFacesDistinct)
     assert('customize.popoverClosed', !customized.open && !customized.panel.visible)
-    await mouseClick('.settings-dialog > header button', 'closeSettings')
+    await mouseClick('.customize-theme-sheet .customize-theme-cancel', 'closeCustomizeSheet')
     assert(
-      'customize.settingsClosed',
+      'customize.sheetClosed',
       await waitFor(
-        "!isVisible(document.querySelector('.settings-dialog')) && isVisible(document.querySelector('.markdown-body h1'))",
-        '关闭设置返回预览',
+        "!isVisible(document.querySelector('.customize-theme-sheet')) && isVisible(document.querySelector('.markdown-body h1'))",
+        '关闭自定主题面板返回预览',
       ),
     )
     await openPopover('finalOpen')
     if (scenario === 'appearance') {
-      await selectPreset('normal', 'finalSelectNormal')
-      await checkTheme('finalNormal', 'normal', 'system', 'light', '#FFFFFF')
+      await selectPreset('original', 'finalSelectOriginal')
+      await checkTheme('finalOriginal', 'original', 'system', 'light', '#FFFFFF')
       await mouseClick(`${panelSelector} .appearance-cycle`, 'finalSelectLight')
     }
     const final = await checkTheme(
       'final',
-      scenario === 'appearance' ? 'normal' : 'dracula',
+      scenario === 'appearance' ? 'original' : 'midnight',
       scenario === 'appearance' ? 'light' : 'dark',
       scenario === 'appearance' ? 'light' : 'dark',
       scenario === 'appearance' ? '#FFFFFF' : '#363846',
@@ -1220,9 +1224,9 @@ if (scenario === 'edit') {
   // dark appearance and reload so this scenario exercises the real path.
   await send('Runtime.evaluate', {
     expression: `(() => {
-    const key = 'textmark.settings.v7';
+    const key = 'textmark.settings.v8';
     const stored = JSON.parse(localStorage.getItem(key) || '{}');
-    localStorage.setItem(key, JSON.stringify({ ...stored, theme: 'dark', themePreset: 'darkGraphite' }));
+    localStorage.setItem(key, JSON.stringify({ ...stored, theme: 'dark', themePreset: 'graphite' }));
     location.reload();
     return true;
   })()`,
@@ -1252,8 +1256,8 @@ if (scenario === 'dark') expectedCondition += " && document.documentElement.data
 if (appearance) {
   const dark = scenario === 'appearance-dark'
   expectedCondition += ` && document.documentElement.dataset.theme === '${dark ? 'dark' : 'light'}' &&
-    JSON.parse(localStorage.getItem('textmark.settings.v7') || '{}').themePreset === '${dark ? 'dracula' : 'normal'}' &&
-    JSON.parse(localStorage.getItem('textmark.settings.v7') || '{}').theme === '${dark ? 'dark' : 'light'}' &&
+    JSON.parse(localStorage.getItem('textmark.settings.v8') || '{}').themePreset === '${dark ? 'midnight' : 'original'}' &&
+    JSON.parse(localStorage.getItem('textmark.settings.v8') || '{}').theme === '${dark ? 'dark' : 'light'}' &&
     isVisible(document.querySelector('.markdown-body h1')) && !isVisible(document.querySelector('.settings-dialog'))`
 }
 const scenarioReady = await waitFor(expectedCondition, `场景 ${scenario}，条件：${expectedCondition}`)

@@ -12,18 +12,7 @@ import { THEME_PRESETS } from '../lib/theme'
 /** A dedicated Settings WebView must not initialize document I/O or Markdown
  * rendering. Keeping this as a separate root makes that boundary explicit. */
 export function SettingsWindow() {
-  const {
-    settings,
-    setLocale,
-    setTheme,
-    setContentWidth,
-    setZoom,
-    setEditorFontSize,
-    setLineHeight,
-    setPagePaddingHorizontal,
-    setDocumentFont,
-    patch,
-  } = useSettings()
+  const { settings, setLocale, setTheme, setContentWidth, setZoom, patch } = useSettings()
   const updater = useUpdater(settings.updateChannel, settings.autoCheckUpdates, (lastUpdateCheckAt) => patch({ lastUpdateCheckAt }))
   const [applications, setApplications] = useState<ExternalApplication[]>([])
   useTheme(settings.theme)
@@ -64,12 +53,9 @@ export function SettingsWindow() {
         updateStatus={updater.status}
         onCheckUpdate={() => void updater.checkNow()}
         onInstallUpdate={() => void updater.install()}
+        onRelaunchUpdate={() => void updater.relaunch()}
         theme={settings.theme}
         contentWidth={settings.contentWidth}
-        editorFontSize={settings.editorFontSize}
-        lineHeight={settings.lineHeight}
-        pagePaddingHorizontal={settings.pagePaddingHorizontal}
-        documentFont={settings.documentFont}
         themePreset={settings.themePreset}
         themeColors={settings.themeColors}
         autoSaveIntervalMinutes={settings.autoSaveIntervalMinutes}
@@ -84,10 +70,6 @@ export function SettingsWindow() {
         onAutoCheckUpdatesChange={(autoCheckUpdates) => patch({ autoCheckUpdates })}
         onThemeChange={setTheme}
         onContentWidthChange={setContentWidth}
-        onEditorFontSizeChange={setEditorFontSize}
-        onLineHeightChange={setLineHeight}
-        onPagePaddingHorizontalChange={setPagePaddingHorizontal}
-        onDocumentFontChange={setDocumentFont}
         onThemePresetChange={(themePreset) => {
           const flavor = THEME_PRESETS[themePreset].flavor
           patch({ themePreset, theme: flavor === 'system' ? 'system' : flavor, themeColors: {} })
@@ -101,6 +83,7 @@ export function SettingsWindow() {
         onAlwaysOnTopChange={(alwaysOnTop) => patch({ alwaysOnTop })}
         onZoomChange={setZoom}
         onDefaultOpenTargetChange={(defaultOpenTarget) => patch({ defaultOpenTarget })}
+        onInstallCli={() => undefined}
         onClose={close}
       />
     </main>

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, DEFAULT_TOOLBAR, normalizeLineHeight, normalizePagePadding, normalizeSettings, SETTINGS_KEYS } from './settings'
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_TOOLBAR,
+  LINE_HEIGHT_RANGE,
+  normalizeLineHeight,
+  normalizePagePadding,
+  normalizeSettings,
+  READER_LAYOUT_RANGES,
+  SETTINGS_KEYS,
+} from './settings'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 describe('reading typography settings', () => {
@@ -9,8 +18,16 @@ describe('reading typography settings', () => {
   })
 
   it('keeps the new profile version ahead of the ones it reads from', () => {
-    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v7')
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(7)
+    expect(SETTINGS_KEYS[0]).toBe('textmark.settings.v8')
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(8)
+  })
+
+  it('carries the upstream ReaderLayoutSetting slider ranges', () => {
+    expect(READER_LAYOUT_RANGES.characterSpacing).toEqual({ min: -5, max: 12, step: 1 })
+    expect(READER_LAYOUT_RANGES.wordSpacing).toEqual({ min: -10, max: 25, step: 1 })
+    expect(READER_LAYOUT_RANGES.margins).toEqual({ min: -100, max: 100, step: 1 })
+    // The reading line height slider keeps its own wider range.
+    expect(LINE_HEIGHT_RANGE).toEqual({ min: 1.2, max: 2.4, step: 0.02 })
   })
 
   it('defaults document actions to independent, reorderable toolbar items', () => {
@@ -62,9 +79,30 @@ describe('reading typography settings', () => {
     expect(normalizePagePadding(24)).toBe(24)
   })
 
+  it('clamps the reader-layout percentages to their upstream ranges', () => {
+    const clamped = normalizeSettings({
+      characterSpacingPercent: 40,
+      wordSpacingPercent: -80,
+      marginsPercent: 900,
+      boldText: true,
+      readerCustomized: true,
+    })
+    expect(clamped.characterSpacingPercent).toBe(12)
+    expect(clamped.wordSpacingPercent).toBe(-10)
+    expect(clamped.marginsPercent).toBe(100)
+    expect(clamped.boldText).toBe(true)
+    expect(clamped.readerCustomized).toBe(true)
+    // Non-numeric or absent values fall back to the uncustomized defaults.
+    const fallback = normalizeSettings({ characterSpacingPercent: 'wide', wordSpacingPercent: null })
+    expect(fallback.characterSpacingPercent).toBe(0)
+    expect(fallback.wordSpacingPercent).toBe(0)
+    expect(fallback.boldText).toBe(false)
+    expect(fallback.readerCustomized).toBe(false)
+  })
+
   it('falls back to the defaults for non-numeric input', () => {
-    expect(normalizeLineHeight('tall')).toBe(1.52)
-    expect(normalizeLineHeight(undefined)).toBe(1.52)
+    expect(normalizeLineHeight('tall')).toBe(1.6)
+    expect(normalizeLineHeight(undefined)).toBe(1.6)
     expect(normalizePagePadding(null)).toBe(40)
     expect(normalizePagePadding(Number.NaN)).toBe(40)
   })

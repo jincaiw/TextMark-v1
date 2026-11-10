@@ -1,8 +1,9 @@
 import type { AppSettings, ToolbarItem } from '../types'
-import { normalizeThemeColors } from './theme'
+import { migrateThemePreset, normalizeThemeColors } from './theme'
 import { UPSTREAM_DOCUMENT_TOKENS } from './designTokens'
 
 export const SETTINGS_KEYS = [
+  'textmark.settings.v8',
   'textmark.settings.v7',
   'textmark.settings.v6',
   'textmark.settings.v5',
@@ -11,10 +12,16 @@ export const SETTINGS_KEYS = [
   'textmark.settings.v1',
 ] as const
 
-/** Reading typography bounds. The upstream defaults (1.52 / 40px) stay inside
- * these ranges so an unmodified profile is byte-identical to the reference. */
+/** Reading typography bounds. The upstream defaults stay inside these ranges
+ * so an unmodified profile is byte-identical to the reference. */
 export const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.4, step: 0.02 } as const
 export const PAGE_PADDING_RANGE = { min: 0, max: 96, step: 4 } as const
+/** Upstream ReaderLayoutSetting ranges, behind the Customize gate. */
+export const READER_LAYOUT_RANGES = {
+  characterSpacing: { min: -5, max: 12, step: 1 } as const,
+  wordSpacing: { min: -10, max: 25, step: 1 } as const,
+  margins: { min: -100, max: 100, step: 1 } as const,
+} as const
 export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'navigation',
   'sidebar',
@@ -77,8 +84,29 @@ const V5_DEFAULT_TOOLBAR: ToolbarItem[] = [
   'search',
 ]
 
+export const READING_FONTS = [
+  'system',
+  'athelas',
+  'avenirNext',
+  'charter',
+  'georgia',
+  'iowan',
+  'newYork',
+  'palatino',
+  'rounded',
+  'seravek',
+  'timesNewRoman',
+  'monospace',
+] as const
+
+/** Legacy pre-list font options map onto named successors the way upstream
+ * does (the old "Serif" used the New York stack). */
+const LEGACY_FONT_MIGRATION: Record<string, AppSettings['documentFont']> = {
+  serif: 'newYork',
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 7,
+  schemaVersion: 8,
   locale: 'zh-CN',
   theme: 'system',
   contentWidth: 'normal',
@@ -87,8 +115,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lineHeight: UPSTREAM_DOCUMENT_TOKENS.lineHeight,
   pagePaddingHorizontal: UPSTREAM_DOCUMENT_TOKENS.pagePaddingHorizontal,
   documentFont: 'system',
-  themePreset: 'normal',
+  themePreset: 'original',
   themeColors: {},
+  boldText: false,
+  readerCustomized: false,
+  characterSpacingPercent: 0,
+  wordSpacingPercent: 0,
+  marginsPercent: 0,
   autoSaveIntervalMinutes: 0,
   openDocumentsInTabs: false,
   alwaysOnTop: false,
@@ -104,8 +137,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
 const valid = <T extends string>(value: unknown, values: readonly T[], fallback: T): T =>
   typeof value === 'string' && values.includes(value as T) ? (value as T) : fallback
 
+const clampNumeric = (value: unknown, min: number, max: number, fallback: number): number => {
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Number(value)))
+}
+
 export function normalizeSettings(value: unknown): AppSettings {
-  const stored = typeof value === 'object' && value ? (value as Partial<AppSettings>) : {}
+  const stored =
+    typeof value === 'object' && value ? (value as Partial<AppSettings> & { documentFont?: unknown; themePreset?: unknown }) : {}
   const rawToolbar = Array.isArray(stored.toolbar)
     ? stored.toolbar.filter((item): item is ToolbarItem => typeof item === 'string' && TOOLBAR_ITEMS.has(item as ToolbarItem))
     : DEFAULT_TOOLBAR
@@ -119,8 +158,15 @@ export function normalizeSettings(value: unknown): AppSettings {
   const matchesToolbar = (expected: ToolbarItem[]) =>
     rawToolbar.length === expected.length && rawToolbar.every((item, index) => item === expected[index])
   const usesPriorDefault = matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR)
+  const storedFont = stored.documentFont
+  const documentFont =
+    typeof storedFont === 'string' &&
+    (storedFont in LEGACY_FONT_MIGRATION || READING_FONTS.includes(storedFont as (typeof READING_FONTS)[number]))
+      ? (LEGACY_FONT_MIGRATION[storedFont] ?? (storedFont as AppSettings['documentFont']))
+      : 'system'
+  const themePreset = migrateThemePreset(stored.themePreset) ?? 'original'
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     locale: valid(stored.locale, ['zh-CN', 'en'], 'zh-CN'),
     theme: valid(stored.theme, ['system', 'light', 'dark'], 'system'),
     contentWidth: valid(stored.contentWidth, ['normal', 'full'], 'normal'),
@@ -128,13 +174,14 @@ export function normalizeSettings(value: unknown): AppSettings {
     editorFontSize: Number.isFinite(stored.editorFontSize) ? Math.min(24, Math.max(12, Number(stored.editorFontSize))) : 15,
     lineHeight: normalizeLineHeight(stored.lineHeight),
     pagePaddingHorizontal: normalizePagePadding(stored.pagePaddingHorizontal),
-    documentFont: valid(stored.documentFont, ['system', 'serif', 'rounded', 'monospace'], 'system'),
-    themePreset: valid(
-      stored.themePreset,
-      ['normal', 'charcoal', 'redGraphite', 'darkGraphite', 'solarizedLight', 'solarizedDark', 'dracula'],
-      'normal',
-    ),
+    documentFont,
+    themePreset,
     themeColors: normalizeThemeColors(stored.themeColors),
+    boldText: stored.boldText === true,
+    readerCustomized: stored.readerCustomized === true,
+    characterSpacingPercent: clampNumeric(stored.characterSpacingPercent, -5, 12, 0),
+    wordSpacingPercent: clampNumeric(stored.wordSpacingPercent, -10, 25, 0),
+    marginsPercent: clampNumeric(stored.marginsPercent, -100, 100, 0),
     autoSaveIntervalMinutes: normalizeAutoSaveInterval(stored.autoSaveIntervalMinutes),
     openDocumentsInTabs: stored.openDocumentsInTabs === true,
     alwaysOnTop: stored.alwaysOnTop === true,

@@ -332,7 +332,7 @@ body {
 .md-source-blank-line {
   height: calc(var(--blank-lines, 1) * 0.76em);
 }
-.copy-code-button,
+.md-code-header,
 .diagram-hud,
 mark.search-match {
   display: none !important;

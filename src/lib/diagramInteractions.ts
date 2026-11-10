@@ -43,7 +43,7 @@ export function attachDiagramInteractions(viewport: HTMLElement, content: HTMLEl
   const minimum = options.minimumZoom ?? 50
   const maximum = options.maximumZoom ?? 300
   const naturalWidth =
-    svg?.viewBox.baseVal.width || Number.parseFloat(svg?.getAttribute('width') ?? '') || Math.max(content.scrollWidth, 320)
+    svg?.viewBox?.baseVal?.width || Number.parseFloat(svg?.getAttribute('width') ?? '') || Math.max(content.scrollWidth, 320)
   const state: DiagramViewState = { zoom: 100, panX: 0, panY: 0, fitWidth: options.initialFitWidth ?? true }
   const pointers = new Map<number, { x: number; y: number }>()
   let dragOrigin: { x: number; y: number; panX: number; panY: number } | null = null

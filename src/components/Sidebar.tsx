@@ -1,11 +1,32 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, Clock, FileText, Folder, FolderOpen, ListFilter, Plus } from 'lucide-react'
 import type { ExternalApplication, FileNode, OutlineItem, SidebarMode } from '../types'
 import { t } from '../lib/i18n'
+import { listRecentFiles } from '../lib/platform'
 import type { Locale } from '../types'
 
 /** Shared empty set so an untouched document does not allocate on every render. */
 const EMPTY_HEADINGS: ReadonlySet<string> = new Set<string>()
+
+/** Prunes the tree to the filter bar's matches: files whose name contains the
+ * query (case-insensitive) and, when the clock toggle is on, that were opened
+ * recently — plus every folder between a match and the root (upstream
+ * `visiblePaths`). */
+function filterTree(nodes: FileNode[], query: string, recent: Set<string> | null): FileNode[] {
+  const needle = query.trim().toLowerCase()
+  const result: FileNode[] = []
+  for (const node of nodes) {
+    if (node.isDirectory) {
+      const children = filterTree(node.children, query, recent)
+      if (children.length) result.push({ ...node, children })
+    } else {
+      const matchesQuery = !needle || node.name.toLowerCase().includes(needle)
+      const matchesRecent = !recent || recent.has(node.path)
+      if (matchesQuery && matchesRecent) result.push(node)
+    }
+  }
+  return result
+}
 
 interface TreeNodeProps {
   node: FileNode
@@ -13,26 +34,29 @@ interface TreeNodeProps {
   depth: number
   onOpenFile: (path: string) => void
   onContextMenu: (event: React.MouseEvent, node: FileNode) => void
+  /** While filtering, every surviving folder is expanded so matches show. */
+  forceExpanded?: boolean
 }
 
-function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNodeProps) {
+function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu, forceExpanded }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(depth < 2)
+  const isOpen = forceExpanded || expanded
   if (node.isDirectory) {
     return (
       <div>
         <button
           className="tree-row"
           style={{ paddingLeft: 12 + depth * 16 }}
-          aria-expanded={expanded}
+          aria-expanded={isOpen}
           aria-level={depth + 1}
           onClick={() => setExpanded((value) => !value)}
           onContextMenu={(event) => onContextMenu(event, node)}
         >
-          {expanded ? <ChevronDown /> : <ChevronRight />}
-          {expanded ? <FolderOpen /> : <Folder />}
+          {isOpen ? <ChevronDown /> : <ChevronRight />}
+          {isOpen ? <FolderOpen /> : <Folder />}
           <span>{node.name}</span>
         </button>
-        {expanded
+        {isOpen
           ? node.children.map((child) => (
               <TreeNode
                 key={child.path}
@@ -41,6 +65,7 @@ function TreeNode({ node, activePath, depth, onOpenFile, onContextMenu }: TreeNo
                 depth={depth + 1}
                 onOpenFile={onOpenFile}
                 onContextMenu={onContextMenu}
+                forceExpanded={forceExpanded}
               />
             ))
           : null}
@@ -86,6 +111,10 @@ interface SidebarProps {
   onCopyFilePath: (path: string) => void
   onCopyFileContents: (path: string) => void
   onOutlineSelect: (id: string) => void
+  /** The folder the add menu creates items in; null disables the menu. */
+  newFileFolder: string | null
+  onCreateItem: (contents: string | null) => void
+  onAddFiles: () => void
   locale: Locale
 }
 
@@ -120,6 +149,60 @@ export function Sidebar(props: SidebarProps) {
     action()
     closeContext()
   }
+
+  // Project navigator filter bar (files mode): a "+" add menu, a name filter,
+  // and a clock toggle that limits the tree to recently opened files.
+  const [filterText, setFilterText] = useState('')
+  const [showsRecentOnly, setShowsRecentOnly] = useState(false)
+  const [recentPaths, setRecentPaths] = useState<Set<string>>(() => new Set())
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const addWrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!showsRecentOnly) return
+    let cancelled = false
+    void listRecentFiles().then((paths) => {
+      if (!cancelled) setRecentPaths(new Set(paths))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showsRecentOnly, props.workspacePath])
+  useEffect(() => {
+    if (!addMenuOpen) return
+    const onDown = (event: MouseEvent) => {
+      if (addWrapRef.current && !addWrapRef.current.contains(event.target as Node)) setAddMenuOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAddMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [addMenuOpen])
+  const filtering = filterText.trim().length > 0 || showsRecentOnly
+  const visibleFiles = filtering ? filterTree(props.files, filterText, showsRecentOnly ? recentPaths : null) : props.files
+  const folderName = props.newFileFolder?.split(/[\\/]/).pop() ?? ''
+  const clipboardAvailable = typeof navigator !== 'undefined' && Boolean(navigator.clipboard)
+  // Creating an item clears the filter so the new "Untitled" row is visible,
+  // as the upstream `createItem` calls `filterBar.clearFilter()`.
+  const runAdd = (action: () => void) => {
+    setFilterText('')
+    setShowsRecentOnly(false)
+    setAddMenuOpen(false)
+    action()
+  }
+  const createFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text) props.onCreateItem(text)
+    } catch {
+      // Clipboard access can be denied; the menu item simply does nothing.
+    }
+  }
+
   return (
     <aside className="native-sidebar">
       <div className="sidebar-section-title">
@@ -160,25 +243,88 @@ export function Sidebar(props: SidebarProps) {
           )}
         </nav>
       ) : (
-        <div className="native-file-tree">
-          {props.files.length ? (
-            props.files.map((node) => (
-              <TreeNode
-                key={node.path}
-                node={node}
-                activePath={props.activePath}
-                depth={0}
-                onOpenFile={props.onOpenFile}
-                onContextMenu={contextMenu}
-              />
-            ))
-          ) : (
-            <div className="sidebar-empty">
-              <FolderOpen />
-              <p>{t(props.locale, 'openFolder')}</p>
-              <button onClick={props.onOpenFolder}>{t(props.locale, 'openFolder')}</button>
+        <div className="native-files-mode">
+          <div className="native-file-tree">
+            {visibleFiles.length ? (
+              visibleFiles.map((node) => (
+                <TreeNode
+                  key={node.path}
+                  node={node}
+                  activePath={props.activePath}
+                  depth={0}
+                  onOpenFile={props.onOpenFile}
+                  onContextMenu={contextMenu}
+                  forceExpanded={filtering}
+                />
+              ))
+            ) : props.files.length ? (
+              <div className="sidebar-filter-empty" />
+            ) : (
+              <div className="sidebar-empty">
+                <FolderOpen />
+                <p>{t(props.locale, 'openFolder')}</p>
+                <button onClick={props.onOpenFolder}>{t(props.locale, 'openFolder')}</button>
+              </div>
+            )}
+          </div>
+          <div className="navigator-filter-bar">
+            <div className="navigator-add-wrap" ref={addWrapRef}>
+              <button
+                className="navigator-add"
+                aria-label={t(props.locale, 'add')}
+                title={t(props.locale, 'add')}
+                aria-expanded={addMenuOpen}
+                aria-haspopup="menu"
+                disabled={!props.newFileFolder}
+                onClick={() => setAddMenuOpen((value) => !value)}
+              >
+                <Plus />
+              </button>
+              {addMenuOpen ? (
+                <div className="navigator-add-menu" role="menu">
+                  <button role="menuitem" onClick={() => runAdd(() => props.onCreateItem(''))}>
+                    {t(props.locale, 'newEmptyFile')}
+                  </button>
+                  <button role="menuitem" disabled={!clipboardAvailable} onClick={() => runAdd(() => void createFromClipboard())}>
+                    {t(props.locale, 'newFileFromClipboard')}
+                  </button>
+                  <hr />
+                  <button role="menuitem" onClick={() => runAdd(() => props.onCreateItem(null))}>
+                    {t(props.locale, 'newFolder')}
+                  </button>
+                  <hr />
+                  <button role="menuitem" onClick={() => runAdd(() => props.onAddFiles())}>
+                    {t(props.locale, 'addFilesTo', { name: folderName })}
+                  </button>
+                </div>
+              ) : null}
             </div>
-          )}
+            <div className="navigator-filter-field">
+              <ListFilter className="navigator-filter-icon" aria-hidden="true" />
+              <input
+                type="text"
+                value={filterText}
+                placeholder={t(props.locale, 'filter')}
+                aria-label={t(props.locale, 'filter')}
+                onChange={(event) => setFilterText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && filterText) {
+                    event.stopPropagation()
+                    setFilterText('')
+                  }
+                }}
+              />
+              <button
+                className={`navigator-recent ${showsRecentOnly ? 'active' : ''}`}
+                aria-label={t(props.locale, 'showOnlyRecentFiles')}
+                title={t(props.locale, 'showOnlyRecentFiles')}
+                aria-pressed={showsRecentOnly}
+                onClick={() => setShowsRecentOnly((value) => !value)}
+              >
+                <Clock />
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {context ? (

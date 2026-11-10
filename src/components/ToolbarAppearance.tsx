@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleCheck, Contrast, Moon, Settings, Sun } from 'lucide-react'
 import { nextZoomStep, ZOOM_STOPS } from '../constants'
+import { DOCUMENT_FONT_FAMILIES } from '../lib/designTokens'
 import { t } from '../lib/i18n'
 import { THEME_PRESETS } from '../lib/theme'
 import type { Locale, ThemeMode, ThemePreset } from '../types'
@@ -144,7 +145,15 @@ export function ToolbarAppearance(props: ToolbarAppearanceProps) {
                 aria-pressed={props.themePreset === id}
                 onClick={() => props.onThemePresetChange(id)}
               >
-                <span className="appearance-preset-sample" style={{ background: colors.windowBackground, color: colors.textColor }}>
+                <span
+                  className="appearance-preset-sample"
+                  style={{
+                    background: colors.windowBackground,
+                    color: colors.textColor,
+                    fontFamily: DOCUMENT_FONT_FAMILIES[preset.font],
+                    fontWeight: preset.boldText ? 600 : 400,
+                  }}
+                >
                   <span>Aa</span>
                   <i style={{ background: colors.linkColor }} />
                   {props.themePreset === id ? <CircleCheck /> : null}

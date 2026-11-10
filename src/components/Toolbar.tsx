@@ -32,6 +32,7 @@ import { t } from '../lib/i18n'
 import { nextZoomStep } from '../constants'
 import type { ExternalApplication, Locale, SidebarMode, ToolbarDisplayMode, ToolbarItem, ViewMode, ThemeMode, ThemePreset } from '../types'
 import { ToolbarAppearance } from './ToolbarAppearance'
+import { ToolbarShare } from './ToolbarShare'
 
 interface ToolbarProps {
   busy: boolean
@@ -48,6 +49,9 @@ interface ToolbarProps {
   onThemePresetChange: (preset: ThemePreset) => void
   onCustomizeAppearance: () => void
   searchQuery: string
+  documentName: string
+  wordCount: number
+  sizeBytes: number
   locale: Locale
   items: ToolbarItem[]
   displayMode: ToolbarDisplayMode
@@ -247,6 +251,21 @@ export function Toolbar(props: ToolbarProps) {
         {node}
       </span>
     )
+    const sharePopover = (triggerClassName: string) => (
+      <ToolbarShare
+        locale={props.locale}
+        documentName={props.documentName}
+        wordCount={props.wordCount}
+        sizeBytes={props.sizeBytes}
+        onShare={props.onShare}
+        onCopy={props.onCopy}
+        onPrint={props.onPrint}
+        onExport={props.onExport}
+        triggerClassName={triggerClassName}
+      >
+        {withLabel(<Share />, 'shareSource')}
+      </ToolbarShare>
+    )
     if (item === 'flexibleSpace')
       return <span key={key} data-toolbar-item={item} data-tauri-drag-region className="toolbar-flexible-space" style={hiddenStyle} />
     if (item === 'space')
@@ -381,9 +400,7 @@ export function Toolbar(props: ToolbarProps) {
           >
             {withLabel(<Info />, 'getInfo')}
           </button>
-          <button title={tx('shareSource')} aria-label={tx('shareSource')} onClick={props.onShare}>
-            {withLabel(<Share />, 'shareSource')}
-          </button>
+          {sharePopover('')}
           <button
             className={props.viewMode === 'edit' ? 'selected edit-active' : ''}
             title={tx(props.viewMode === 'edit' ? 'stopEditing' : 'edit')}
@@ -409,6 +426,7 @@ export function Toolbar(props: ToolbarProps) {
           />
         </div>,
       )
+    if (item === 'share') return slot(sharePopover(`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''}`))
     const simple = SIMPLE_ACTIONS[item]
     if (simple) {
       const title = actionTitle(item, props, simple.title)
@@ -445,7 +463,7 @@ export function Toolbar(props: ToolbarProps) {
       className="native-toolbar"
       data-tauri-drag-region
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest('.appearance-popover')) return
+        if ((event.target as HTMLElement).closest('.appearance-popover, .share-popover')) return
         const details = (event.target as HTMLElement).closest('.menu-popover button')?.closest('details')
         if (details) window.setTimeout(() => details.removeAttribute('open'), 0)
       }}

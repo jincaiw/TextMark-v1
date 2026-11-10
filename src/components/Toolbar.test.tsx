@@ -17,11 +17,14 @@ const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
   alwaysOnTop: false,
   zoom: 100,
   theme: 'system',
-  themePreset: 'normal',
+  themePreset: 'original',
   onThemeChange: vi.fn(),
   onThemePresetChange: vi.fn(),
   onCustomizeAppearance: vi.fn(),
   searchQuery: '',
+  documentName: 'guide.md',
+  wordCount: 4,
+  sizeBytes: 24,
   locale: 'en',
   items: [],
   displayMode: 'iconOnly',
@@ -213,8 +216,8 @@ describe('Toolbar', () => {
     const props = makeProps({ items: ['sidebar'], ...state })
     render(props)
     const group = element('[role="group"][aria-label="Choose sidebar mode"]')
-    const outline = element<HTMLButtonElement>('button[aria-label="Outline"]', group)
-    const files = element<HTMLButtonElement>('button[aria-label="Folders"]', group)
+    const outline = element<HTMLButtonElement>(`button[aria-label="${t('en', 'tableOfContents')}"]`, group)
+    const files = element<HTMLButtonElement>(`button[aria-label="${t('en', 'projectNavigator')}"]`, group)
     expect(group.querySelectorAll('button')).toHaveLength(2)
     expect(element('button[aria-label="Toggle Sidebar"]').getAttribute('aria-pressed')).toBe(String(state.sidebarVisible))
     expect(outline.getAttribute('aria-pressed')).toBe(String(state.sidebarVisible && state.sidebarMode === 'outline'))
@@ -325,11 +328,63 @@ describe('Toolbar', () => {
       t(props.locale, 'getInfo'),
     ])
     click(buttons[0])
+    // The share button opens the upstream share popover; its Share row shares.
     click(buttons[1])
+    const shareRow = Array.from(host.querySelectorAll<HTMLButtonElement>('.share-popover .share-row')).find(
+      (row) => row.textContent === t(props.locale, 'share'),
+    )!
+    expect(shareRow).toBeDefined()
+    click(shareRow)
     click(buttons[2])
     expect(props.onViewModeChange).toHaveBeenCalledExactlyOnceWith('edit')
     expect(props.onShare).toHaveBeenCalledOnce()
     expect(props.onToggleInspector).toHaveBeenCalledOnce()
+  })
+
+  it('共享弹出框展示文稿头部与导出/打印/共享/拷贝行，Escape 关闭', () => {
+    const props = makeProps({ items: ['share'] })
+    render(props)
+    const trigger = element<HTMLButtonElement>('[data-toolbar-item="share"] button')
+    expect(host.querySelector('.share-popover')).toBeNull()
+    const open = () => {
+      if (!host.querySelector('.share-popover')) click(trigger)
+    }
+    open()
+    const popover = element('.share-popover')
+    expect(element('.share-header-text strong', popover).textContent).toBe('guide.md')
+    // The byte unit's plural form differs between ICU variants (node "byte",
+    // Chrome "bytes"); assert the count and word label, not the plural.
+    const subtitle = element('.share-header-subtitle', popover).textContent ?? ''
+    expect(subtitle.startsWith('4 words · ')).toBe(true)
+    expect(subtitle).toContain('24')
+    const rows = Array.from(popover.querySelectorAll<HTMLButtonElement>('.share-row'))
+    expect(rows.map((row) => row.textContent)).toEqual([
+      t(props.locale, 'exportItem'),
+      t(props.locale, 'printItem'),
+      t(props.locale, 'share'),
+      t(props.locale, 'copySource'),
+    ])
+    const clickRow = (label: string) => {
+      open()
+      const pop = element('.share-popover')
+      const row = Array.from(pop.querySelectorAll<HTMLButtonElement>('.share-row')).find((r) => r.textContent === label)!
+      click(row)
+    }
+    clickRow(t(props.locale, 'exportItem'))
+    expect(props.onExport).toHaveBeenCalledOnce()
+    clickRow(t(props.locale, 'printItem'))
+    expect(props.onPrint).toHaveBeenCalledOnce()
+    clickRow(t(props.locale, 'share'))
+    expect(props.onShare).toHaveBeenCalledOnce()
+    clickRow(t(props.locale, 'copySource'))
+    expect(props.onCopy).toHaveBeenCalledOnce()
+    // Each action closes the popover; Escape closes it without acting.
+    open()
+    expect(host.querySelector('.share-popover')).not.toBeNull()
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(host.querySelector('.share-popover')).toBeNull()
   })
 
   it.each(['preview', 'edit'] as const)('documentActions 溢出后保留 info/share/edit 回调（%s 模式）', (viewMode) => {
@@ -351,6 +406,12 @@ describe('Toolbar', () => {
       return button!
     })
     for (const button of buttons) click(button)
+    // The share trigger opened the popover; its Share row performs the share.
+    const shareRow = Array.from(more.querySelectorAll<HTMLButtonElement>('.share-popover .share-row')).find(
+      (row) => row.textContent === t(props.locale, 'share'),
+    )!
+    expect(shareRow).toBeDefined()
+    click(shareRow)
     expect(props.onToggleInspector).toHaveBeenCalledTimes(1)
     expect(props.onShare).toHaveBeenCalledTimes(1)
     expect(props.onViewModeChange).toHaveBeenCalledExactlyOnceWith(viewMode === 'edit' ? 'preview' : 'edit')

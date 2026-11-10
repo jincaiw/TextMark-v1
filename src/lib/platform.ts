@@ -129,6 +129,21 @@ export async function scanFolder(path: string): Promise<FileNode[]> {
   return invoke<FileNode[]>('list_directory', { path })
 }
 
+/** Creates a uniquely-named file (contents set) or folder (contents null) in
+ * `folder`, returning the created path — the project navigator's add menu. */
+export async function createNavigatorItem(
+  folder: string,
+  base: string,
+  extension: string | null,
+  contents: string | null,
+): Promise<string> {
+  return invoke<string>('create_navigator_item', { folder, base, extension, contents })
+}
+
+export async function copyFilesToFolder(folder: string, sources: string[]): Promise<void> {
+  await invoke('copy_files_to_folder', { folder, sources })
+}
+
 export async function loadLocalAsset(baseDir: string, relativePath: string, workspaceRoot?: string | null): Promise<string> {
   return invoke<string>('read_local_asset', { baseDir, relativePath, workspaceRoot: workspaceRoot ?? null })
 }
@@ -160,6 +175,11 @@ export async function recordRecentFile(path: string): Promise<void> {
 export async function clearRecentFiles(): Promise<void> {
   if (!isTauri()) return
   await invoke('clear_recent_files')
+}
+
+export async function listRecentFiles(): Promise<string[]> {
+  if (!isTauri()) return []
+  return invoke<string[]>('list_recent_files')
 }
 
 export async function writeExportBytes(path: string, bytes: Uint8Array): Promise<void> {
@@ -337,6 +357,14 @@ export async function watchPaths(paths: string[]): Promise<void> {
 export async function openInApplication(path: string, applicationId: string): Promise<void> {
   if (!isTauri()) return
   await invoke('open_external_application', { path, applicationId })
+}
+
+/** The running app version, or null in the browser where there is no
+ * Tauri host. Used to greet a relaunch into a new version ("Updated to …"). */
+export async function getAppVersion(): Promise<string | null> {
+  if (!isTauri()) return null
+  const { getVersion } = await import('@tauri-apps/api/app')
+  return getVersion()
 }
 
 export async function revealInFileManager(path: string): Promise<void> {

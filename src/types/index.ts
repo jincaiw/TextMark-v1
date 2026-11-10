@@ -1,13 +1,27 @@
 export type ViewMode = 'edit' | 'preview'
 export type Locale = 'zh-CN' | 'en'
 export type ThemeMode = 'dark' | 'light' | 'system'
-export type DocumentFont = 'system' | 'serif' | 'rounded' | 'monospace'
-export type ThemePreset = 'normal' | 'charcoal' | 'redGraphite' | 'darkGraphite' | 'solarizedLight' | 'solarizedDark' | 'dracula'
+/** Upstream reading faces (DocumentFontSetting). "serif"/"rounded" were the
+ * pre-list options; "serif" now maps onto New York like upstream does. */
+export type DocumentFont =
+  | 'system'
+  | 'athelas'
+  | 'avenirNext'
+  | 'charter'
+  | 'georgia'
+  | 'iowan'
+  | 'newYork'
+  | 'palatino'
+  | 'rounded'
+  | 'seravek'
+  | 'timesNewRoman'
+  | 'monospace'
+export type ThemePreset = 'original' | 'quiet' | 'paper' | 'bold' | 'calm' | 'focus' | 'graphite' | 'dusk' | 'midnight'
 export type ThemeColorScheme = 'light' | 'dark'
 export type ThemeColorSlot = 'windowBackground' | 'editorBackground' | 'codeBlockBackground' | 'textColor' | 'linkColor'
 export type ThemeColors = Partial<Record<ThemeColorScheme, Partial<Record<ThemeColorSlot, string>>>>
 export type SidebarMode = 'outline' | 'files'
-export type InspectorMode = 'outline' | 'document' | 'tags' | 'outgoing' | 'backlinks'
+export type InspectorMode = 'document' | 'properties'
 export type ContentWidth = 'normal' | 'full'
 export type ToolbarDisplayMode = 'iconOnly' | 'iconAndLabel'
 export type SearchMode = 'contains' | 'beginsWith'
@@ -47,7 +61,7 @@ export type ExternalDocumentChange =
 export type ExternalChangeResolution = 'reload' | 'overwrite' | 'saveAs' | 'cancel'
 
 export interface AppSettings {
-  schemaVersion: 7
+  schemaVersion: 8
   locale: Locale
   theme: ThemeMode
   contentWidth: ContentWidth
@@ -60,6 +74,13 @@ export interface AppSettings {
   documentFont: DocumentFont
   themePreset: ThemePreset
   themeColors: ThemeColors
+  /** Per-theme reading look (upstream ReaderLayoutSetting): Bold Text applies
+   * immediately; the spacing sliders apply only while readerCustomized is on. */
+  boldText: boolean
+  readerCustomized: boolean
+  characterSpacingPercent: number
+  wordSpacingPercent: number
+  marginsPercent: number
   /** 0 disables automatic saving; -30 represents the 30-second option. */
   autoSaveIntervalMinutes: number
   /** Prefer document tabs for ordinary open requests. Explicit tab requests always win. */

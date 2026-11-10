@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { MARKDOWN_FILTERS, SAMPLE_MARKDOWN } from '../constants'
+import { t } from '../lib/i18n'
 import { eventAffectsPath, eventMayAffectDocument, renamedDestinationInDirectory, resolveChangedDocumentPath } from '../lib/diskChange'
 import { autoSaveDelayMs, shouldAutoSave } from '../lib/autoSave'
 import {
@@ -16,6 +17,8 @@ import {
   resolveSiblingPath,
   savePastedImage,
   scanFolder,
+  createNavigatorItem,
+  copyFilesToFolder,
   watchPaths,
   writeDocument,
   loadSessionManifest,
@@ -642,6 +645,60 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     }
   }, [locale, openFolderPath, showError])
 
+  /// The folder the navigator's add menu targets: the active document's
+  /// directory when it lives inside the workspace, otherwise the workspace
+  /// root (upstream `newFileFolder`, minus the selected-row case TextMark's
+  /// tree does not track separately).
+  const newFileFolder = useMemo(() => {
+    if (!workspacePath) return null
+    const path = active?.path
+    if (path && path.startsWith(workspacePath)) return parentDirectory(path) ?? workspacePath
+    return workspacePath
+  }, [workspacePath, active?.path])
+
+  const refreshWorkspace = useCallback(async () => {
+    if (!workspacePath) return
+    setFiles(await scanFolder(workspacePath))
+  }, [workspacePath])
+
+  const createItem = useCallback(
+    async (contents: string | null) => {
+      if (!isTauri() || !newFileFolder) return
+      setBusy(true)
+      try {
+        const isFolder = contents === null
+        const base = isFolder ? t(locale, 'newFolder') : t(locale, 'untitled')
+        const created = await createNavigatorItem(newFileFolder, base, isFolder ? null : 'md', contents)
+        await refreshWorkspace()
+        if (!isFolder) {
+          const document = await readDocument(created)
+          applyDocument(document, openDocumentsInTabs)
+        }
+      } catch (error) {
+        showError(error)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [applyDocument, locale, newFileFolder, openDocumentsInTabs, refreshWorkspace, showError],
+  )
+
+  const addFiles = useCallback(async () => {
+    if (!isTauri() || !newFileFolder) return
+    setBusy(true)
+    try {
+      const selected = await open({ multiple: true, directory: false, filters: MARKDOWN_FILTERS })
+      const sources = typeof selected === 'string' ? [selected] : (selected ?? [])
+      if (!sources.length) return
+      await copyFilesToFolder(newFileFolder, sources)
+      await refreshWorkspace()
+    } catch (error) {
+      showError(error)
+    } finally {
+      setBusy(false)
+    }
+  }, [newFileFolder, refreshWorkspace, showError])
+
   const saveAs = useCallback(async (): Promise<boolean> => {
     if (!active) return false
     if (!isTauri()) {
@@ -942,6 +999,9 @@ export function useDocument(locale: Locale, options: UseDocumentOptions = {}) {
     openPath,
     openRelative,
     openWorkspacePath: navigatePath,
+    newFileFolder,
+    createItem,
+    addFiles,
     canGoBack: (active?.historyIndex ?? 0) > 0,
     canGoForward: Boolean(active && active.historyIndex < active.history.length - 1),
     goBack: (scrollTop?: number, force = false) => moveNavigation(-1, scrollTop, force),
