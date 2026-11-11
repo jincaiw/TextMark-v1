@@ -268,6 +268,34 @@ describe('localized desktop components', () => {
     expect(html).toContain('可用项目')
     expect(html).toContain('当前工具栏')
   })
+  it('无 LLM 目标时可用项目不列出「在 LLM 中打开」（upstream allowed 集合门控）', () => {
+    const withLlm = renderToStaticMarkup(
+      <ToolbarCustomizer
+        open
+        locale="zh-CN"
+        items={['sidebar']}
+        displayMode="iconOnly"
+        hasLlmTargets
+        onChange={vi.fn()}
+        onDisplayModeChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    const withoutLlm = renderToStaticMarkup(
+      <ToolbarCustomizer
+        open
+        locale="zh-CN"
+        items={['sidebar']}
+        displayMode="iconOnly"
+        hasLlmTargets={false}
+        onChange={vi.fn()}
+        onDisplayModeChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(withLlm).toContain('在 LLM 中打开')
+    expect(withoutLlm).not.toContain('在 LLM 中打开')
+  })
   it('adds, removes, resets and changes the custom toolbar display mode', async () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -781,6 +809,12 @@ describe('code and diagram pills', () => {
     expect(actions.querySelector('[data-diagram-action="copy"]')).not.toBeNull()
     expect(actions.querySelector('[data-diagram-action="open"]')).not.toBeNull()
     await act(async () => zoom.querySelector<HTMLButtonElement>('[data-diagram-action="in"]')!.click())
+    expect(zoom.querySelector('.diagram-hud-level')?.textContent).toBe('125%')
+    // Multiplicative compounding: 125 × 1.25 = 156.25 → rounded label 156%.
+    await act(async () => zoom.querySelector<HTMLButtonElement>('[data-diagram-action="in"]')!.click())
+    expect(zoom.querySelector('.diagram-hud-level')?.textContent).toBe('156%')
+    // 156.25 × 0.8 = 125 exactly, proving the scale stayed fractional internally.
+    await act(async () => zoom.querySelector<HTMLButtonElement>('[data-diagram-action="out"]')!.click())
     expect(zoom.querySelector('.diagram-hud-level')?.textContent).toBe('125%')
     await act(async () => zoom.querySelector<HTMLButtonElement>('[data-diagram-action="reset"]')!.click())
     expect(zoom.querySelector('.diagram-hud-level')?.textContent).toBe('100%')

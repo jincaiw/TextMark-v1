@@ -167,6 +167,13 @@ export async function refreshMenu(state: {
   })
 }
 
+/** Mirrors upstream #637's NSMenuItemValidation: Edit ▸ Copy as Plain Text
+ * is enabled only while the reader has article text selected. */
+export async function setCopyAsPlainTextEnabled(enabled: boolean): Promise<void> {
+  if (!isTauri()) return
+  await invoke('set_copy_as_plain_text_enabled', { enabled })
+}
+
 export async function recordRecentFile(path: string): Promise<void> {
   if (!isTauri()) return
   await invoke('record_recent_file', { path })

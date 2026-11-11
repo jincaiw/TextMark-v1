@@ -178,6 +178,34 @@ function makeRenderer() {
   md.renderer.rules.textmark_blank = (tokens, index) =>
     `<div class="md-source-blank-line${tokens[index].attrGet('class') ? ` ${tokens[index].attrGet('class')}` : ''}" aria-hidden="true"></div>`
 
+  // Ordered-list gutter growth (upstream d0c6197 #622): a list whose widest
+  // rendered marker reaches three digits gets `data-mdp-digits`, and the
+  // stylesheet widens its gutter one `ch` per extra digit so "100." never
+  // hangs past the page edge. Markers number sequentially from the list's
+  // start (browsers ignore the authored value of every item but the first),
+  // so the widest marker is `start + count - 1`. Each list owns its own
+  // count, including nested lists, which markdown-it splits into their own
+  // <ol> when renumbered.
+  md.core.ruler.after('textmark_blank_lines', 'textmark_list_digits', (state) => {
+    const stack: { ordered: boolean; start: number; count: number; token: (typeof state.tokens)[number] }[] = []
+    for (const token of state.tokens) {
+      if (token.type === 'ordered_list_open') {
+        const start = Number(token.attrGet('start') ?? '1')
+        stack.push({ ordered: true, start: Number.isFinite(start) ? start : 1, count: 0, token })
+      } else if (token.type === 'bullet_list_open') {
+        stack.push({ ordered: false, start: 1, count: 0, token })
+      } else if (token.type === 'list_item_open') {
+        const top = stack[stack.length - 1]
+        if (top?.ordered) top.count += 1
+      } else if (token.type === 'ordered_list_close' || token.type === 'bullet_list_close') {
+        const top = stack.pop()
+        if (!top?.ordered || top.count === 0) continue
+        const widest = String(top.start + top.count - 1).length
+        if (widest >= 3) top.token.attrSet('data-mdp-digits', String(Math.min(widest, 9)))
+      }
+    }
+  })
+
   return md
 }
 
@@ -323,8 +351,14 @@ function anchorOutlineToSource(outline: OutlineItem[], source: string) {
   return outline.map((item) => {
     const wanted = item.text.trim()
     for (let index = cursor; index < lines.length; index += 1) {
-      const atx = lines[index].match(/^\s{0,3}#{1,6}\s+(.*)$/)
-      if (atx && (atx[1].trim() === wanted || atx[1].includes(wanted))) {
+      // The content group is optional so a bare `#` (an empty heading) still
+      // matches its own line instead of falling through to the next heading.
+      const atx = lines[index].match(/^\s{0,3}#{1,6}(?:\s+(.*))?$/)
+      // The `includes` fallback anchors a heading whose rendered text is a
+      // substring of the source line (formatting markers, link labels). It is
+      // skipped for an empty heading, where `includes('')` would match every
+      // following heading and mis-anchor the outline.
+      if (atx && (atx[1]?.trim() === wanted || (wanted !== '' && atx[1]?.includes(wanted)))) {
         cursor = index + 1
         return { ...item, line: index + 1 }
       }
@@ -372,31 +406,172 @@ function preserveTableAlignment(html: string) {
   )
 }
 
-function convertAlerts(html: string, locale: 'zh-CN' | 'en') {
-  const labels =
-    locale === 'zh-CN'
-      ? { NOTE: '注意', TIP: '提示', IMPORTANT: '重要', WARNING: '警告', CAUTION: '小心' }
-      : { NOTE: 'Note', TIP: 'Tip', IMPORTANT: 'Important', WARNING: 'Warning', CAUTION: 'Caution' }
-  return html.replace(
-    /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]([\s\S]*?)<\/p>([\s\S]*?)<\/blockquote>/gi,
-    (_match, rawKind: string, firstParagraph: string, remainder: string) => {
-      const kind = rawKind.toUpperCase() as keyof typeof labels
-      const pieces = firstParagraph.replace(/^\s*<br\s*\/?>\s*/i, '').split(/<br\s*\/?>/i)
-      const customTitle = pieces.length > 1 ? pieces.shift()?.trim() : ''
-      const body = pieces.join('<br>').trim()
-      const icons: Record<keyof typeof labels, string> = {
-        NOTE: '<path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM7.25 8v3.5h1.5V8h-1.5Z"/>',
-        TIP: '<path d="M8 0a5.5 5.5 0 0 0-3.4 9.82c.38.3.65.7.73 1.15l.1.53h5.14l.1-.53c.08-.45.35-.85.73-1.15A5.5 5.5 0 0 0 8 0Zm-2 13v1h4v-1H6Z"/>',
-        IMPORTANT: '<path d="M8 0a1 1 0 0 1 1 1v5.5a1 1 0 1 1-2 0V1a1 1 0 0 1 1-1Zm0 10a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 8 10Z"/>',
-        WARNING:
-          '<path d="M7.1 1.4a1 1 0 0 1 1.8 0l6.2 12A1 1 0 0 1 14.2 15H1.8a1 1 0 0 1-.9-1.6l6.2-12ZM7.25 6v4h1.5V6h-1.5ZM8 11.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>',
-        CAUTION:
-          '<path d="M3.2.8h9.6l2.4 2.4v9.6l-2.4 2.4H3.2L.8 12.8V3.2L3.2.8ZM7.25 4v5h1.5V4h-1.5ZM8 10.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>',
-      }
-      const icon = `<svg class="markdown-alert-icon" viewBox="0 0 16 16" aria-hidden="true">${icons[kind]}</svg>`
-      return `<div class="markdown-alert markdown-alert-${kind.toLowerCase()}"><p class="markdown-alert-title">${icon}${customTitle || labels[kind]}</p>${body ? `<p>${body}</p>` : ''}${remainder}</div>`
-    },
-  )
+/** The fifteen callout kinds of upstream d0c6197 (#629): GitHub's five plus
+ * Obsidian's kinds. Any `[!type]` blockquote is a callout; an unknown type
+ * looks like a note. */
+const CALLOUT_KINDS = new Set([
+  'note',
+  'tip',
+  'important',
+  'warning',
+  'caution',
+  'abstract',
+  'info',
+  'todo',
+  'success',
+  'question',
+  'failure',
+  'danger',
+  'bug',
+  'example',
+  'quote',
+])
+
+/** Obsidian's aliases. `important` and `caution` are aliases in Obsidian, but
+ * GitHub gives them their own look, so upstream keeps them as kinds. */
+const CALLOUT_ALIASES: Record<string, string> = {
+  summary: 'abstract',
+  tldr: 'abstract',
+  hint: 'tip',
+  check: 'success',
+  done: 'success',
+  help: 'question',
+  faq: 'question',
+  attention: 'warning',
+  fail: 'failure',
+  missing: 'failure',
+  error: 'danger',
+  cite: 'quote',
+}
+
+/** GitHub Octicons, the same path data upstream embeds per kind. */
+const CALLOUT_ICONS: Record<string, string> = {
+  note: 'M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z',
+  info: 'M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z',
+  tip: 'M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z',
+  important:
+    'M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z',
+  warning:
+    'M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z',
+  caution:
+    'M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z',
+  abstract:
+    'M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13.274 9.537v-.001l-4.557 4.45a.75.75 0 0 1-1.055-.008l-1.943-1.95a.75.75 0 0 1 1.062-1.058l1.419 1.425 4.026-3.932a.75.75 0 1 1 1.048 1.074ZM4.75 4h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM4 7.75A.75.75 0 0 1 4.75 7h2a.75.75 0 0 1 0 1.5h-2A.75.75 0 0 1 4 7.75Z',
+  todo: 'M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm1.5 0a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm10.28-1.72-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l1.47 1.47 3.97-3.97a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z',
+  success:
+    'M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z',
+  question:
+    'M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.92 6.085h.001a.749.749 0 1 1-1.342-.67c.169-.339.436-.701.849-.977C6.845 4.16 7.369 4 8 4a2.756 2.756 0 0 1 1.637.525c.503.377.863.965.863 1.725 0 .448-.115.83-.329 1.15-.205.307-.47.513-.692.662-.109.072-.22.138-.313.195l-.006.004a6.24 6.24 0 0 0-.26.16.952.952 0 0 0-.276.245.75.75 0 0 1-1.248-.832c.184-.264.42-.489.692-.661.103-.067.207-.132.313-.195l.007-.004c.1-.061.182-.11.258-.161a.969.969 0 0 0 .277-.245C8.96 6.514 9 6.427 9 6.25a.612.612 0 0 0-.262-.525A1.27 1.27 0 0 0 8 5.5c-.369 0-.595.09-.74.187a1.01 1.01 0 0 0-.34.398ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z',
+  failure:
+    'M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z',
+  danger:
+    'M9.504.43a1.516 1.516 0 0 1 2.437 1.713L10.415 5.5h2.123c1.57 0 2.346 1.909 1.22 3.004l-7.34 7.142a1.249 1.249 0 0 1-.871.354h-.302a1.25 1.25 0 0 1-1.157-1.723L5.633 10.5H3.462c-1.57 0-2.346-1.909-1.22-3.004L9.503.429Zm1.047 1.074L3.286 8.571A.25.25 0 0 0 3.462 9H6.75a.75.75 0 0 1 .694 1.034l-1.713 4.188 6.982-6.793A.25.25 0 0 0 12.538 7H9.25a.75.75 0 0 1-.683-1.06l2.008-4.418.003-.006a.036.036 0 0 0-.004-.009l-.006-.006-.008-.001c-.003 0-.006.002-.009.004Z',
+  bug: 'M4.72.22a.75.75 0 0 1 1.06 0l1 .999a3.488 3.488 0 0 1 2.441 0l.999-1a.748.748 0 0 1 1.265.332.75.75 0 0 1-.205.729l-.775.776c.616.63.995 1.493.995 2.444v.327c0 .1-.009.197-.025.292.408.14.764.392 1.029.722l1.968-.787a.75.75 0 0 1 .556 1.392L13 7.258V9h2.25a.75.75 0 0 1 0 1.5H13v.5c0 .409-.049.806-.141 1.186l2.17.868a.75.75 0 0 1-.557 1.392l-2.184-.873A4.997 4.997 0 0 1 8 16a4.997 4.997 0 0 1-4.288-2.427l-2.183.873a.75.75 0 0 1-.558-1.392l2.17-.868A5.036 5.036 0 0 1 3 11v-.5H.75a.75.75 0 0 1 0-1.5H3V7.258L.971 6.446a.75.75 0 0 1 .558-1.392l1.967.787c.265-.33.62-.583 1.03-.722a1.677 1.677 0 0 1-.026-.292V4.5c0-.951.38-1.814.995-2.444L4.72 1.28a.75.75 0 0 1 0-1.06Zm.53 6.28a.75.75 0 0 0-.75.75V11a3.5 3.5 0 1 0 7 0V7.25a.75.75 0 0 0-.75-.75ZM6.173 5h3.654A.172.172 0 0 0 10 4.827V4.5a2 2 0 1 0-4 0v.327c0 .096.077.173.173.173Z',
+  example:
+    'M5.75 2.5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-6a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM2 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z',
+  quote:
+    'M1.75 2.5h10.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Zm4 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2.5 7.75v6a.75.75 0 0 1-1.5 0v-6a.75.75 0 0 1 1.5 0Z',
+}
+
+/** The `[!type]` tag that opens a callout, ported from upstream's AlertTag.
+ * The type is case-insensitive; smart punctuation has already turned the `--`
+ * and `---` the author typed into en and em dashes, so those count as the
+ * hyphens they were. A `-` or `+` right after the `]` folds the callout. */
+interface CalloutTag {
+  kind: string
+  fold: 'open' | 'closed' | null
+  /** The type with a capital first letter, never localized: `[!faq]` reads
+   * "Faq" and `[!NOTE]` reads "Note", exactly as upstream. */
+  defaultTitle: string
+  /** Characters the tag takes up at the start of the paragraph. */
+  length: number
+}
+
+function parseCalloutTag(text: string): CalloutTag | null {
+  if (!text.startsWith('[!')) return null
+  const afterBang = text.slice(2)
+  let end = 0
+  while (end < afterBang.length) {
+    const character = afterBang[end]!
+    if (!/[A-Za-z0-9_-]/.test(character) && character !== '–' && character !== '—') break
+    end += 1
+  }
+  const name = afterBang.slice(0, end)
+  if (!/^[A-Za-z]/.test(name) || afterBang[end] !== ']') return null
+  const type = name.toLowerCase().replace(/–/g, '--').replace(/—/g, '---')
+  const marker = afterBang[end + 1]
+  const fold = marker === '-' ? 'closed' : marker === '+' ? 'open' : null
+  return {
+    kind: CALLOUT_KINDS.has(type) ? type : (CALLOUT_ALIASES[type] ?? 'note'),
+    fold,
+    defaultTitle: type.charAt(0).toUpperCase() + type.slice(1),
+    length: 2 + name.length + 1 + (fold ? 1 : 0),
+  }
+}
+
+function calloutIcon(kind: string): string {
+  return `<svg class="markdown-alert-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="${CALLOUT_ICONS[kind]}"></path></svg>`
+}
+
+/** The end index of the `</blockquote>` closing the `<blockquote>` at
+ * `open`, counting nested blockquotes (including raw-HTML ones with
+ * attributes) so a remainder never cuts at an inner close. */
+function findBlockquoteEnd(html: string, open: number): number {
+  const pattern = /<\/?blockquote\b/g
+  pattern.lastIndex = open
+  let depth = 0
+  for (let match = pattern.exec(html); match; match = pattern.exec(html)) {
+    depth += match[0][1] === '/' ? -1 : 1
+    if (depth === 0) return match.index
+  }
+  return -1
+}
+
+/**
+ * Converts every callout blockquote to upstream's alert markup (d0c6197
+ * #629): any `[!type]` blockquote is a callout, kinds resolve through
+ * Obsidian's aliases, unknown types look like a note, `[!x]-`/`[!x]+` fold
+ * into `<details>`/`<summary>` carrying `data-md-fold`, the title is the
+ * text after the tag or the capitalized type, and the body keeps the rest
+ * of the first paragraph plus every following block. Default titles are
+ * not localized — upstream renders "Note"/"Tip"/"Faq" in every language.
+ */
+function convertAlerts(html: string): string {
+  let out = ''
+  let cursor = 0
+  for (;;) {
+    const open = html.indexOf('<blockquote>', cursor)
+    if (open < 0) break
+    const end = findBlockquoteEnd(html, open)
+    if (end < 0) break
+    out += html.slice(cursor, open)
+    const inner = html.slice(open + '<blockquote>'.length, end)
+    const first = inner.match(/^(\s*)<p>([\s\S]*?)<\/p>/)
+    const tag = first ? parseCalloutTag(first[2]) : null
+    if (!tag) {
+      out += `<blockquote>${convertAlerts(inner)}</blockquote>`
+      cursor = end + '</blockquote>'.length
+      continue
+    }
+    // Text on the tag line after the closing `]` is the title; the first
+    // soft or hard break ends it, and everything after belongs to the body.
+    // Upstream drops exactly one leading space after the tag.
+    const rest = first![2].slice(tag.length).replace(/^ /, '')
+    const breakMatch = rest.match(/\n|<br\s*\/?>\n?/)
+    const titleHtml = breakMatch ? rest.slice(0, breakMatch.index) : rest
+    const bodyHtml = breakMatch ? rest.slice((breakMatch.index ?? 0) + breakMatch[0].length) : ''
+    const remainder = convertAlerts(inner.slice(first![0].length))
+    const wrapper = tag.fold ? 'details' : 'div'
+    const titleTag = tag.fold ? 'summary' : 'p'
+    const foldAttribute = tag.fold === 'open' ? ' data-md-fold="open" open=""' : tag.fold === 'closed' ? ' data-md-fold="closed"' : ''
+    out += `<${wrapper} class="markdown-alert markdown-alert-${tag.kind}"${foldAttribute}>`
+    out += `<${titleTag} class="markdown-alert-title">${calloutIcon(tag.kind)} ${titleHtml.trim() ? titleHtml : tag.defaultTitle}</${titleTag}>`
+    if (bodyHtml) out += `<p>${bodyHtml}</p>`
+    out += remainder
+    out += `</${wrapper}>`
+    cursor = end + '</blockquote>'.length
+  }
+  return out + html.slice(cursor)
 }
 
 export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'en'): RenderedMarkdown {
@@ -414,7 +589,7 @@ export function renderMarkdownUnsafe(source: string, locale: 'zh-CN' | 'en' = 'e
   const outline = anchorOutlineToSource(environment.outline ?? [], source)
   const toc = `<nav class="table-of-contents" aria-label="${locale === 'zh-CN' ? '目录' : 'Table of contents'}"><ol>${outline.map((item) => `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`).join('')}</ol></nav>`
   raw = raw.replace(/<p>\s*\[TOC\]\s*<\/p>/gi, toc)
-  raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw), locale))
+  raw = preserveTableAlignment(convertAlerts(convertRawRelativeImages(raw)))
   raw = `${frontmatterHtml(frontmatter.entries)}${raw}`
   const maps = buildSourceMaps(source)
   const hasMermaid = environment.hasMermaid ?? false

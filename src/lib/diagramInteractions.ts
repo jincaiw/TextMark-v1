@@ -23,7 +23,9 @@ interface DiagramOptions {
 
 const controllers = new WeakMap<HTMLElement, DiagramController>()
 
-export const clampDiagramZoom = (zoom: number, minimum = 50, maximum = 300) => Math.min(maximum, Math.max(minimum, Math.round(zoom)))
+// Upstream keeps the scale fractional (0.25–8) and rounds only for the HUD
+// label, so repeated ×1.25/×0.8 steps compound exactly as the reference does.
+export const clampDiagramZoom = (zoom: number, minimum = 25, maximum = 800) => Math.min(maximum, Math.max(minimum, zoom))
 
 export function panForZoomPoint(state: DiagramViewState, nextZoom: number, point: { x: number; y: number }) {
   const ratio = nextZoom / state.zoom
@@ -40,8 +42,8 @@ export function getDiagramController(viewport: HTMLElement | null) {
 export function attachDiagramInteractions(viewport: HTMLElement, content: HTMLElement, options: DiagramOptions = {}): DiagramController {
   controllers.get(viewport)?.destroy()
   const svg = content.querySelector<SVGSVGElement>('svg')
-  const minimum = options.minimumZoom ?? 50
-  const maximum = options.maximumZoom ?? 300
+  const minimum = options.minimumZoom ?? 25
+  const maximum = options.maximumZoom ?? 800
   const naturalWidth =
     svg?.viewBox?.baseVal?.width || Number.parseFloat(svg?.getAttribute('width') ?? '') || Math.max(content.scrollWidth, 320)
   const state: DiagramViewState = { zoom: 100, panX: 0, panY: 0, fitWidth: options.initialFitWidth ?? true }
@@ -72,13 +74,21 @@ export function attachDiagramInteractions(viewport: HTMLElement, content: HTMLEl
   const onWheel = (event: WheelEvent) => {
     if (!event.ctrlKey && !event.metaKey) return
     event.preventDefault()
-    setZoom(state.zoom * Math.exp(-event.deltaY * 0.002), relativePoint(event.clientX, event.clientY))
+    setZoom(state.zoom * Math.exp(-event.deltaY * 0.01), relativePoint(event.clientX, event.clientY))
   }
   const onDoubleClick = (event: MouseEvent) => {
     if ((event.target as HTMLElement).closest('.diagram-hud')) return
     event.preventDefault()
     event.stopPropagation()
-    setZoom(state.zoom === 100 ? 200 : 100, relativePoint(event.clientX, event.clientY))
+    // Upstream: any non-100% scale resets to fit; at 100% a double-click zooms ×2.
+    if (Math.abs(state.zoom - 100) > 0.1) {
+      state.zoom = 100
+      state.panX = 0
+      state.panY = 0
+      apply()
+    } else {
+      setZoom(state.zoom * 2, relativePoint(event.clientX, event.clientY))
+    }
   }
   const onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest('.diagram-hud')) return
@@ -115,8 +125,8 @@ export function attachDiagramInteractions(viewport: HTMLElement, content: HTMLEl
 
   const controller: DiagramController = {
     getState: () => ({ ...state }),
-    zoomIn: () => setZoom(state.zoom + 25),
-    zoomOut: () => setZoom(state.zoom - 25),
+    zoomIn: () => setZoom(state.zoom * 1.25),
+    zoomOut: () => setZoom(state.zoom * 0.8),
     reset: () => {
       state.zoom = 100
       state.panX = 0

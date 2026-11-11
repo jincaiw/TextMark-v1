@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Capability for document windows (main, newly opened, and session-restored)",
+  "windows": ["main", "document-*", "restored-*"],
   "permissions": [
     "core:default",
     "core:window:allow-set-title",
     "core:window:allow-set-always-on-top",
+    "core:window:allow-close",
     "core:webview:allow-create-webview-window",
     "core:window:allow-create",
     "dialog:allow-open",
@@ -15,6 +16,8 @@
     "opener:default",
     "updater:default",
     "process:allow-restart",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-html",
     "wdio:default"
   ]
 }

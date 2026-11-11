@@ -38,6 +38,7 @@ describe('reading typography settings', () => {
       'openActions',
       'space',
       'themesAndSettings',
+      'space',
       'inspector',
       'share',
       'edit',
@@ -51,6 +52,9 @@ describe('reading typography settings', () => {
       ['flexibleSpace', 'sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'zoom', 'inspector', 'share', 'edit', 'search'],
     ],
     [7, ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'documentActions', 'search']],
+    // The v0.10.7 default gains upstream's second `.space` after
+    // themesAndSettings; un-customized users migrate without losing anything.
+    [8, ['sidebar', 'navigation', 'flexibleSpace', 'openActions', 'space', 'themesAndSettings', 'inspector', 'share', 'edit', 'search']],
   ] as const)('migrates the prior default toolbar from schema v%s without changing custom layouts', (schemaVersion, toolbar) => {
     expect(normalizeSettings({ schemaVersion, toolbar }).toolbar).toEqual(DEFAULT_TOOLBAR)
     expect(normalizeSettings({ schemaVersion, toolbar: ['search', 'documentActions', 'space'] }).toolbar).toEqual([

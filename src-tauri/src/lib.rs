@@ -13,13 +13,13 @@ use std::{
     process::Command,
     sync::{
         LazyLock, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-    menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+    menu::{Menu, MenuBuilder, MenuItemBuilder, MenuItemKind, SubmenuBuilder},
 };
 use tauri_plugin_updater::{Error as UpdaterError, UpdaterExt};
 
@@ -294,6 +294,44 @@ fn session_manifest_path() -> AppResult<PathBuf> {
 /// rebuilt once it is ready.
 static RECENT_FILES_CACHE: LazyLock<Mutex<Option<Vec<String>>>> =
     LazyLock::new(|| Mutex::new(None));
+
+/// Whether the reader currently has article text selected. Upstream enables
+/// Copy as Plain Text only while it is (NSMenuItemValidation on the web
+/// view); the frontend reports selection changes through the command below.
+/// The flag outlives menu rebuilds, so `refresh_menu` can restore it.
+static READER_HAS_SELECTION: AtomicBool = AtomicBool::new(false);
+
+/// Applies `READER_HAS_SELECTION` to the Copy as Plain Text item in `menu`.
+/// `Menu::get` does not recurse, so the Edit submenu — built with id "edit" —
+/// is located by walking the top-level items.
+fn apply_copy_as_plain_text_state<R: tauri::Runtime>(menu: &Menu<R>) {
+    let enabled = READER_HAS_SELECTION.load(Ordering::SeqCst);
+    let Ok(items) = menu.items() else { return };
+    for item in items {
+        let MenuItemKind::Submenu(submenu) = item else {
+            continue;
+        };
+        if submenu.id() != "edit" {
+            continue;
+        }
+        let Some(MenuItemKind::MenuItem(copy_item)) = submenu.get("copy-as-plain-text") else {
+            return;
+        };
+        let _ = copy_item.set_enabled(enabled);
+        return;
+    }
+}
+
+#[tauri::command]
+fn set_copy_as_plain_text_enabled(app: tauri::AppHandle, enabled: bool) -> AppResult<()> {
+    READER_HAS_SELECTION.store(enabled, Ordering::SeqCst);
+    // set_enabled dispatches to the main thread itself, so this may run on
+    // Tauri's command thread without deadlocking against the menu loop.
+    if let Some(menu) = app.menu() {
+        apply_copy_as_plain_text_state(&menu);
+    }
+    Ok(())
+}
 
 fn read_recent_files_from_disk() -> Vec<String> {
     let Ok(path) = recent_files_path() else {
@@ -812,12 +850,16 @@ fn build_menu(
     )?;
     let close_tab = item("close-tab", "关闭", "Close", Some("CmdOrCtrl+W"))?;
     let open = item("open", "打开…", "Open…", Some("CmdOrCtrl+O"))?;
-    let open_folder = item(
-        "open-folder",
-        "打开文件夹…",
-        "Open Folder…",
+    // Upstream inserts Search for Document… directly after Open… with ⇧⌘O
+    // (AppDelegate.installSearchForDocumentMenuItem). That shortcut therefore
+    // belongs to the palette, not to Open Folder.
+    let search_document = item(
+        "search-document",
+        "搜索文稿…",
+        "Search for Document…",
         Some("CmdOrCtrl+Shift+O"),
     )?;
+    let open_folder = item("open-folder", "打开文件夹…", "Open Folder…", None)?;
     let save = item("save", "存储", "Save", Some("CmdOrCtrl+S"))?;
     let save_as = item("save-as", "存储为…", "Save As…", Some("CmdOrCtrl+Shift+S"))?;
     let revert = item("revert", "复原到已存储的版本", "Revert to Saved", None)?;
@@ -850,7 +892,7 @@ fn build_menu(
     let file_builder = SubmenuBuilder::new(app, if zh { "文件" } else { "File" })
         .items(&[&new_tab, &new_document, &close_tab])
         .separator()
-        .items(&[&open, &open_folder])
+        .items(&[&open, &search_document, &open_folder])
         .item(&open_recent)
         .separator()
         .items(&[&save, &save_as, &revert])
@@ -902,11 +944,27 @@ fn build_menu(
         Some("CmdOrCtrl+E"),
     )?;
     let preferences = item("preferences", "设置…", "Settings…", Some("CmdOrCtrl+Comma"))?;
+    // Copy as Plain Text (upstream #637): written right after Copy, and
+    // enabled only while the reader has article text selected — the frontend
+    // reports selection changes through set_copy_as_plain_text_enabled.
+    let copy_as_plain_text = MenuItemBuilder::with_id(
+        "copy-as-plain-text",
+        if zh {
+            "拷贝为纯文本"
+        } else {
+            "Copy as Plain Text"
+        },
+    )
+    .enabled(false)
+    .accelerator("CmdOrCtrl+Alt+Shift+C")
+    .build(app)?;
     let edit_builder = SubmenuBuilder::new(app, if zh { "编辑" } else { "Edit" })
+        .id("edit")
         .items(&[&undo, &redo])
         .separator()
         .cut_with_text(if zh { "剪切" } else { "Cut" })
         .copy_with_text(if zh { "拷贝" } else { "Copy" })
+        .item(&copy_as_plain_text)
         .paste_with_text(if zh { "粘贴" } else { "Paste" })
         .select_all_with_text(if zh { "全选" } else { "Select All" })
         .separator()
@@ -1263,6 +1321,9 @@ fn refresh_menu(
         always_on_top,
     };
     let menu = build_menu(&app, &locale, &state, &load_recent_files()).map_err(io_error)?;
+    // A rebuild replaces the freshly-built disabled item; restore the
+    // selection state the frontend last reported.
+    apply_copy_as_plain_text_state(&menu);
     app.set_menu(menu).map_err(io_error)?;
     Ok(())
 }
@@ -1675,6 +1736,49 @@ fn test_open_path(
         .ok_or(AppError { code: "not_found" })?;
     enqueue_pending_open_paths(&state, vec![request.clone()]);
     app.emit("open-paths", vec![request]).map_err(io_error)
+}
+
+/// Reads the system pasteboard for the Copy as Plain Text e2e round trip.
+/// An empty or image-only pasteboard reads as an empty string.
+#[cfg(feature = "e2e")]
+#[tauri::command]
+fn test_read_pasteboard(app: tauri::AppHandle) -> AppResult<String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    Ok(app.clipboard().read_text().unwrap_or_default())
+}
+
+/// Whether the reader has reported an active text selection, for the Copy as
+/// Plain Text e2e round trip: the accelerator only fires once the frontend
+/// has enabled the native item.
+#[cfg(feature = "e2e")]
+#[tauri::command]
+fn test_reader_has_selection() -> bool {
+    READER_HAS_SELECTION.load(Ordering::SeqCst)
+}
+
+/// The *native* enabled state of the Copy as Plain Text item, for the e2e
+/// round trip: `READER_HAS_SELECTION` only proves the frontend reported the
+/// selection, while the key equivalent fires only if `set_enabled` actually
+/// reached the live NSMenuItem.
+#[cfg(feature = "e2e")]
+#[tauri::command]
+fn test_copy_as_plain_text_enabled(app: tauri::AppHandle) -> AppResult<bool> {
+    let Some(menu) = app.menu() else {
+        return Ok(false);
+    };
+    for item in menu.items().map_err(io_error)? {
+        let MenuItemKind::Submenu(submenu) = item else {
+            continue;
+        };
+        if submenu.id() != "edit" {
+            continue;
+        }
+        return match submenu.get("copy-as-plain-text") {
+            Some(MenuItemKind::MenuItem(copy_item)) => copy_item.is_enabled().map_err(io_error),
+            _ => Ok(false),
+        };
+    }
+    Ok(false)
 }
 
 #[tauri::command]
@@ -2500,7 +2604,8 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
     #[cfg(feature = "e2e")]
     let builder = builder
         .plugin(tauri_plugin_wdio::init())
@@ -2601,6 +2706,12 @@ pub fn run() {
             drain_pending_open_paths,
             #[cfg(feature = "e2e")]
             test_open_path,
+            #[cfg(feature = "e2e")]
+            test_read_pasteboard,
+            #[cfg(feature = "e2e")]
+            test_reader_has_selection,
+            #[cfg(feature = "e2e")]
+            test_copy_as_plain_text_enabled,
             write_text_file,
             save_export_bytes,
             save_pasted_image,
@@ -2618,6 +2729,7 @@ pub fn run() {
             install_cli,
             set_default_handler,
             refresh_menu,
+            set_copy_as_plain_text_enabled,
             record_recent_file,
             clear_recent_files,
             list_recent_files,

@@ -36,6 +36,9 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
   'share',
   'edit',
   'search',
+  // Offered in Customize Toolbar but deliberately absent from the default set
+  // (upstream: the toolbar already carries a search field for in-document find).
+  'searchDocument',
   'print',
   'copy',
   'export',
@@ -46,7 +49,25 @@ export const TOOLBAR_ITEMS = new Set<ToolbarItem>([
 
 // Upstream (markdown-preview) default toolbar order. The AppKit-only sidebar
 // tracking separator is intentionally omitted (native macOS affordance).
+// The two `space` items mirror upstream toolbarDefaultItemIdentifiers on
+// macOS 26+ (openActions | space | themesAndSettings | space | inspector).
 export const DEFAULT_TOOLBAR: ToolbarItem[] = [
+  'sidebar',
+  'navigation',
+  'flexibleSpace',
+  'openActions',
+  'space',
+  'themesAndSettings',
+  'space',
+  'inspector',
+  'share',
+  'edit',
+  'search',
+]
+
+/** The v0.10.7 default, before upstream's second `.space` after
+ * themesAndSettings was adopted; un-customized users migrate to the new one. */
+const V7_DEFAULT_TOOLBAR: ToolbarItem[] = [
   'sidebar',
   'navigation',
   'flexibleSpace',
@@ -157,7 +178,8 @@ export function normalizeSettings(value: unknown): AppSettings {
       : rawToolbar.map((item) => (item === 'openWith' ? ('openActions' as ToolbarItem) : item))
   const matchesToolbar = (expected: ToolbarItem[]) =>
     rawToolbar.length === expected.length && rawToolbar.every((item, index) => item === expected[index])
-  const usesPriorDefault = matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR)
+  const usesPriorDefault =
+    matchesToolbar(V5_DEFAULT_TOOLBAR) || matchesToolbar(LEGACY_COMBINED_DEFAULT_TOOLBAR) || matchesToolbar(V7_DEFAULT_TOOLBAR)
   const storedFont = stored.documentFont
   const documentFont =
     typeof storedFont === 'string' &&

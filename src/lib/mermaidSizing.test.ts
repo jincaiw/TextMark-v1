@@ -36,9 +36,20 @@ describe('Mermaid popup sizing parity', () => {
       width: 420,
       height: 320,
     }))
-  it('clamps pointer zoom to the upstream interaction range', () => {
-    expect(clampDiagramZoom(25)).toBe(50)
-    expect(clampDiagramZoom(420)).toBe(300)
+  it('clamps pointer zoom to the upstream 25%–800% range without rounding', () => {
+    expect(clampDiagramZoom(10)).toBe(25)
+    expect(clampDiagramZoom(25)).toBe(25)
+    expect(clampDiagramZoom(420)).toBe(420)
+    expect(clampDiagramZoom(900)).toBe(800)
+    // Upstream keeps the scale fractional so ×1.25/×0.8 steps compound exactly.
+    expect(clampDiagramZoom(156.25)).toBe(156.25)
+  })
+  it('compounds zoom multiplicatively like the upstream HUD (×1.25 / ×0.8)', () => {
+    expect(clampDiagramZoom(100 * 1.25)).toBe(125)
+    expect(clampDiagramZoom(125 * 1.25)).toBe(156.25)
+    expect(clampDiagramZoom(125 * 0.8)).toBe(100)
+    expect(clampDiagramZoom(25 * 0.8)).toBe(25)
+    expect(clampDiagramZoom(800 * 1.25)).toBe(800)
   })
   it('keeps the point under the pointer stable while zooming', () =>
     expect(panForZoomPoint({ zoom: 100, panX: 0, panY: 0, fitWidth: true }, 200, { x: 120, y: 80 })).toEqual({ panX: -120, panY: -80 }))

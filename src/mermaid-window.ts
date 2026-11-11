@@ -33,7 +33,7 @@ async function render() {
     minimumZoom: 25,
     maximumZoom: 400,
     onChange: (state) => {
-      output.value = `${state.zoom}%`
+      output.value = `${Math.round(state.zoom)}%`
       fitButton.setAttribute('aria-pressed', String(state.fitWidth))
       fitButton.title = locale === 'zh-CN' ? (state.fitWidth ? '实际大小' : '适合宽度') : state.fitWidth ? 'Actual Size' : 'Fit Width'
     },

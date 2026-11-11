@@ -111,6 +111,27 @@ describe('renderMarkdown', () => {
     expect(plain.hasMath).toBe(false)
   })
 
+  it('keeps escaped citation brackets with commas and dashes literal (upstream #633)', () => {
+    // Escaped citations like \[18\], \[3, 4\] and \[5–7\] must render as text,
+    // not be captured as display math, matching upstream d0c6197.
+    for (const source of ['\\[18\\]', '\\[3, 4\\]', '\\[5–7\\]', '\\[8, 9\\]', '\\[1, 2, 3\\]']) {
+      const rendered = renderMarkdown(`See ${source} for details.`)
+      expect(rendered.hasMath).toBe(false)
+      expect(rendered.html).not.toContain('textmark-math-placeholder')
+      expect(rendered.html).toContain(source.replace(/\\\[/g, '[').replace(/\\\]/g, ']'))
+    }
+  })
+
+  it('anchors an empty heading to its own line, not the next heading (upstream #628)', () => {
+    const rendered = renderMarkdown('- #\n# Real')
+    const empty = rendered.outline.find((item) => item.text === '')
+    expect(empty).toBeDefined()
+    // The empty heading sits on source line 1; the bug mis-anchored it to
+    // line 2 (`# Real`), because `'Real'.includes('')` is always true.
+    expect(empty?.line).toBe(1)
+    expect(rendered.outline.find((item) => item.text === 'Real')?.line).toBe(2)
+  })
+
   it('restores inline code nested inside a Markdown link', () => {
     const rendered = renderMarkdown('[`code`](https://example.com)')
     expect(rendered.html).toContain('<a href="https://example.com"')

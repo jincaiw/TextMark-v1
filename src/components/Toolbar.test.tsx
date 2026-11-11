@@ -3,6 +3,7 @@ import { act, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { t } from '../lib/i18n'
+import { DEFAULT_TOOLBAR } from '../lib/settings'
 import { Toolbar } from './Toolbar'
 
 type ToolbarProps = ComponentProps<typeof Toolbar>
@@ -42,6 +43,7 @@ const makeProps = (overrides: Partial<ToolbarProps> = {}): ToolbarProps => ({
   onZoomChange: vi.fn(),
   onSearchQueryChange: vi.fn(),
   onSearchOpen: vi.fn(),
+  onSearchDocument: vi.fn(),
   onOpenWith: vi.fn(),
   onOpenInLlm: vi.fn(),
   onOpen: vi.fn(),
@@ -272,6 +274,85 @@ describe('Toolbar', () => {
     expect(props.onSearchQueryChange).toHaveBeenCalledExactlyOnceWith('needle')
     render({ ...props, searchQuery: 'needle' })
     expect(input.value).toBe('needle')
+  })
+
+  it.each(['en', 'zh-CN'] as const)('在 %s 下渲染 Search for Document 工具栏项', (locale) => {
+    const props = makeProps({ locale, items: ['search', 'searchDocument'] })
+    render(props)
+    // Upstream NSToolbarItem: label "Search for Document", tooltip distinct.
+    const button = element<HTMLButtonElement>('[data-toolbar-item="searchDocument"] button')
+    expect(button.getAttribute('aria-label')).toBe(t(locale, 'searchForDocumentItem'))
+    expect(button.title).toBe(t(locale, 'searchForDocumentTooltip'))
+    expect(button.querySelector('svg.lucide-file-search')).not.toBeNull()
+    click(button)
+    expect(props.onSearchDocument).toHaveBeenCalledTimes(1)
+    // The in-document find field stays a separate item; the two never merge.
+    expect(host.querySelector('.document-search')).not.toBeNull()
+  })
+
+  it('Search for Document 不在默认工具栏中（upstream 仅加入 allowed 集合）', () => {
+    expect(DEFAULT_TOOLBAR).not.toContain('searchDocument')
+    const props = makeProps({ items: DEFAULT_TOOLBAR })
+    render(props)
+    expect(host.querySelector('[data-toolbar-item="searchDocument"]')).toBeNull()
+  })
+
+  // Upstream hasLLMTargetsAvailable: the openInLLM item is removed entirely
+  // while no LLM app is installed, and named after the resolved default.
+  it('无已安装 LLM 应用时整体隐藏 openInLlm 工具栏项', () => {
+    const props = makeProps({
+      items: ['search', 'openInLlm'],
+      applications: [
+        { id: 'system', name: 'System Default', kind: 'system', available: true },
+        { id: 'codex', name: 'Codex', kind: 'llm', available: false },
+      ],
+    })
+    render(props)
+    expect(host.querySelector('[data-toolbar-item="openInLlm"]')).toBeNull()
+    // Remaining slots keep their layout positions; nothing shifts or blanks.
+    expect(slots().map((slot) => slot.dataset.toolbarItem)).toEqual(['search'])
+  })
+
+  it('openInLlm 以默认应用命名并持久化选择', () => {
+    // This jsdom build exposes no usable localStorage; stub one so the
+    // persisted-pick path is observable.
+    const values = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+      removeItem: (key: string) => void values.delete(key),
+      clear: () => values.clear(),
+      key: (index: number) => Array.from(values.keys())[index] ?? null,
+      length: values.size,
+    })
+    const props = makeProps({
+      items: ['openInLlm'],
+      displayMode: 'iconAndLabel',
+      applications: [
+        { id: 'claude', name: 'Claude', kind: 'llm', available: true },
+        { id: 'chatgpt', name: 'ChatGPT', kind: 'llm', available: true },
+        { id: 'codex', name: 'Codex', kind: 'llm', available: false },
+      ],
+    })
+    render(props)
+    const summary = element<HTMLElement>('[data-toolbar-item="openInLlm"] summary')
+    // First installed candidate (upstream resolveDefaultLLM falls back to it).
+    expect(summary.title).toBe('Open in Claude')
+    expect(summary.textContent).toContain('Open in Claude')
+    click(summary)
+    const chatgpt = Array.from(host.querySelectorAll<HTMLButtonElement>('.menu-popover button')).find((button) =>
+      button.textContent?.includes('ChatGPT'),
+    )
+    expect(chatgpt).toBeDefined()
+    expect(chatgpt!.disabled).toBe(false)
+    click(chatgpt!)
+    expect(props.onOpenInLlm).toHaveBeenCalledExactlyOnceWith('chatgpt')
+    // The pick persists (upstream setDefaultLLM → UserDefaults) and the label
+    // follows the new default.
+    expect(values.get('textmark.lastLlmTarget')).toBe('chatgpt')
+    expect(element<HTMLElement>('[data-toolbar-item="openInLlm"] summary').title).toBe('Open in ChatGPT')
+    // Uninstalled targets never appear in the menu (upstream llmCandidates).
+    expect(host.textContent).not.toContain('Codex')
   })
 
   it('将 system 作为默认打开目标，不回退到首个可用编辑器', () => {

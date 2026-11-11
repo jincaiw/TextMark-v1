@@ -109,14 +109,72 @@ describe('upstream MarkdownHTML rendering parity', () => {
     expect(html).toContain('https://example.com/a.png')
     expect(html).not.toContain('data-local-src')
   })
-  it('localizes a default GitHub alert title', () => expect(renderMarkdown('> [!IMPORTANT]\n> Body', 'zh-CN').html).toContain('重要'))
+  it('keeps GitHub alert default titles in English in every locale', () => {
+    expect(renderMarkdown('> [!IMPORTANT]\n> Body', 'zh-CN').html).toContain('Important')
+    expect(renderMarkdown('> [!IMPORTANT]\n> Body', 'zh-CN').html).not.toContain('重要')
+  })
   it('supports formatted custom alert titles', () =>
     expect(renderMarkdown('> [!NOTE] With **bold** title').html).toContain('With <strong>bold</strong> title'))
   it('includes the alert icon', () => expect(renderMarkdown('> [!NOTE]\n> Body').html).toContain('markdown-alert-icon'))
-  it('keeps unknown alerts as blockquotes', () => {
+  it('renders every Obsidian callout kind and alias as a callout', () => {
+    expect(renderMarkdown('> [!abstract] A').html).toContain('markdown-alert-abstract')
+    expect(renderMarkdown('> [!summary] A').html).toContain('markdown-alert-abstract')
+    expect(renderMarkdown('> [!tldr] A').html).toContain('markdown-alert-abstract')
+    expect(renderMarkdown('> [!hint] A').html).toContain('markdown-alert-tip')
+    expect(renderMarkdown('> [!check] A').html).toContain('markdown-alert-success')
+    expect(renderMarkdown('> [!done] A').html).toContain('markdown-alert-success')
+    expect(renderMarkdown('> [!help] A').html).toContain('markdown-alert-question')
+    expect(renderMarkdown('> [!faq] A').html).toContain('markdown-alert-question')
+    expect(renderMarkdown('> [!attention] A').html).toContain('markdown-alert-warning')
+    expect(renderMarkdown('> [!fail] A').html).toContain('markdown-alert-failure')
+    expect(renderMarkdown('> [!missing] A').html).toContain('markdown-alert-failure')
+    expect(renderMarkdown('> [!error] A').html).toContain('markdown-alert-danger')
+    expect(renderMarkdown('> [!cite] A').html).toContain('markdown-alert-quote')
+    expect(renderMarkdown('> [!bug] A').html).toContain('markdown-alert-bug')
+    expect(renderMarkdown('> [!todo] A').html).toContain('markdown-alert-todo')
+    expect(renderMarkdown('> [!info] A').html).toContain('markdown-alert-info')
+    expect(renderMarkdown('> [!example] A').html).toContain('markdown-alert-example')
+  })
+  it('treats an unknown type as a note callout with the capitalized type as title', () => {
     const html = renderMarkdown('> [!FOO] Nope').html
-    expect(html).toContain('<blockquote>')
-    expect(html).not.toContain('markdown-alert')
+    expect(html).toContain('markdown-alert markdown-alert-note')
+    expect(html).not.toContain('<blockquote>')
+    expect(renderMarkdown('> [!bar]').html).toContain('Bar')
+    expect(renderMarkdown('> [!NOTE]').html).toContain('Note')
+    expect(renderMarkdown('> [!faq]').html).toContain('Faq')
+  })
+  it('folds callouts with the Obsidian markers', () => {
+    const closed = renderMarkdown('> [!tip]- Folded\n> Body').html
+    expect(closed).toContain('<details class="markdown-alert markdown-alert-tip" data-md-fold="closed">')
+    expect(closed).toContain('<summary class="markdown-alert-title">')
+    expect(closed).not.toContain('open=""')
+    const open = renderMarkdown('> [!tip]+ Open\n> Body').html
+    expect(open).toContain('data-md-fold="open" open=""')
+    expect(renderMarkdown('> [!tip] Title').html).toContain('<div class="markdown-alert markdown-alert-tip">')
+  })
+  it('uses the text after the tag as the title and the rest as the body', () => {
+    const html = renderMarkdown('> [!warning] Heads up\n> First line\n> Second line').html
+    expect(html).toContain('Heads up')
+    expect(html).toContain('First line\nSecond line')
+    expect(renderMarkdown('> [!note]\n> Only body').html).toContain('Note</p><p>Only body</p>')
+  })
+  it('keeps a blockquote without a callout tag as a blockquote', () => {
+    expect(renderMarkdown('> Plain quote').html).toContain('<blockquote>')
+    expect(renderMarkdown('> Plain quote').html).not.toContain('markdown-alert')
+  })
+  it('widens the gutter only for lists whose widest rendered marker reaches three digits', () => {
+    // Markers number sequentially from the list's start; authored values of
+    // later items never render, so they must not widen the gutter.
+    expect(renderMarkdown('1. a\n2. b').html).not.toContain('data-mdp-digits')
+    expect(renderMarkdown('1. a\n100. b').html).not.toContain('data-mdp-digits')
+    expect(renderMarkdown('1. a\n10. b\n99. c').html).not.toContain('data-mdp-digits')
+    expect(renderMarkdown('100. a\n101. b').html).toContain('<ol start="100" data-mdp-digits="3">')
+    expect(renderMarkdown('1000. a').html).toContain('data-mdp-digits="4"')
+    expect(renderMarkdown('999999999. a').html).toContain('data-mdp-digits="9"')
+    // A renumbered nested list is its own <ol> with its own count.
+    const nested = renderMarkdown('1. a\n   - x\n   100. y\n2. b').html
+    expect(nested.match(/<ol data-mdp-digits="3">|<ol start="100" data-mdp-digits="3">/g)).toHaveLength(1)
+    expect(nested).toMatch(/<ol>\n<li>a/)
   })
   it('sanitizes executable alert title HTML', () =>
     expect(renderMarkdown('> [!CAUTION] <script>alert(1)</script>').html).not.toContain('script'))

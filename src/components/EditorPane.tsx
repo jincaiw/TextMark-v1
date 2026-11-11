@@ -7,6 +7,26 @@ import { EditorView } from '@codemirror/view'
 import { indentLess, indentMore } from '@codemirror/commands'
 import { keymap } from '@codemirror/view'
 import { editorHeadings } from '../lib/editorHeadings'
+import {
+  applyBlockStyle,
+  applyListStyle,
+  insertLinkFromPopover,
+  insertLinkPlaceholder,
+  setHeading,
+  toggleBlockPrefix,
+  toggleInlineMark,
+  toggleOrderedList,
+} from '../lib/formatEditing'
+import {
+  blockStyle,
+  linkSelection,
+  listStyle,
+  selectionContext,
+  type BlockStyle,
+  type FormattingState,
+  type LinkSelection,
+  type ListStyle,
+} from '../lib/formatState'
 import { createEditorMarkdownDecorations } from '../lib/editorMarkdownDecorations'
 import {
   codeFenceAutoCloseInsertion,
@@ -33,6 +53,20 @@ export interface EditorPaneHandle {
   /** Source line currently at the top of the editor viewport. */
   getTopLine: () => number | null
   format: (command: FormatCommand) => void
+  /** Live formatting state of the selection, for the floating format controls. */
+  getFormattingState: () => FormattingState | null
+  /** The innermost block style enclosing the caret (quote/code/plain/fenced/table). */
+  getBlockStyle: () => BlockStyle | null
+  /** The common list style of the selected lines. */
+  getListStyle: () => ListStyle | null
+  /** The range and text the link form edits, expanding an enclosing link. */
+  getLinkSelection: () => LinkSelection | null
+  /** Replace a range with a Markdown link (the floating bar's link form). */
+  insertLink: (text: string, url: string, from: number, to: number) => boolean
+  /** Apply a block style from the More Formatting popover. */
+  setBlockStyle: (style: BlockStyle, language?: string) => boolean
+  /** Apply a list style from the Lists popover. */
+  setListStyle: (style: Exclude<ListStyle, 'mixed'>) => boolean
   /** Fraction of the editor's scroll range (0–1); used to hand the reading
    * position over to the preview when leaving edit mode. */
   getScrollFraction: () => number
@@ -85,6 +119,9 @@ interface EditorPaneProps {
   onRenameImage?: (path: string) => void
   onCursorChange: (line: number, column: number) => void
   onStateChange?: (state: EditorSessionState) => void
+  /** Reports the selection's formatting state so the floating format controls
+   * can show the live heading label and emphasis tints. */
+  onFormattingChange?: (state: FormattingState) => void
   /** Reports the selection's word/character/line counts (null when the caret
    * has no range) so the inspector can show selection-aware totals. */
   onSelectionStatsChange?: (stats: DocumentStats | null) => void
@@ -97,28 +134,6 @@ interface EditorPaneProps {
   searchMode?: SearchMode
   onSearchCount?: (count: number) => void
 }
-
-const wrappers: Partial<Record<FormatCommand, [string, string]>> = {
-  bold: ['**', '**'],
-  italic: ['*', '*'],
-  strikethrough: ['~~', '~~'],
-  code: ['`', '`'],
-  link: ['[', '](https://)'],
-}
-
-function toggledInline(selected: string, wrapper: [string, string]) {
-  if (selected.startsWith(wrapper[0]) && selected.endsWith(wrapper[1]) && selected.length >= wrapper[0].length + wrapper[1].length)
-    return {
-      text: selected.slice(wrapper[0].length, -wrapper[1].length),
-      selectionStart: 0,
-      selectionEnd: selected.length - wrapper[0].length - wrapper[1].length,
-    }
-  const body = selected || 'text'
-  return { text: `${wrapper[0]}${body}${wrapper[1]}`, selectionStart: wrapper[0].length, selectionEnd: wrapper[0].length + body.length }
-}
-
-const stripListMarker = (line: string) => line.replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
-const stripTaskMarker = (line: string) => line.replace(/^\s*(?:[-+*]\s+)?(?:\[[ xX]\]\s+)?/, '')
 
 function editorOverlayHeight(view: EditorView): number {
   return parseFloat(getComputedStyle(view.dom).getPropertyValue('--document-tools-height')) || 0
@@ -163,54 +178,39 @@ function getSelectionStats(view: EditorView): DocumentStats | null {
 }
 
 function applyFormat(view: EditorView, command: FormatCommand) {
-  const selection = view.state.selection.main
-  const selected = view.state.sliceDoc(selection.from, selection.to)
-  const wrapper = wrappers[command]
-  if (wrapper) {
-    const toggled = toggledInline(selected, wrapper)
-    view.dispatch({
-      changes: { from: selection.from, to: selection.to, insert: toggled.text },
-      selection: { anchor: selection.from + toggled.selectionStart, head: selection.from + toggled.selectionEnd },
-    })
-    view.focus()
+  const heading = /^h([0-6])$/.exec(command)
+  if (heading) {
+    setHeading(view, Number(heading[1]))
     return
   }
-
-  const startLine = view.state.doc.lineAt(selection.from)
-  const endLine = view.state.doc.lineAt(selection.to)
-  const from = startLine.from
-  const to = endLine.to
-  const lines = view.state.sliceDoc(from, to).split('\n')
-  const heading = command.match(/^h([0-3])$/)?.[1]
-  const allHave = (pattern: RegExp) => lines.every((line) => pattern.test(line))
-  const removing =
-    heading !== undefined
-      ? allHave(heading === '0' ? /^#{1,6}\s+/ : new RegExp(`^#{${heading}}\\s+`))
-      : command === 'bulletList'
-        ? allHave(/^\s*[-+*]\s+/)
-        : command === 'orderedList'
-          ? allHave(/^\s*\d+[.)]\s+/)
-          : command === 'taskList'
-            ? allHave(/^\s*(?:[-+*]\s+)?\[[ xX]\]\s+/)
-            : command === 'quote'
-              ? allHave(/^>\s?/)
-              : false
-  let index = 0
-  const transformed = lines
-    .map((line) => {
-      if (heading !== undefined)
-        return removing || heading === '0'
-          ? line.replace(/^#{1,6}\s+/, '')
-          : `${'#'.repeat(Number(heading))} ${line.replace(/^#{1,6}\s+/, '')}`
-      if (command === 'bulletList') return removing ? line.replace(/^\s*[-+*]\s+/, '') : `- ${stripListMarker(line)}`
-      if (command === 'orderedList') return removing ? line.replace(/^\s*\d+[.)]\s+/, '') : `${++index}. ${stripListMarker(line)}`
-      if (command === 'taskList') return removing ? stripTaskMarker(line) : `- [ ] ${stripTaskMarker(line)}`
-      if (command === 'quote') return removing ? line.replace(/^>\s?/, '') : `> ${line.replace(/^>\s?/, '')}`
-      return line
-    })
-    .join('\n')
-  view.dispatch({ changes: { from, to, insert: transformed }, selection: { anchor: from, head: from + transformed.length } })
-  view.focus()
+  switch (command) {
+    case 'bold':
+      toggleInlineMark(view, '**')
+      return
+    case 'italic':
+      toggleInlineMark(view, '*')
+      return
+    case 'strikethrough':
+      toggleInlineMark(view, '~~')
+      return
+    case 'code':
+      toggleInlineMark(view, '`')
+      return
+    case 'link':
+      insertLinkPlaceholder(view)
+      return
+    case 'quote':
+      toggleBlockPrefix(view, '> ', /^>\s?/)
+      return
+    case 'bulletList':
+      toggleBlockPrefix(view, '- ', /^\s*[-*+]\s/)
+      return
+    case 'orderedList':
+      toggleOrderedList(view)
+      return
+    case 'taskList':
+      toggleBlockPrefix(view, '- [ ] ', /^\s*[-+*]\s+\[[ xX]\]\s/)
+  }
 }
 
 export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane(props, forwardedRef) {
@@ -243,6 +243,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   onStateChangeRef.current = props.onStateChange
   const onSelectionStatsChangeRef = useRef(props.onSelectionStatsChange)
   onSelectionStatsChangeRef.current = props.onSelectionStatsChange
+  const onFormattingChangeRef = useRef(props.onFormattingChange)
+  onFormattingChangeRef.current = props.onFormattingChange
   // The parent callback is recreated on every render. Keeping it in the
   // dependency list would re-apply a pending format command on unrelated
   // renders before the parent has cleared it.
@@ -391,6 +393,13 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       format: (command) => {
         if (viewRef.current) applyFormat(viewRef.current, command)
       },
+      getFormattingState: () => (viewRef.current ? selectionContext(viewRef.current.state) : null),
+      getBlockStyle: () => (viewRef.current ? blockStyle(viewRef.current.state) : null),
+      getListStyle: () => (viewRef.current ? listStyle(viewRef.current.state) : null),
+      getLinkSelection: () => (viewRef.current ? linkSelection(viewRef.current.state, true) : null),
+      insertLink: (text, url, from, to) => (viewRef.current ? insertLinkFromPopover(viewRef.current, text, url, from, to) : false),
+      setBlockStyle: (style, language = '') => (viewRef.current ? applyBlockStyle(viewRef.current, style, language) : false),
+      setListStyle: (style) => (viewRef.current ? applyListStyle(viewRef.current, style) : false),
       getScrollFraction: () => {
         const dom = viewRef.current?.scrollDOM
         if (!dom || dom.scrollHeight <= dom.clientHeight) return 0
@@ -541,6 +550,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             props.onCursorChange(line.number, head - line.from + 1)
             onStateChangeRef.current?.(getEditorState(view))
             onSelectionStatsChangeRef.current?.(getSelectionStats(view))
+            onFormattingChangeRef.current?.(selectionContext(view.state))
             setReady(true)
           }}
           onChange={props.onChange}
@@ -552,6 +562,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
             props.onCursorChange(line.number, head - line.from + 1)
             onStateChangeRef.current?.(getEditorState(update.view))
             onSelectionStatsChangeRef.current?.(getSelectionStats(update.view))
+            onFormattingChangeRef.current?.(selectionContext(update.state))
           }}
           basicSetup={{
             lineNumbers: false,

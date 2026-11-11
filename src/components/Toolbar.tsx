@@ -9,6 +9,7 @@ import {
   Download,
   FileDown,
   FilePenLine,
+  FileSearch,
   FolderOpen,
   Folder,
   Info,
@@ -69,6 +70,8 @@ interface ToolbarProps {
   onZoomChange: (zoom: number) => void
   onSearchQueryChange: (value: string) => void
   onSearchOpen: () => void
+  /** Opens the Search for Document palette (⇧⌘O). */
+  onSearchDocument: () => void
   onOpenWith: (application?: string) => void
   onOpenInLlm: (application: 'codex' | 'claude' | 'chatgpt') => void
   onOpen: () => void
@@ -88,7 +91,16 @@ interface ToolbarProps {
 }
 
 const SIMPLE_ACTIONS: Partial<
-  Record<ToolbarItem, { title: Parameters<typeof t>[1]; icon: React.ReactNode; action: (p: ToolbarProps) => void }>
+  Record<
+    ToolbarItem,
+    {
+      title: Parameters<typeof t>[1]
+      /** NSToolbarItem.toolTip; hover text distinct from the accessible label. */
+      tooltip?: Parameters<typeof t>[1]
+      icon: React.ReactNode
+      action: (p: ToolbarProps) => void
+    }
+  >
 > = {
   inspector: { title: 'getInfo', icon: <Info />, action: (p) => p.onToggleInspector() },
   alwaysOnTop: { title: 'alwaysOnTop', icon: <Pin />, action: (p) => p.onToggleAlwaysOnTop() },
@@ -99,6 +111,12 @@ const SIMPLE_ACTIONS: Partial<
   export: { title: 'exportItem', icon: <FileDown />, action: (p) => p.onExport() },
   exportPdf: { title: 'exportPdf', icon: <FileDown />, action: (p) => p.onExportPdf() },
   search: { title: 'searchItem', icon: <Search />, action: (p) => p.onSearchOpen() },
+  searchDocument: {
+    title: 'searchForDocumentItem',
+    tooltip: 'searchForDocumentTooltip',
+    icon: <FileSearch />,
+    action: (p) => p.onSearchDocument(),
+  },
 }
 
 const actionTitle = (item: ToolbarItem, props: ToolbarProps, fallback: Parameters<typeof t>[1]) =>
@@ -124,17 +142,32 @@ export function Toolbar(props: ToolbarProps) {
     () => props.applications.filter((application) => application.kind !== 'llm' && application.available),
     [props.applications],
   )
-  const llmApps = useMemo(() => props.applications.filter((application) => application.kind === 'llm'), [props.applications])
+  // Upstream llmCandidates() lists only installed LLM apps; an uninstalled
+  // target never appears in the menu at all, and the toolbar item itself is
+  // removed while none are available.
+  const llmApps = useMemo(
+    () => props.applications.filter((application) => application.kind === 'llm' && application.available),
+    [props.applications],
+  )
+  // Upstream resolveDefaultLLM: the last picked target when still installed,
+  // otherwise the first candidate.
+  const defaultLlm = llmApps.find((application) => application.id === lastLlmTarget) ?? llmApps[0]
   // `system` is a valid default target but is intentionally filtered out of
   // editorApps (it has kind="system"). Never silently substitute a different
   // editor for the user's configured target.
   const defaultEditor = editorApps.find((application) => application.id === props.defaultOpenTarget)
   const effectiveDefaultTarget = defaultEditor?.id ?? 'system'
   // Keep the user's ordered layout, including duplicate spacing items. Like
-  // AppKit, navigation is absent until there is a destination in either direction.
+  // AppKit, navigation is absent until there is a destination in either
+  // direction, and openInLlm is removed entirely while no LLM app is
+  // installed (upstream hasLLMTargetsAvailable gates the allowed set and the
+  // item factory, then live-removes the item via removeOpenInLLMToolbarItem).
   const toolbarItems = useMemo(
-    () => props.items.filter((item) => item !== 'navigation' || props.canGoBack || props.canGoForward),
-    [props.items, props.canGoBack, props.canGoForward],
+    () =>
+      props.items.filter(
+        (item) => (item !== 'navigation' || props.canGoBack || props.canGoForward) && (item !== 'openInLlm' || llmApps.length > 0),
+      ),
+    [props.items, props.canGoBack, props.canGoForward, llmApps.length],
   )
 
   const withLabel = (icon: React.ReactNode, title: Parameters<typeof t>[1]) => (
@@ -156,12 +189,20 @@ export function Toolbar(props: ToolbarProps) {
       <span>{tx('openWithDefault')}</span>
     </button>
   )
+  // llmApps only lists installed targets, so every row is actionable — the
+  // way upstream's buildOpenInLLMMenu lists installed candidates alone.
   const llmButtons = llmApps.map((application) => (
     <button
       key={application.id}
-      disabled={!application.available}
       onClick={() => {
         setLastLlmTarget(application.id)
+        // Upstream persists the pick (setDefaultLLM → UserDefaults) so the
+        // "Open in {app}" label and checkmark survive relaunches.
+        try {
+          localStorage.setItem('textmark.lastLlmTarget', application.id)
+        } catch {
+          /* storage unavailable: the in-memory default still applies */
+        }
         props.onOpenInLlm(application.id as 'codex' | 'claude' | 'chatgpt')
       }}
     >
@@ -351,16 +392,23 @@ export function Toolbar(props: ToolbarProps) {
           </div>
         </details>,
       )
-    if (item === 'openInLlm')
+    if (item === 'openInLlm') {
+      // Reached only while an LLM app is installed: toolbarItems filters the
+      // item out otherwise (upstream hasLLMTargetsAvailable gates the allowed
+      // set and the item factory, then live-removes the item). The label
+      // names the resolved default, the way refreshOpenInLLMItem does.
+      const llmLabel = t(props.locale, 'openInApp', { name: defaultLlm.name })
       return slot(
         <details className="toolbar-group open-with">
-          <summary title={tx('openInLlm')}>
-            {withLabel(<Sparkles />, 'openInLlm')}
+          <summary title={llmLabel}>
+            <Sparkles />
+            {props.displayMode === 'iconAndLabel' ? <span className="toolbar-label">{llmLabel}</span> : null}
             <ChevronDown />
           </summary>
-          <div className="menu-popover">{llmApps.length ? llmButtons : emptyAppItem()}</div>
+          <div className="menu-popover">{llmButtons}</div>
         </details>,
       )
+    }
     if (item === 'zoom')
       return slot(
         <div className="toolbar-group zoom-buttons" aria-label={`${tx('zoom')} ${props.zoom}%`}>
@@ -437,7 +485,7 @@ export function Toolbar(props: ToolbarProps) {
       return slot(
         <button
           className={`toolbar-item-button ${props.displayMode === 'iconAndLabel' ? 'with-label' : ''} ${active ? 'selected' : ''} ${item === 'edit' && active ? 'edit-active' : ''}`}
-          title={tx(title)}
+          title={tx(simple.tooltip ?? title)}
           aria-label={tx(title)}
           onClick={() => {
             if (item === 'copy') {

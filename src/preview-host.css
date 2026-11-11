@@ -6,6 +6,14 @@
   --document-link: #0066cc;
   --document-fill: #f5f5f7;
   --document-grid: #d2d2d7;
+  /* Callout colors: upstream d0c6197's seven GitHub groups (light). */
+  --alert-blue: #0969da;
+  --alert-green: #1a7f37;
+  --alert-purple: #8250df;
+  --alert-yellow: #9a6700;
+  --alert-red: #d1242f;
+  --alert-teal: #1b7c83;
+  --alert-orange: #bc4c00;
   background: var(--document-background);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-synthesis: none;
@@ -20,6 +28,13 @@
   --document-link: #409cff;
   --document-fill: #2c2c2e;
   --document-grid: #48484a;
+  --alert-blue: #4493f8;
+  --alert-green: #3fb950;
+  --alert-purple: #ab7df8;
+  --alert-yellow: #d29922;
+  --alert-red: #f85149;
+  --alert-teal: #39c5cf;
+  --alert-orange: #db6d28;
 }
 
 * {
@@ -311,23 +326,96 @@ body {
   border-radius: 999px;
   background: color-mix(in srgb, var(--document-grid) 50%, transparent);
 }
-.markdown-alert {
-  margin: 1.1em 0;
-  padding: 0.65em 0.9em;
-  border-left: 3px solid var(--document-link);
-  background: color-mix(in srgb, var(--document-link) 7%, transparent);
+.markdown-body .markdown-alert {
+  margin: 24px 0 0;
+  padding: 12px 16px;
+  color: var(--document-text);
+  background: var(--document-fill);
+  border: 0.5px solid color-mix(in srgb, var(--document-text) 12%, transparent);
+  border-radius: 16px;
+}
+.markdown-body .markdown-alert > *:first-child {
+  margin-top: 0;
+}
+.markdown-body .markdown-alert > .markdown-alert-title + * {
+  margin-top: 6px;
 }
 .markdown-alert-title {
-  margin: 0 0 0.25em !important;
-  color: var(--document-link);
-  font-weight: 650;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.87em;
+  line-height: 1;
 }
 .markdown-alert-icon {
   width: 1em;
   height: 1em;
   margin-right: 0.5em;
-  vertical-align: -0.12em;
+  flex: 0 0 auto;
   fill: currentColor;
+}
+.markdown-alert-note,
+.markdown-alert-info,
+.markdown-alert-todo {
+  --alert-color: var(--alert-blue);
+}
+.markdown-alert-tip,
+.markdown-alert-success {
+  --alert-color: var(--alert-green);
+}
+.markdown-alert-important,
+.markdown-alert-example {
+  --alert-color: var(--alert-purple);
+}
+.markdown-alert-warning {
+  --alert-color: var(--alert-yellow);
+}
+.markdown-alert-caution,
+.markdown-alert-failure,
+.markdown-alert-danger,
+.markdown-alert-bug {
+  --alert-color: var(--alert-red);
+}
+.markdown-alert-abstract {
+  --alert-color: var(--alert-teal);
+}
+.markdown-alert-question {
+  --alert-color: var(--alert-orange);
+}
+.markdown-alert-quote {
+  --alert-color: var(--document-secondary);
+}
+.markdown-alert-title {
+  color: var(--alert-color, var(--alert-blue));
+}
+summary.markdown-alert-title {
+  cursor: default;
+  list-style: none;
+}
+summary.markdown-alert-title::-webkit-details-marker {
+  display: none;
+}
+summary.markdown-alert-title::after {
+  content: '';
+  margin-left: auto;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform 0.15s;
+}
+details[open] > summary.markdown-alert-title::after {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  summary.markdown-alert-title::after {
+    transition: none;
+  }
 }
 .md-source-blank-line {
   height: calc(var(--blank-lines, 1) * 0.76em);

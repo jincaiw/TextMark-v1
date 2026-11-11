@@ -1,3 +1,21 @@
+# TextMark v0.11.0
+
+TextMark 0.11.0 completes the desktop parity sweep against Markdown Preview v0.0.72 — the current upstream release — and closes it with the first full real-desktop acceptance run. Reading rendering gains GitHub/Obsidian callouts, footnotes, source-anchored outlines, escaped citations and gutter-stable numbered lists; the Edit menu gains Copy as Plain Text (⌥⇧⌘C), which copies the reader selection the way it reads; the appearance sheet, sidebar wording, inspector and share popover were realigned surface by surface. The whole desktop shell spec now runs against the real native binary — menus, shortcuts, the system pasteboard, the Rust filesystem — and passes 23 of 23.
+
+TextMark 0.11.0 完成对 Markdown Preview v0.0.72（上游当前版本）的桌面 UI 逐面对齐，并以首轮真实桌面验收收尾。阅读渲染新增 GitHub/Obsidian 提示块、脚注、目录源锚定、转义引用字面渲染与编号列宽稳定；编辑菜单新增「拷贝为纯文本」（⌥⇧⌘C），按阅读所见复制选区；外观面板、侧栏措辞、显示简介与分享浮层逐面校正。整套桌面 shell 用例现运行于真实原生二进制——原生菜单、快捷键、系统粘贴板、Rust 文件系统——23/23 全部通过。
+
+## Highlights / 主要更新
+
+- 拷贝为纯文本：Edit 菜单 Copy 之后新增「拷贝为纯文本 / Copy as Plain Text」（⌥⇧⌘C）。无阅读选区时原生菜单项自动禁用；有选区时按「读到的样子」提取文本——frontmatter 以 `键\t值` 行、任务项显示 ☐/☑、表格制表符分列、剥离 `- [ ]`、`| … |`、`#` 等 Markdown 记号——经跨平台剪贴板插件写入系统粘贴板，粘贴进纯文本框不再带 Markdown 语法。
+- 提示块：`> [!NOTE]` 等 15 种 GitHub kind 与 Obsidian 别名（tip/hint、summary/tldr、check/done、error→danger 等）渲染为上游同款 alert 卡片：octicon 图标、GitHub 双模式配色（`--alert-*`）、`+`/`-` 折叠标题。
+- 阅读渲染对齐：脚注区与源码映射；`\[18\]` 转义引用按字面文本渲染而非数学公式；目录条目锚定到真实标题行（含空标题防护）；有序列表编号列宽按该列表最大序号位数固定，切换模式与缩放时列不位移。
+- 外观：主题预设扩至九款（Original…Midnight，与上游 ThemePreset 逐一对应）；「自定义主题」面板以色板/重置/完成走查校正，并修复从设置 ▸ 外观打开时面板被设置对话框遮挡的层级缺陷。
+- 措辞与结构：侧栏模式选择器改「目录 / 项目导航器」、自动保存文案对齐上游 zh「自动保存」、显示简介去掉面板内关闭按钮（与上游一致，经工具栏或 View ▸ Inspector 关闭）、分享浮层「共享」行归位。
+- 关闭流程：补齐 `core:window:allow-close` 能力，红绿灯关闭在有未保存文稿时正确弹出保存询问、保存后关闭窗口（此前保存后关闭会被权限拒绝）。
+- 验收：新增真实桌面 e2e——wdio + Tauri driver 驱动带 `e2e` feature 的原生调试二进制，覆盖启动渲染、窗口几何、偏好持久化、原生菜单启用态往返、系统粘贴板逐项断言、剪贴板图片落盘、保存/冲突/改名/删除重建等 23 个场景，全部通过；前端 56 个测试文件 592 项测试、TypeScript、ESLint、格式、构建、包体积预算（main+worker 323 KiB）与 Rust fmt/check/clippy/test（含 `--features e2e`）全部通过。逐面对比与证据边界见 `outputs/desktop-review-20260918/TextMark-v0.0.72-桌面UI完全一致对比表-v1.0.md`。
+
+---
+
 # TextMark v0.10.9
 
 TextMark 0.10.9 aligns the desktop reading and document chrome with Markdown Preview v0.0.71: a Customize Theme sheet, an update capsule, a share popover, code-block and diagram control pills, and the Find/tab menu shortcuts.

@@ -4,7 +4,11 @@ import { gzipSync } from 'node:zlib'
 // Standard Emoji shortcodes are parsed in the render worker so preview, HTML,
 // PDF and PNG exports stay identical. Keep room for that complete built-in map
 // while retaining a tight budget for first-screen application code.
-const maximum = 320 * 1024
+// v0.0.71 parity (B6): the searchDocument toolbar item (FileSearch glyph) and
+// the openInLlm availability gating (installed-only candidates, dynamic
+// "Open in {app}" label, persisted pick) grew the first screen past 320 KiB;
+// same documented raise precedent as the emoji map (300 -> 320).
+const maximum = 324 * 1024
 const assetDirectory = new URL('../dist/assets/', import.meta.url)
 
 function linkedJavaScript(page) {

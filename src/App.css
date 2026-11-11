@@ -29,13 +29,14 @@
   --search-match-text: #202124;
   --search-match-active-bg: #ffc94d;
   --search-match-active-ring: #ef8b00;
-  /* Markdown alert accents */
-  --alert-note: #0969da;
-  --alert-tip: #1a7f37;
-  --alert-important: #8250df;
-  --alert-warning: #9a6700;
-  --alert-caution: #d1242f;
-  --alert-default: #696969;
+  /* Markdown alert accents: upstream d0c6197's seven GitHub color groups. */
+  --alert-blue: #0969da;
+  --alert-green: #1a7f37;
+  --alert-purple: #8250df;
+  --alert-yellow: #9a6700;
+  --alert-red: #d1242f;
+  --alert-teal: #1b7c83;
+  --alert-orange: #bc4c00;
   /* Document palette (upstream parity) */
   --document-text: #1d1d1f;
   --document-secondary: #6e6e73;
@@ -98,12 +99,13 @@
   --border: rgba(255, 255, 255, 0.13);
   --hover: rgba(255, 255, 255, 0.08);
   --selected: rgba(10, 132, 255, 0.26);
-  --alert-note: #58a6ff;
-  --alert-tip: #3fb950;
-  --alert-important: #d2a8ff;
-  --alert-warning: #d29922;
-  --alert-caution: #f85149;
-  --alert-default: #8b949e;
+  --alert-blue: #4493f8;
+  --alert-green: #3fb950;
+  --alert-purple: #ab7df8;
+  --alert-yellow: #d29922;
+  --alert-red: #f85149;
+  --alert-teal: #39c5cf;
+  --alert-orange: #db6d28;
   --document-text: #f5f5f7;
   --document-secondary: #86868b;
   --document-link: #2997ff;
@@ -762,59 +764,309 @@ select:focus-visible {
   width: 190px;
 }
 
-.formatting-toolbar {
-  z-index: 8;
-  min-width: 0;
+/* Floating format controls (edit mode). Upstream's macOS 26 cluster: five
+ * independently-shaped glass capsules pinned to the editor's top-trailing
+ * edge, floating over the document rather than pushing it down. The overlay
+ * is click-through — only the pills and their popovers take pointer events. */
+.floating-format-bar {
+  position: absolute;
+  z-index: 10;
+  /* Upstream pins the bar's top to the chrome overlay stack: it sits 8pt
+   * below whatever the find bar occupies. */
+  top: calc(8px + var(--document-tools-height, 0px));
+  right: 20px;
+  pointer-events: none;
+}
+.ffb-groups {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 max(40px, calc((100% - 820px) / 2 + 40px));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--chrome) 92%, transparent);
+  gap: 8px;
 }
-.formatting-toolbar > span {
-  width: 1px;
-  height: 20px;
-  margin: 0 8px;
-  background: var(--border);
-}
-.formatting-toolbar button {
-  width: 26px;
+.ffb-group {
+  display: flex;
+  align-items: center;
   height: 28px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  padding: 0 2px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--window) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--shadow-hud);
+  pointer-events: auto;
+}
+.ffb-btn {
+  height: 28px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 6px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
 }
-.formatting-toolbar button:hover {
+.ffb-btn:hover {
   background: var(--hover);
-  color: var(--text);
 }
-.formatting-toolbar button svg {
+.ffb-btn svg {
   width: 15px;
   height: 15px;
-  stroke-width: 1.7;
+  stroke-width: 1.8;
 }
-.formatting-toolbar select {
-  height: 26px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+/* Selection tints the glyph itself (upstream: contentTintColor systemBlue,
+ * native selected bezel deliberately off). */
+.ffb-btn.is-active {
+  color: var(--accent);
+}
+.ffb-menu-btn {
+  min-width: 70px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.ffb-btn-link {
+  min-width: 28px;
+}
+/* Upstream widths: Lists 54pt, More Formatting 52pt. */
+.ffb-btn-lists {
+  min-width: 54px;
+}
+.ffb-btn-more {
+  min-width: 52px;
+}
+.ffb-menu-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}
+.ffb-chevron {
+  width: 10px !important;
+  height: 10px !important;
+  stroke-width: 2.4 !important;
+  opacity: 0.75;
+}
+.ffb-popover {
+  position: fixed;
+  z-index: 120;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--window);
+  backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: var(--shadow-popover);
+  pointer-events: auto;
+}
+.ffb-popover.is-wide {
+  width: max-content;
+  min-width: 220px;
+}
+.ffb-popover-title {
+  padding: 0 8px 4px;
+  font-size: 11px;
   color: var(--muted);
-  font-size: var(--text-sm);
+}
+.ffb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
   cursor: pointer;
 }
-.formatting-toolbar .formatting-heading {
-  width: 76px;
-  padding-inline: 6px;
+.ffb-row:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
-.formatting-toolbar select:hover {
-  background: var(--hover);
+.ffb-check {
+  flex: 0 0 14px;
+  display: grid;
+  place-items: center;
+}
+.ffb-check svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+  color: var(--accent);
+}
+.ffb-row-icon {
+  flex: 0 0 16px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.ffb-row-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.ffb-row-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ffb-row-trailing {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.ffb-row-trailing svg {
+  width: 9px;
+  height: 9px;
+  stroke-width: 2.4;
+}
+.ffb-heading-row .ffb-row-label {
+  padding-left: 2px;
+}
+/* Code Block → language picker. */
+.ffb-language {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 342px;
+}
+.ffb-lang-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.ffb-lang-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
   color: var(--text);
+  font-size: 12px;
+}
+.ffb-lang-filter input:focus,
+.ffb-lang-filter input:focus-visible {
+  outline: none;
+}
+.ffb-lang-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ffb-lang-title {
+  padding: 3px 4px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ffb-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 6px 0 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.ffb-lang-row:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.ffb-lang-glyph {
+  flex: 0 0 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+.ffb-lang-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ffb-lang-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Link form. Upstream .frame(width: 320) wraps the 16pt padding, so the
+ * content column is 320 − 2×8 popover padding − 2×1px border = 302px. */
+.ffb-link-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 302px;
+  font-size: 13px;
+}
+.ffb-link-form .ffb-popover-title {
+  padding-bottom: 0;
+}
+.ffb-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ffb-link-label {
+  flex: 0 0 34px;
+  color: var(--muted);
+  text-align: right;
+}
+.ffb-link-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+.ffb-link-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ffb-link-actions button {
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ffb-link-actions button:hover {
+  background: var(--hover);
+}
+.ffb-link-actions button.ffb-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.ffb-link-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .find-bar {
@@ -1070,16 +1322,6 @@ select:focus-visible {
   inset: 0 0 auto;
   display: flex;
   flex-direction: column;
-}
-.document-tools .formatting-toolbar {
-  background: var(--chrome);
-  min-height: 40px;
-  flex-shrink: 0;
-  overflow-x: auto;
-  padding-inline: max(40px, calc((100% - 820px) / 2 + 40px));
-}
-.document-tools .formatting-toolbar > * {
-  flex-shrink: 0;
 }
 .document-tools .find-bar {
   flex-wrap: wrap;
@@ -1991,17 +2233,30 @@ select:focus-visible {
   max-width: var(--document-page-width, 900px);
   min-height: 100%;
   margin: 0 auto;
+  /* The reader margins inset composes with the page padding, so it holds in
+     every content-width mode (upstream ReaderLayoutSetting.pageInset). */
   padding: var(--document-page-padding, 32px 40px 48px);
+  padding-inline: calc(var(--document-page-padding-horizontal, 40px) + var(--document-page-inset, 0px));
   color: var(--document-text);
   font-family: var(--document-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif);
   font-size: var(--document-font-size, 15px);
-  line-height: var(--document-line-height, 1.52);
-  overflow-wrap: break-word;
+  font-weight: var(--document-font-weight, 400);
+  line-height: var(--document-line-height, 1.6);
+  letter-spacing: var(--document-letter-spacing, normal);
+  word-spacing: var(--document-word-spacing, normal);
+  text-wrap: pretty;
   tab-size: 4;
+}
+/* Reader spacing tweaks stop at code — whitespace fidelity wins (upstream). */
+.markdown-body pre,
+.markdown-body code,
+.markdown-body kbd,
+.markdown-body samp {
+  letter-spacing: normal;
+  word-spacing: normal;
 }
 .markdown-body.content-full {
   width: 100%;
-  padding-inline: var(--document-page-padding-horizontal, 40px);
 }
 .markdown-body > *:first-child {
   margin-top: 0 !important;
@@ -2013,36 +2268,34 @@ select:focus-visible {
 .markdown-body h5,
 .markdown-body h6 {
   scroll-margin-top: 24px;
-  margin: 1.72em 0 0;
+  /* Upstream's system title scale as ratios of the 15px body, with top-only
+     margins: the next block's own top margin is the gap below a heading. */
+  margin: calc(0.6rem + 0.5em) 0 0;
   color: var(--document-text);
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.012em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .markdown-body h1 {
-  margin-top: 0.72em;
-  font-size: 1.82em;
-  font-weight: 700;
+  font-size: 2em;
 }
 .markdown-body h2 {
-  font-size: 1.58em;
-  line-height: 1.1;
+  font-size: 1.692em;
 }
 .markdown-body h3 {
-  font-size: 1.4em;
-  line-height: 1.12;
+  font-size: 1.308em;
 }
 .markdown-body h4 {
-  font-size: 1.266em;
-  line-height: 1.08;
+  font-size: 1.154em;
 }
 .markdown-body h5 {
-  font-size: 1.125em;
-  line-height: 1.09;
+  font-size: 1em;
 }
 .markdown-body h6 {
-  font-size: 1em;
-  line-height: 1.24;
+  font-size: 0.846em;
+}
+.markdown-body :is(h1, h2, h3, h4, h5, h6) code {
+  font-size: inherit;
 }
 .markdown-body .md-source-blank-line {
   height: var(--document-source-line-height, 22.8px);
@@ -2063,16 +2316,19 @@ select:focus-visible {
   margin-top: var(--document-source-line-height, 22.8px);
 }
 .markdown-body p {
-  margin: 14px 0 0;
+  margin: 12px 0 0;
+}
+.markdown-body li > p:first-child {
+  margin-top: 0;
 }
 .markdown-body strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 .markdown-body mark {
   padding: 0 0.16em;
   border-radius: 0.22em;
   color: inherit;
-  background: color-mix(in srgb, var(--accent-color) 26%, transparent);
+  background: rgba(255, 216, 77, 0.55);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
@@ -2100,29 +2356,66 @@ select:focus-visible {
 }
 .markdown-body ul,
 .markdown-body ol {
-  margin: 14px 0 0;
-  padding-left: 1.55em;
+  /* Each list owns its gutter, so a nested list does not inherit the wider
+     gutter of a long ordered list around it (upstream d0c6197). */
+  --mdp-list-indent: 2.1em;
+  margin: 12px 0 0;
+  padding-inline-start: var(--mdp-list-indent);
+  padding-inline-end: 0;
+}
+/* From "100." on, the renderer tags the list with its digit count and the
+   gutter grows one ch per extra digit, so the marker never hangs past the
+   page edge. 1ch is the width of "0", which no document font renders
+   narrower than its tabular digits. */
+.markdown-body ol[data-mdp-digits='3'] {
+  --mdp-list-indent: calc(2.1em + 1ch);
+}
+.markdown-body ol[data-mdp-digits='4'] {
+  --mdp-list-indent: calc(2.1em + 2ch);
+}
+.markdown-body ol[data-mdp-digits='5'] {
+  --mdp-list-indent: calc(2.1em + 3ch);
+}
+.markdown-body ol[data-mdp-digits='6'] {
+  --mdp-list-indent: calc(2.1em + 4ch);
+}
+.markdown-body ol[data-mdp-digits='7'] {
+  --mdp-list-indent: calc(2.1em + 5ch);
+}
+.markdown-body ol[data-mdp-digits='8'] {
+  --mdp-list-indent: calc(2.1em + 6ch);
+}
+.markdown-body ol[data-mdp-digits='9'] {
+  --mdp-list-indent: calc(2.1em + 7ch);
+}
+.markdown-body ol > li::marker {
+  color: var(--document-link);
+  font-variant-numeric: tabular-nums;
 }
 .markdown-body li {
-  margin-top: 5px;
+  margin-top: 3px;
 }
 .markdown-body li:first-child {
   margin-top: 0;
 }
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 3px;
+}
+.markdown-body ul {
+  list-style: none;
+}
 .markdown-body ul > li {
   position: relative;
-}
-.markdown-body ul > li::marker {
-  color: transparent;
 }
 .markdown-body ul > li:not(.task-list-item)::before {
   content: '';
   position: absolute;
-  inset-inline-start: -0.9em;
-  top: 0.56em;
+  inset-inline-start: calc(-1 * 0.75em - 0.4em);
+  top: calc(0.5lh - 0.2em);
   width: 0;
   height: 0;
-  border: 0.2em solid var(--document-text);
+  border: 0.2em solid var(--document-link);
   border-radius: 50%;
 }
 .markdown-body a {
@@ -2139,39 +2432,39 @@ select:focus-visible {
   background: var(--document-grid);
 }
 .markdown-body blockquote {
-  margin: 20px 0 0;
-  padding: 2px 0 2px 1em;
-  border-inline-start: 3px solid color-mix(in srgb, var(--accent-color) 40%, var(--document-grid));
+  position: relative;
+  margin: 18px 0 0;
+  padding: 0.4em 1em;
+  padding-inline-start: 1.5em;
   color: var(--document-secondary);
 }
-.markdown-body blockquote p:first-child {
+/* Upstream draws the bar as a rounded 4px ::before inset from the edge;
+   --document-grid is the cross-platform stand-in for its
+   -apple-system-quaternary-label (upstream's own print palette unifies the
+   two at #d2d2d7). */
+.markdown-body blockquote::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0.3em;
+  top: 0.4em;
+  bottom: 0.4em;
+  border-inline-start: 4px solid var(--document-grid);
+  border-radius: 999px;
+  pointer-events: none;
+}
+.markdown-body blockquote > *:first-child {
   margin-top: 0;
 }
 .markdown-body blockquote p:last-child {
   margin-bottom: 0;
 }
-.markdown-body details {
-  margin: 18px 0 0;
-  padding: 12px 14px;
-  border: 1px solid var(--document-grid);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--document-fill) 58%, transparent);
-}
-.markdown-body summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.markdown-body details[open] summary {
-  margin-bottom: 10px;
-}
-.markdown-body details > :last-child {
-  margin-bottom: 0;
-}
+/* Upstream styles no generic <details>; a raw disclosure block uses the
+   browser default. Foldable callouts are the only details the document
+   styles, and they carry their own card (.markdown-alert above). */
 .markdown-body .md-table-scroll {
   width: 100%;
-  margin: 20px 0 0;
+  margin: 24px 0 0;
   overflow-x: auto;
-  border-radius: var(--radius-md);
 }
 .markdown-body table {
   width: 100%;
@@ -2179,7 +2472,6 @@ select:focus-visible {
   margin: 0;
   border-spacing: 0;
   border-collapse: collapse;
-  font-size: 0.92em;
 }
 .markdown-body.textmark-exporting {
   margin: 0;
@@ -2208,12 +2500,14 @@ select:focus-visible {
 }
 .markdown-body th,
 .markdown-body td {
-  padding: 8px 10px;
-  border: 1px solid var(--document-grid);
+  padding: 8px 12px;
+  /* Horizontal hairlines only, like upstream: no full grid, no shaded header. */
+  border-top: 1px solid var(--document-grid);
+  border-bottom: 1px solid var(--document-grid);
   text-align: start;
+  vertical-align: top;
 }
 .markdown-body th {
-  background: color-mix(in srgb, var(--document-fill) 68%, transparent);
   font-weight: 600;
 }
 .markdown-body th.md-table-align-left,
@@ -2234,25 +2528,30 @@ select:focus-visible {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 .markdown-body code {
-  padding: 0.18em 0.42em;
-  border-radius: var(--radius-sm);
+  padding: 0.15em 0.3em;
+  border-radius: 5px;
   background: var(--document-fill);
+  border: 0.5px solid color-mix(in srgb, var(--document-text) 12%, transparent);
   color: var(--document-text);
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: var(--document-code-font-size, 0.88em);
-  font-size: 0.88em;
+  font-size: var(--document-code-font-size, 0.9em);
+}
+.markdown-body :not(pre) > code {
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 .markdown-body pre {
   position: relative;
 }
 .markdown-body pre.hljs {
-  margin: 16px 0 0;
-  padding: 12px 14px;
-  border-radius: var(--radius-lg);
+  margin: 12px 0 0;
+  padding: 16px;
+  border-radius: 8px;
   overflow: auto;
   background: var(--document-fill);
   color: var(--document-text);
-  line-height: 1.45;
+  line-height: 1.3;
   white-space: pre;
   overflow-wrap: normal;
   word-break: keep-all;
@@ -2348,12 +2647,24 @@ select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+/* Images follow the surrounding text (upstream d0c6197); the paragraph owns
+   the block gap, so image margins must not add to it. Explicit width/height
+   attributes take effect; downscaled images stay proportional. */
 .markdown-body img {
-  display: block;
+  display: inline-block;
   max-width: 100%;
+  margin: 12px 0 0;
+  border-radius: 8px;
+}
+.markdown-body img:not([width]):not([height]) {
   height: auto;
-  margin: 16px auto 0;
-  border-radius: var(--radius-md);
+}
+.markdown-body p img {
+  vertical-align: middle;
+  margin: 0 0.35em 0 0;
+}
+.markdown-body p > img:only-child {
+  margin: 0;
 }
 .markdown-body img.asset-error {
   min-height: 80px;
@@ -2467,39 +2778,87 @@ select:focus-visible {
 }
 .markdown-body .katex {
   cursor: copy;
+  /* KaTeX must lay out formulas left-to-right even inside RTL prose
+     (upstream d0c6197). */
+  direction: ltr !important;
+  unicode-bidi: isolate;
 }
 .markdown-body .katex-display {
+  /* Display math sits on the block rhythm (1.2em top), not KaTeX's default
+     1em/1em, and scrolls wide formulas without wrapping them. */
+  margin: 1.2em 0 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 .markdown-body .task-list-item {
   list-style: none;
 }
+/* Completed tasks read as done by muting, without a strikethrough (upstream
+   d0c6197): a long checklist stays legible. Only the item's own checkbox
+   counts, and nested lists keep their own state. */
+.markdown-body li.task-list-item:has(> input.task-list-item-checkbox:checked) > :not(ul, ol) {
+  color: color-mix(in srgb, var(--document-secondary), var(--document-text) 30%);
+}
+.markdown-body li.task-list-item > p:first-of-type {
+  display: inline;
+  margin-top: 0;
+}
 .markdown-body .task-list-item-checkbox {
-  width: 16px;
-  height: 16px;
-  margin: 0 0.55em 0 -1.4em;
+  font: inherit;
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0;
+  margin-inline-start: calc(-1.1em - 0.25em);
+  margin-inline-end: 0.25em;
+  vertical-align: middle;
+  position: relative;
+  top: calc(0.5ex - 0.5cap);
+  flex: 0 0 auto;
   accent-color: var(--accent);
-  vertical-align: -2px;
   cursor: pointer;
 }
-.markdown-body li.task-list-item:has(input.task-list-item-checkbox:checked) {
-  color: var(--document-secondary);
-  text-decoration: line-through;
+/* Footnotes (upstream d0c6197 #622): the separator is the plugin's own
+   <hr class="footnotes-sep">, so the section adds no border of its own. The
+   list uses the shared ordered-list gutter, which fits "10." and grows from
+   "100." on — no private padding. */
+.markdown-body .footnotes-sep {
+  margin: 2.35em 0 1em;
 }
 .markdown-body .footnotes {
-  margin-top: 2.35em;
-  padding-top: 1em;
-  border-top: 1px solid var(--document-grid);
+  color: var(--document-text);
   font-size: 0.9em;
+  line-height: 1.45;
 }
 .markdown-body .footnotes ol {
-  padding-left: 1.45em;
+  margin-top: 0;
 }
-.markdown-body .footnote-ref a,
-.markdown-body .footnote-backref {
-  font-weight: 650;
+.markdown-body .footnotes li {
+  margin-top: 0.72em;
+  padding-left: 0.12em;
+}
+.markdown-body .footnotes li:first-child {
+  margin-top: 0;
+}
+.markdown-body .footnotes li > p:first-child {
+  margin-top: 0;
+}
+.markdown-body .footnote-ref {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+}
+.markdown-body .footnote-ref a {
+  padding: 0 0.12em;
   text-decoration: none;
+}
+.markdown-body .footnote-backref {
+  font-size: 0.78em;
+  opacity: 0.65;
+  vertical-align: baseline;
+  text-decoration: none;
+}
+.markdown-body .footnote-backref:hover {
+  opacity: 1;
 }
 .table-of-contents {
   margin: 1em 0 2em;
@@ -2561,17 +2920,31 @@ select:focus-visible {
   content: '—';
   color: var(--document-secondary);
 }
-.markdown-alert {
+/* Callouts (upstream d0c6197 #629): the same hairline card as a code block,
+   a kind-colored flex title with an Octicon, and an Obsidian-style chevron
+   on foldable callouts. GitHub colors the seven groups; the fifteen kinds
+   map onto them. */
+.markdown-body .markdown-alert {
   margin: 24px 0 0;
   padding: 12px 16px;
-  border-left: 4px solid var(--alert-default);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--document-fill) 100%, transparent);
+  color: var(--document-text);
+  background: var(--document-fill);
+  border: 0.5px solid color-mix(in srgb, var(--document-text) 12%, transparent);
+  border-radius: 16px;
+}
+.markdown-body .markdown-alert > *:first-child {
+  margin-top: 0;
+}
+.markdown-body .markdown-alert > .markdown-alert-title + * {
+  margin-top: 6px;
 }
 .markdown-alert-title {
-  margin: 0 0 5px !important;
-  color: var(--accent);
-  font-weight: 650;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.87em;
+  line-height: 1;
 }
 .markdown-alert-icon {
   width: 1em;
@@ -2580,35 +2953,69 @@ select:focus-visible {
   flex: 0 0 auto;
   fill: currentColor;
 }
-.markdown-alert-note {
-  border-left-color: var(--alert-note);
+.markdown-alert-note,
+.markdown-alert-info,
+.markdown-alert-todo {
+  --alert-color: var(--alert-blue);
 }
-.markdown-alert-note .markdown-alert-title {
-  color: var(--alert-note);
+.markdown-alert-tip,
+.markdown-alert-success {
+  --alert-color: var(--alert-green);
 }
-.markdown-alert-tip {
-  border-left-color: var(--alert-tip);
-}
-.markdown-alert-tip .markdown-alert-title {
-  color: var(--alert-tip);
-}
-.markdown-alert-important {
-  border-left-color: var(--alert-important);
-}
-.markdown-alert-important .markdown-alert-title {
-  color: var(--alert-important);
+.markdown-alert-important,
+.markdown-alert-example {
+  --alert-color: var(--alert-purple);
 }
 .markdown-alert-warning {
-  border-left-color: var(--alert-warning);
+  --alert-color: var(--alert-yellow);
 }
-.markdown-alert-warning .markdown-alert-title {
-  color: var(--alert-warning);
+.markdown-alert-caution,
+.markdown-alert-failure,
+.markdown-alert-danger,
+.markdown-alert-bug {
+  --alert-color: var(--alert-red);
 }
-.markdown-alert-caution {
-  border-left-color: var(--alert-caution);
+.markdown-alert-abstract {
+  --alert-color: var(--alert-teal);
 }
-.markdown-alert-caution .markdown-alert-title {
-  color: var(--alert-caution);
+.markdown-alert-question {
+  --alert-color: var(--alert-orange);
+}
+.markdown-alert-quote {
+  --alert-color: var(--document-secondary);
+}
+.markdown-alert-title {
+  color: var(--alert-color, var(--alert-blue));
+}
+/* A foldable callout is a <details>; the chevron lives on the title and
+   turns down when open, exactly upstream's octicon mask. */
+summary.markdown-alert-title {
+  cursor: default;
+  list-style: none;
+}
+summary.markdown-alert-title::-webkit-details-marker {
+  display: none;
+}
+summary.markdown-alert-title::after {
+  content: '';
+  margin-left: 0.35em;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath d='M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform 0.15s ease;
+}
+details.markdown-alert[open] > summary.markdown-alert-title::after {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  summary.markdown-alert-title::after {
+    transition: none;
+  }
 }
 mark.search-match {
   padding: 0 1px;
@@ -2978,6 +3385,177 @@ mark.search-match.active {
 }
 .update-pill-close:active {
   background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+/* Search for Document… (⇧⌘O): the floating file-search palette, mirroring
+ * upstream FileSearchPanelController. A 480pt-wide glass panel with 20pt
+ * corners, a 52pt search row over a hairline, then 40pt file rows and 24pt
+ * section headers. Centered horizontally with its top edge 26% down the window
+ * (FileSearchPanelPlacement). The overlay is transparent — clicking outside the
+ * panel dismisses it, the way the child panel resigns key on a parent click. */
+.file-search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 26vh;
+}
+.file-search-palette {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(74vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--window);
+  backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: var(--shadow-dialog);
+}
+.file-search-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 52px;
+  height: 52px;
+  padding: 0 18px 0 16px;
+}
+/* The hairline under the field, inset 16pt like upstream's HairlineSeparator. */
+.file-search-row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+}
+.file-search-icon {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  color: var(--document-secondary);
+}
+.file-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--document-text);
+  font-size: 20px;
+  line-height: 1.2;
+}
+/* The field is focused the moment the palette opens and never gives focus up,
+ * so a ring would only box in the one element that should read as plain text
+ * (upstream PlainQueryField suppresses it). */
+.file-search-input:focus,
+.file-search-input:focus-visible {
+  outline: none;
+}
+.file-search-input::placeholder {
+  color: var(--document-secondary);
+}
+.file-search-results {
+  overflow-y: auto;
+  padding: 4px 0 8px;
+  /* Upstream shows at most eight rows before scrolling. */
+  max-height: 340px;
+}
+.file-search-header {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--document-secondary);
+}
+.file-search-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin: 1px 8px;
+  padding: 0 10px;
+  border-radius: 13px;
+  cursor: default;
+}
+.file-search-file[data-selected='true'] {
+  background: var(--accent);
+}
+.file-search-file-icon {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  color: var(--document-secondary);
+}
+.file-search-file[data-selected='true'] .file-search-file-icon {
+  color: #fff;
+}
+.file-search-file-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.file-search-file-name {
+  font-size: 13px;
+  color: var(--document-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-search-file-name strong {
+  font-weight: 700;
+}
+.file-search-file-path {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--document-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-search-file-path strong {
+  font-weight: 700;
+}
+.file-search-file[data-selected='true'] .file-search-file-name {
+  color: #fff;
+}
+.file-search-file[data-selected='true'] .file-search-file-path {
+  color: rgba(255, 255, 255, 0.82);
+}
+.file-search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 108px;
+  padding: 16px 24px;
+  color: var(--document-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+.file-search-open-folder {
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.file-search-open-folder:hover {
+  background: var(--hover);
+}
+.file-search-truncated {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--document-secondary);
+  text-align: center;
 }
 .dialog-backdrop {
   position: fixed;
@@ -4086,7 +4664,7 @@ mark.search-match.active {
   .native-sidebar,
   .document-tabs,
   .inspector-panel,
-  .formatting-toolbar,
+  .floating-format-bar,
   .find-bar,
   .toast {
     display: none !important;

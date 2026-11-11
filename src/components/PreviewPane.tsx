@@ -44,7 +44,7 @@ interface PreviewPaneProps {
 
 const hasRtl = (value: string) => /[\u0590-\u08ff]/.test(value)
 const disclosureKey = (details: HTMLDetailsElement, index: number) =>
-  `${index}:${details.querySelector('summary')?.textContent?.trim() ?? ''}`
+  `${index}:${details.dataset.mdFold ?? ''}:${details.querySelector('summary')?.textContent?.trim() ?? ''}`
 
 function DiagramLightbox({ html, locale, onClose }: { html: string; locale: Locale; onClose: () => void }) {
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -58,7 +58,7 @@ function DiagramLightbox({ html, locale, onClose }: { html: string; locale: Loca
       minimumZoom: 25,
       maximumZoom: 400,
       onChange: (state) => {
-        if (output) output.value = `${state.zoom}%`
+        if (output) output.value = `${Math.round(state.zoom)}%`
         if (fit) {
           fit.setAttribute('aria-pressed', String(state.fitWidth))
           fit.title = t(locale, state.fitWidth ? 'actualSize' : 'fitWidth')
@@ -259,7 +259,16 @@ export function PreviewPane(props: PreviewPaneProps) {
     morphdom(root, next, {
       childrenOnly: true,
       onBeforeElUpdated(from, to) {
-        if (from instanceof HTMLDetailsElement && from.open) (to as HTMLDetailsElement).open = true
+        // A reader's open/closed choice survives an in-place update only while
+        // the authored fold marker is unchanged (upstream d0c6197): flipping
+        // `[!x]+` to `[!x]-` must reset the callout to closed.
+        if (
+          from instanceof HTMLDetailsElement &&
+          to instanceof HTMLDetailsElement &&
+          from.dataset.mdFold === to.dataset.mdFold &&
+          from.open
+        )
+          to.open = true
         if (
           from instanceof HTMLElement &&
           to instanceof HTMLElement &&
@@ -413,7 +422,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                     diagramControllers.push(
                       attachDiagramInteractions(figure, node, {
                         onChange: (state) => {
-                          if (level) level.textContent = `${state.zoom}%`
+                          if (level) level.textContent = `${Math.round(state.zoom)}%`
                         },
                       }),
                     )

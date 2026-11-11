@@ -5,6 +5,7 @@ import {
   Clipboard,
   FileDown,
   FilePenLine,
+  FileSearch,
   GripVertical,
   Info,
   PanelLeft,
@@ -37,6 +38,9 @@ const AVAILABLE: ToolbarItem[] = [
   'share',
   'edit',
   'search',
+  // Upstream lists it in toolbarAllowedItemIdentifiers between .search and
+  // .printDocument, and keeps it out of the default set.
+  'searchDocument',
   'print',
   'copy',
   'export',
@@ -59,6 +63,7 @@ const label: Record<ToolbarItem, Parameters<typeof t>[1]> = {
   share: 'share',
   edit: 'edit',
   search: 'searchItem',
+  searchDocument: 'searchForDocumentItem',
   print: 'printItem',
   copy: 'copyItem',
   export: 'exportItem',
@@ -94,6 +99,10 @@ const itemIcon = (item: ToolbarItem): React.ReactNode => {
       return <FilePenLine />
     case 'search':
       return <Search />
+    case 'searchDocument':
+      // Upstream uses doc.text.magnifyingglass here: a document search, kept
+      // visually distinct from the plain magnifier of the in-document field.
+      return <FileSearch />
     case 'print':
       return <Printer />
     case 'copy':
@@ -113,12 +122,24 @@ interface ToolbarCustomizerProps {
   locale: Locale
   items: ToolbarItem[]
   displayMode: ToolbarDisplayMode
+  /** Upstream adds .openInLLM to toolbarAllowedItemIdentifiers only while
+   * hasLLMTargetsAvailable; the palette card follows the same gate. */
+  hasLlmTargets?: boolean
   onChange: (items: ToolbarItem[]) => void
   onDisplayModeChange: (mode: ToolbarDisplayMode) => void
   onClose: () => void
 }
 
-export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, onDisplayModeChange, onClose }: ToolbarCustomizerProps) {
+export function ToolbarCustomizer({
+  open,
+  locale,
+  items,
+  displayMode,
+  hasLlmTargets = true,
+  onChange,
+  onDisplayModeChange,
+  onClose,
+}: ToolbarCustomizerProps) {
   const backdropRef = useDialogAccessibility(open, onClose)
   const [overIndex, setOverIndex] = useState<number | null>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
@@ -165,7 +186,7 @@ export function ToolbarCustomizer({ open, locale, items, displayMode, onChange, 
         <div className="tc-scroll-body">
           <h3 className="tc-section">{t(locale, 'availableItems')}</h3>
           <div className="tc-palette">
-            {AVAILABLE.map((item) => (
+            {AVAILABLE.filter((item) => item !== 'openInLlm' || hasLlmTargets).map((item) => (
               <button
                 key={item}
                 type="button"

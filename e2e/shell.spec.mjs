@@ -75,7 +75,7 @@ describe('TextMark desktop shell', () => {
         [...document.querySelectorAll('.settings-pane label')]
           .find((element) => element.querySelector('span')?.textContent?.trim() === label)
           ?.querySelector(selector)
-      const autoSave = control('自动存储', 'select')
+      const autoSave = control('自动保存', 'select')
       const tabs = control('打开文稿时加入标签页', 'input')
       const alwaysOnTop = control('窗口置顶', 'input')
       autoSave.value = '5'
@@ -97,7 +97,7 @@ describe('TextMark desktop shell', () => {
       const control = (label, selector) =>
         labels.find((element) => element.querySelector('span')?.textContent?.trim() === label)?.querySelector(selector)
       return {
-        autoSave: control('自动存储', 'select')?.value,
+        autoSave: control('自动保存', 'select')?.value,
         tabs: control('打开文稿时加入标签页', 'input')?.checked,
         alwaysOnTop: control('窗口置顶', 'input')?.checked,
       }
@@ -107,7 +107,7 @@ describe('TextMark desktop shell', () => {
       const labels = [...document.querySelectorAll('.settings-pane label')]
       const control = (label, selector) =>
         labels.find((element) => element.querySelector('span')?.textContent?.trim() === label)?.querySelector(selector)
-      const autoSave = control('自动存储', 'select')
+      const autoSave = control('自动保存', 'select')
       autoSave.value = '0'
       autoSave.dispatchEvent(new Event('change', { bubbles: true }))
       for (const checkbox of [control('打开文稿时加入标签页', 'input'), control('窗口置顶', 'input')]) {
@@ -141,7 +141,10 @@ describe('TextMark desktop shell', () => {
     await expect(await $('.inspector-panel')).toBeDisplayed()
     await (await $$(".inspector-panel [role='tab']"))[1].click()
     await expect(await $('.frontmatter-list')).toHaveText(expect.stringContaining('TextMark QA'))
-    await $(".inspector-panel button[aria-label='关闭']").click()
+    // Upstream parity: the inspector has no in-panel close button — the
+    // toolbar toggle (View ▸ Inspector) hides it again.
+    await $("button[aria-label='显示简介']").click()
+    await expect(await $('.inspector-panel')).not.toBeDisplayed()
 
     const task = await $('input.task-list-item-checkbox')
     await task.click()
@@ -157,6 +160,77 @@ describe('TextMark desktop shell', () => {
     await expect(await $('.table-context-menu')).toBeDisplayed()
     await $("//div[contains(@class,'table-context-menu')]/button[normalize-space()='复制行']").click()
     expect(await browser.getTitle()).toContain('已编辑')
+  })
+
+  it('copies the reader selection as plain text through the native menu (#637)', async () => {
+    // Two layers of upstream #637 parity on the real desktop:
+    //
+    // 1. NSMenuItemValidation parity. Upstream enables Edit ▸ Copy as Plain
+    //    Text only while the reader has article text selected. The probe
+    //    reads the *live NSMenuItem's* enabled state, so the waits prove
+    //    selectionchange -> invoke -> set_enabled actually reached AppKit
+    //    (disabled -> enabled -> disabled), not just a Rust-side flag.
+    //
+    // 2. The command pipeline. "menu-command" with the item id is the exact
+    //    payload Tauri's on_menu_event emits when the native item fires, so
+    //    emitting it drives the same handler -> DOM walk -> system
+    //    pasteboard path a menu click would. The keystroke itself is not
+    //    asserted: the embedded W3C driver cannot synthesize the
+    //    three-modifier ⌥⇧⌘C key equivalent (verified on this binary:
+    //    ⌘⌥F and ⌘⇧O land, Shift+Alt+C never does), and the accelerator
+    //    registration itself lives in lib.rs next to the working ⌘⌥F
+    //    precedent.
+    const enabled = () => browser.tauri.execute((tauri) => tauri.core.invoke('test_copy_as_plain_text_enabled'))
+    const selectAll = () =>
+      browser.execute(() => {
+        const article = document.querySelector('article.markdown-body')
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.selectAllChildren(article)
+      })
+    await browser.execute(() => window.getSelection().removeAllRanges())
+    await browser.waitUntil(async () => !(await enabled()), {
+      timeoutMsg: 'Copy as Plain Text stayed enabled without a reader selection',
+      timeout: 10000,
+    })
+    await selectAll()
+    await browser.waitUntil(async () => await enabled(), {
+      timeoutMsg: 'the native item never enabled while the reader had a selection',
+      timeout: 10000,
+    })
+    await browser.execute(() => window.getSelection().removeAllRanges())
+    await browser.waitUntil(async () => !(await enabled()), {
+      timeoutMsg: 'the native item stayed enabled after the selection cleared',
+      timeout: 10000,
+    })
+
+    // Re-select, fence the pasteboard with a sentinel, then fire the command.
+    await selectAll()
+    await browser.waitUntil(async () => await enabled(), { timeout: 10000 })
+    await browser.tauri.execute(async (tauri) => {
+      await tauri.core.invoke('plugin:clipboard-manager|write_text', { label: null, text: 'SENTINEL-CLEAR' })
+    })
+    await browser.execute(() => {
+      window.__TAURI__.event.emit('menu-command', 'copy-as-plain-text')
+    })
+    // The write is async (lazy module + clipboard plugin); poll the real
+    // system pasteboard until the plain-text flavor lands.
+    let pasted = ''
+    await browser.waitUntil(
+      async () => {
+        pasted = await browser.tauri.execute((tauri) => tauri.core.invoke('test_read_pasteboard'))
+        return pasted.includes('Verify native task editing')
+      },
+      { timeoutMsg: `pasteboard did not receive the plain-text copy: ${JSON.stringify(pasted)}`, timeout: 10000 },
+    )
+    // Text as it reads: task boxes and tab-separated table rows instead of
+    // Markdown source syntax.
+    expect(pasted).toMatch(/[☐☑] Verify native task editing/)
+    expect(pasted).toContain('Preview\tReady')
+    expect(pasted).not.toContain('- [')
+    expect(pasted).not.toContain('| Preview |')
+    expect(pasted).not.toContain('# E2E Native Document')
+    expect(pasted).toContain('E2E Native Document')
   })
 
   it('persists a pasted clipboard image and inserts a relative Markdown reference', async () => {
@@ -230,9 +304,9 @@ describe('TextMark desktop shell', () => {
 })
 
 // Toolbar click matrix: every top-area control must respond to real clicks.
-// Runs against the default toolbar (flexibleSpace, sidebar, navigation,
-// flexibleSpace, openActions, space, zoom, inspector, share, edit, search)
-// in the default zh-CN locale. Native file dialogs are intentionally not
+// Runs against the default toolbar (sidebar, navigation, flexibleSpace,
+// openActions, space, themesAndSettings, space, inspector, share, edit,
+// search) in the default zh-CN locale. Native file dialogs are intentionally not
 // invoked: their trigger items are asserted to exist and open the menu, and
 // dialog-bound actions stay covered by the shell tests above.
 
@@ -269,8 +343,8 @@ describe('TextMark toolbar click matrix', () => {
     // The pane picker is a segmented control on the toolbar (upstream
     // AppKit parity): it is always present, toggles aria-pressed, and picking a
     // pane reveals the sidebar the same way the native pane picker does.
-    const outline = await $('.sidebar-mode-picker button[aria-label="大纲"]')
-    await $('.sidebar-mode-picker button[aria-label="文件夹"]').click()
+    const outline = await $('.sidebar-mode-picker button[aria-label="目录"]')
+    await $('.sidebar-mode-picker button[aria-label="项目导航器"]').click()
     await expect(await $('.native-file-tree')).toBeDisplayed()
     await outline.click()
     await expect(await $('.native-outline')).toBeDisplayed()
@@ -351,7 +425,12 @@ describe('TextMark toolbar click matrix', () => {
   })
 
   it('share falls back to copy and flashes a notice', async () => {
+    // Upstream parity: the share toolbar item is an NSSharingServicePicker,
+    // so the button opens a popover; the 共享 row runs the share (which falls
+    // back to a clipboard copy in the e2e binary and flashes a notice).
     await $('button[aria-label="共享 Markdown 源文件"]').click()
+    await expect(await $('.share-popover')).toBeDisplayed()
+    await $("//div[contains(@class,'share-popover')]/div[3]/button[normalize-space()='共享']").click()
     await expect(await $('.toast[role="status"]')).toBeDisplayed()
   })
 
@@ -400,20 +479,33 @@ describe('TextMark toolbar click matrix', () => {
     await $('.more-menu summary[title="更多"]').click()
     await $("//details[contains(@class,'more-menu')]//button[normalize-space()='偏好设置…']").click()
     await expect(await $('.settings-dialog')).toBeDisplayed()
-    await $("//nav[contains(@class,'settings-nav')]/button[normalize-space()='外观']").click()
-    expect(await $$('.theme-preset-grid > button')).toHaveLength(7)
-    await $("//div[contains(@class,'theme-preset-grid')]/button[normalize-space()='Solarized Dark']").click()
-    expect(await browser.execute(() => document.documentElement.style.getPropertyValue('--window'))).toBe('#0C3742')
+    await $("//nav[contains(@class,'settings-tabs')]/button[normalize-space()='外观']").click()
+    // Upstream ThemePreset.builtIn: nine presets in a 3×3 gallery (Original,
+    // Quiet, Paper / Bold, Calm, Focus / Graphite, Dusk, Midnight).
+    expect(await $$('.theme-preset-grid > button')).toHaveLength(9)
+    await $("//div[contains(@class,'theme-preset-grid')]/button[@aria-label='Dusk']").click()
+    await browser.waitUntil(
+      async () => (await browser.execute(() => document.documentElement.style.getPropertyValue('--window'))) === '#0C3742',
+      { timeoutMsg: 'Dusk did not apply its window color', timeout: 5000 },
+    )
+    // Per-theme color editing lives in the Customize Theme sheet (upstream
+    // CustomizeThemeView), which presents above the settings window.
+    await $('.settings-customize-theme').click()
+    await expect(await $('.customize-theme-sheet')).toBeDisplayed()
+    const sheetColor = () => browser.execute(() => document.querySelector('.customize-theme-color input[type="color"]')?.value ?? '')
     await browser.execute(() => {
-      const color = document.querySelector('.theme-colors input[type="color"]')
+      const color = document.querySelector('.customize-theme-color input[type="color"]')
       const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
       setValue.call(color, '#123456')
       color.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await expect(await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']")).toBeEnabled()
-    await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']").click()
-    await expect(await $("//div[contains(@class,'theme-colors-heading')]/button[normalize-space()='恢复默认']")).not.toBeEnabled()
-    await $("//div[contains(@class,'theme-preset-grid')]/button[normalize-space()='Normal']").click()
+    await expect(sheetColor()).resolves.toBe('#123456')
+    await $('.customize-theme-reset').click()
+    await expect(sheetColor()).resolves.toBe('#0c3742')
+    await $('.customize-theme-done').click()
+    await expect(await $('.customize-theme-sheet')).not.toBeDisplayed()
+    // Back to the neutral default for the remaining scenarios.
+    await $("//div[contains(@class,'theme-preset-grid')]/button[@aria-label='Original']").click()
     await $(".settings-dialog button[aria-label='关闭']").click()
   })
 
@@ -499,6 +591,6 @@ describe('TextMark toolbar click matrix', () => {
     const editor = await $('.cm-content')
     await editor.waitForDisplayed()
     expect(await editor.getText()).toBe('')
-    await expect(await $('.formatting-toolbar[aria-label="Markdown 格式"]')).toBeDisplayed()
+    await expect(await $('.floating-format-bar')).toBeDisplayed()
   })
 })

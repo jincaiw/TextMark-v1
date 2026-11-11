@@ -130,7 +130,7 @@ const readToolsState = async () => {
       const workspace = document.querySelector('.document-workspace');
       const tools = workspace?.querySelector('.document-tools');
       const find = tools?.querySelector('.find-bar');
-      const formatting = tools?.querySelector('.formatting-toolbar');
+      const formatting = workspace?.querySelector('.floating-format-bar');
       const content = workspace?.querySelector('.cm-content');
       const preview = workspace?.querySelector('.preview-pane');
       const scroller = workspace?.querySelector('.cm-scroller');
@@ -139,16 +139,15 @@ const readToolsState = async () => {
         scrollContainer = scrollContainer.parentElement;
       }
       const bounds = rect(workspace);
-      const controls = [...(tools?.querySelectorAll(
+      const controls = [tools, formatting].filter(Boolean).flatMap((host) => [...host.querySelectorAll(
         'button, input, select, textarea, summary, a[href], [role="button"], [role="tab"], [role="combobox"], [tabindex], [contenteditable="true"]'
-      ) || [])].filter((element) => {
+      )]).filter((element) => {
         const box = element.getBoundingClientRect();
         // 不按视口筛选，否则完全越界的控件会逃过检查。
         return element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && box.width > 0 && box.height > 0;
       }).map((element) => {
         const box = rect(element);
-        const bar = element.closest('.formatting-toolbar');
-        const horizontalScrollException = Boolean(bar && /^(auto|scroll)$/.test(getComputedStyle(bar).overflowX) && bar.scrollWidth > bar.clientWidth);
+        const horizontalScrollException = false;
         const withinWorkspace = Boolean(bounds && box.top >= bounds.top - 0.5 && box.bottom <= bounds.bottom + 0.5 &&
           (horizontalScrollException || (box.left >= bounds.left - 0.5 && box.right <= bounds.right + 0.5)));
         return { ...identify(element), rect: box, horizontalScrollException, withinWorkspace };
@@ -202,8 +201,11 @@ let appearance
 const toolsMeasuredCondition = `(() => {
   const tools = document.querySelector('.document-tools');
   const workspace = document.querySelector('.document-workspace');
-  const height = workspace ? parseFloat(getComputedStyle(workspace).getPropertyValue('--document-tools-height')) : 0;
-  return tools && height > 0 && Math.abs(height - tools.getBoundingClientRect().height) <= 0.5;
+  if (!tools || !workspace) return false;
+  const raw = getComputedStyle(workspace).getPropertyValue('--document-tools-height').trim();
+  const height = raw ? parseFloat(raw) : 0;
+  // 浮层格式条不占工具高度，编辑态关闭查找时高度合法为零。
+  return Math.abs(height - tools.getBoundingClientRect().height) <= 0.5;
 })()`
 const toolbarFixtures = {
   'print-inspector': {
@@ -746,13 +748,10 @@ if (scenario === 'edit') {
           Math.abs(snapshot.rects.slot.width - sidebarTracking.closed.rects.slot.width) <= 1,
       )
     }
-    assert(
-      `${phase}.titleInsideFirstFlexibleSpace`,
-      snapshot.titleInFirstFlexibleSpace &&
-        snapshot.titleVisible &&
-        inside(snapshot.rects.title, snapshot.rects.flexibleSpace) &&
-        inside(snapshot.rects.titleName, snapshot.rects.flexibleSpace),
-    )
+    // v0.10.8 single-source document title: the toolbar no longer renders a
+    // document title (upstream keeps it only in the native window titlebar),
+    // so the flexibleSpace slot must be empty of a .toolbar-document-context.
+    assert(`${phase}.noToolbarDocumentTitle`, !snapshot.titleVisible && snapshot.rects.title === null)
     // 透明 input 也保留原始 rect，不能按可见性过滤而掩盖现有产品越界。
     assert(`${phase}.searchInputInsideSearchBox`, snapshot.searchRendered && inside(snapshot.rects.input, snapshot.rects.search))
     assert(`${phase}.noPageHorizontalOverflow`, snapshot.scrollWidth <= snapshot.viewport.pageWidth)
@@ -1150,10 +1149,7 @@ if (scenario === 'edit') {
   const inEditor = await send('Runtime.evaluate', { expression: "Boolean(document.querySelector('.cm-editor'))", returnByValue: true })
   if (!inEditor.result.value) await click('.native-toolbar [aria-label="编辑"], .native-toolbar [aria-label="Edit"]', '未找到编辑按钮')
   await waitFor("isVisible(document.querySelector('.editor-pane .cm-editor'))", 'README 编辑器可见')
-  await waitFor(
-    `isVisible(document.querySelector('.document-tools .formatting-toolbar')) && ${toolsMeasuredCondition}`,
-    '格式条高度已写入 CSS 变量',
-  )
+  await waitFor(`isVisible(document.querySelector('.floating-format-bar')) && ${toolsMeasuredCondition}`, '格式条可见且工具高度已测量')
   await delay(250)
   const scroll = await send('Runtime.evaluate', {
     expression: `(() => {
@@ -1274,7 +1270,7 @@ const geometry = await send('Runtime.evaluate', {
       '.document-tabs',
       '.document-shell',
       '.document-workspace',
-      '.formatting-toolbar',
+      '.floating-format-bar',
       '.editor-pane',
       '.cm-content',
       '.cm-editor',
@@ -1447,9 +1443,13 @@ if (tabsFind) {
     const open = ['after', 'reopened', 'final'].includes(phase)
     assertions[`${phase}.readmeActive`] = /^README(?:\.md)?$/i.test(snapshot.activeTab ?? '') && snapshot.visibleTabCount >= 2
     assertions[`${phase}.absoluteOverlay`] = snapshot.position === 'absolute'
-    assertions[`${phase}.heightMeasured`] = snapshot.cssHeightPx > 0 && Math.abs(snapshot.cssHeightPx - snapshot.height) <= 0.5
+    assertions[`${phase}.heightMeasured`] =
+      Math.abs(snapshot.cssHeightPx - snapshot.height) <= 0.5 && (open ? snapshot.cssHeightPx > 0 : snapshot.cssHeightPx === 0)
     assertions[`${phase}.formattingInsideWorkspace`] = inside(snapshot.rects.formatting, snapshot.rects.workspace)
-    assertions[`${phase}.toolsInsideWorkspace`] = inside(snapshot.rects.tools, snapshot.rects.workspace)
+    // 浮层格式条不在 .document-tools 内（编辑态关闭查找时工具高度合法为零），
+    // 单独要求条本身在 workspace 内；工具条存在时仍需被 workspace 包含。
+    assertions[`${phase}.toolsInsideWorkspace`] =
+      snapshot.rects.tools === null || snapshot.rects.tools.height === 0 || inside(snapshot.rects.tools, snapshot.rects.workspace)
     assertions[`${phase}.controlsInsideWorkspace`] = snapshot.controls.length > 0 && snapshot.overflowingControls.length === 0
     assertions[`${phase}.realScrollContainer`] = Boolean(
       snapshot.scrollContainer?.className.split(/\s+/).includes('cm-scroller') &&
@@ -1477,7 +1477,7 @@ if (scenario.startsWith('print-') || scenario === 'print') {
   await send('Emulation.setEmulatedMedia', { media: 'print' })
   const result = await send('Runtime.evaluate', {
     expression: `(() => {
-      const selectors = ['.native-toolbar', '.native-sidebar', '.document-tabs', '.inspector-panel', '.formatting-toolbar', '.find-bar', '.document-tools', '.toast'];
+      const selectors = ['.native-toolbar', '.native-sidebar', '.document-tabs', '.inspector-panel', '.floating-format-bar', '.find-bar', '.document-tools', '.toast'];
       const display = (selector) => {
         const element = document.querySelector(selector);
         return element ? getComputedStyle(element).display : null;

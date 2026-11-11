@@ -9,8 +9,11 @@ import { DraftRecoveryDialog } from './components/DraftRecoveryDialog'
 import { DocumentTabs } from './components/DocumentTabs'
 import { ExportDialog } from './components/ExportDialog'
 import { FindBar } from './components/FindBar'
+import { FileSearchPalette, type OpenMode } from './components/FileSearchPalette'
+import { flattenProjectFiles, recentCandidates } from './lib/fileSearchIndex'
 import { DocumentTools } from './components/DocumentTools'
-import { FormattingToolbar } from './components/FormattingToolbar'
+import { FloatingFormatBar } from './components/FloatingFormatBar'
+import type { FormattingState } from './lib/formatState'
 import { Inspector } from './components/Inspector'
 import { PreviewPane } from './components/PreviewPane'
 import { PanelResizer } from './components/PanelResizer'
@@ -43,6 +46,7 @@ import {
   isMacos,
   isTauri,
   installCli,
+  listRecentFiles,
   openDocumentWindow,
   openSettingsWindow,
   printCurrentWindow,
@@ -53,6 +57,7 @@ import {
   refreshMenu,
   saveExportFile,
   setDefaultHandler,
+  setCopyAsPlainTextEnabled,
   shareSourceNatively,
   shouldUseDedicatedSettingsWindow,
   tempExportPath,
@@ -158,11 +163,14 @@ function DocumentApp() {
   const [exportOpen, setExportOpen] = useState(false)
   const [defaultHandlerPrompt, setDefaultHandlerPrompt] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const [fileSearchOpen, setFileSearchOpen] = useState(false)
+  const [recentPaths, setRecentPaths] = useState<string[]>([])
   const [pendingScrollFraction, setPendingScrollFraction] = useState<number | null>(null)
   const [pendingEditorLine, setPendingEditorLine] = useState<number | null>(null)
   const [pendingEditorCursor, setPendingEditorCursor] = useState<{ line: number; column: number } | null>(null)
   const [pendingEditorSelection, setPendingEditorSelection] = useState<EditorSessionState['selection'] | null>(null)
   const [selectionStats, setSelectionStats] = useState<DocumentStats | null>(null)
+  const [formatting, setFormatting] = useState<FormattingState>({ heading: 0, commands: [], selectedText: null })
   const [pendingPreviewLine, setPendingPreviewLine] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [replacement, setReplacement] = useState('')
@@ -722,6 +730,18 @@ function DocumentApp() {
     }
   }
   const menuCommandRef = useRef<(command: string) => void>(() => {})
+  // Upstream #637: the pasteboard write goes through the clipboard plugin so
+  // rich text fields get the HTML too. Dynamic imports keep both off the
+  // first-screen bundle (the budget is a hard 324 KiB).
+  const copyAsPlainTextAction = async () => {
+    const { copyAsPlainText } = await import('./lib/plainTextCopy')
+    const copied = await copyAsPlainText(async (copy) => {
+      const { writeHtml, writeText } = await import('@tauri-apps/plugin-clipboard-manager')
+      if (copy.html) await writeHtml(copy.html, copy.text)
+      else await writeText(copy.text)
+    })
+    if (!copied) flash(t(settings.locale, 'plainTextCopyNoSelection'))
+  }
   menuCommandRef.current = (command: string) => {
     if (command === 'open') void documents.openFile()
     else if (command.startsWith('open-recent:')) void documents.openPath(command.slice('open-recent:'.length))
@@ -740,7 +760,8 @@ function DocumentApp() {
       void documents.openFolder()
       setSidebarMode('files')
       setSidebarVisible(true)
-    } else if (command === 'new-tab') void documents.openFile(true)
+    } else if (command === 'search-document') openFileSearch()
+    else if (command === 'new-tab') void documents.openFile(true)
     else if (command === 'new-document') createNewDocument()
     else if (command === 'close-tab') documents.closeSession(documents.activeId)
     else if (command === 'save') void documents.saveFile()
@@ -757,6 +778,7 @@ function DocumentApp() {
     else if (command === 'find-replace') openFindReplace()
     else if (command === 'use-selection-find') useSelectionForFind()
     else if (command === 'jump-to-selection') jumpToSelection()
+    else if (command === 'copy-as-plain-text') void copyAsPlainTextAction()
     else if (command === 'edit-mode') switchViewMode(viewMode === 'edit' ? 'preview' : 'edit')
     else if (command === 'sidebar') setSidebarVisible((value) => !value)
     else if (command === 'sidebar-hide') setSidebarVisible(false)
@@ -804,6 +826,36 @@ function DocumentApp() {
       void subscription.then((dispose) => dispose())
     }
   }, [])
+  // Upstream #637: the reader reports whether article text is selected, and
+  // the native Edit menu enables Copy as Plain Text only while it is. The
+  // cheap clipped-range check mirrors upstream's selection clip without the
+  // full text walk; the copy path itself re-checks and no-ops (beep-style
+  // rejection) when nothing copyable is selected.
+  useEffect(() => {
+    if (!isTauri()) return
+    const report = () => {
+      const selection = window.getSelection()
+      const article = document.querySelector('article.markdown-body')
+      let hasText = false
+      if (article && selection && !selection.isCollapsed && selection.rangeCount) {
+        const range = selection.getRangeAt(0)
+        if (range.intersectsNode(article)) {
+          const clipped = range.cloneRange()
+          const bounds = document.createRange()
+          bounds.selectNodeContents(article)
+          if (clipped.compareBoundaryPoints(Range.START_TO_START, bounds) < 0) clipped.setStart(bounds.startContainer, bounds.startOffset)
+          if (clipped.compareBoundaryPoints(Range.END_TO_END, bounds) > 0) clipped.setEnd(bounds.endContainer, bounds.endOffset)
+          hasText = clipped.toString().trim().length > 0
+        }
+      }
+      void setCopyAsPlainTextEnabled(hasText)
+    }
+    document.addEventListener('selectionchange', report)
+    // A pane swap (edit ↔ preview) can drop the selection without firing
+    // selectionchange, so re-report whenever the mode changes.
+    report()
+    return () => document.removeEventListener('selectionchange', report)
+  }, [viewMode])
   const toggleTask = (targetIndex: number, checked: boolean) => {
     const line = rendered.tasks[targetIndex]?.line
     if (!line) return
@@ -842,6 +894,29 @@ function DocumentApp() {
     setPendingEditorSelection(saved)
     setPendingRevealSelection(true)
   }
+  // Upstream Search for Document… (⇧⌘O): a floating palette over the mounted
+  // project's Markdown files plus the app-wide recents (recents-only when no
+  // folder is mounted).
+  const openFileSearch = () => {
+    void listRecentFiles()
+      .then(setRecentPaths)
+      .catch(() => setRecentPaths([]))
+    setFileSearchOpen(true)
+  }
+  const openSearchResult = (path: string, mode: OpenMode) => {
+    setFileSearchOpen(false)
+    if (mode === 'window') void openDocumentWindow(path)
+    else void documents.openPath(path, mode === 'tab')
+  }
+  const projectSearch = useMemo(
+    () => (documents.workspacePath ? flattenProjectFiles(documents.files, documents.workspacePath) : { files: [], truncated: false }),
+    [documents.files, documents.workspacePath],
+  )
+  const searchRecents = useMemo(() => recentCandidates(recentPaths), [recentPaths])
+  const searchProjectName = useMemo(() => {
+    if (!documents.workspacePath) return null
+    return documents.workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? null
+  }, [documents.workspacePath])
   const replaceCurrent = () => {
     if (viewMode !== 'edit' || !searchQuery) return
     const replaced = editorRef.current?.replace(searchQuery, replacement, { matchCase, mode: searchMode }) ?? 0
@@ -1007,9 +1082,7 @@ function DocumentApp() {
         void documents.saveFile()
       } else if (key === 'o' && event.shiftKey) {
         event.preventDefault()
-        void documents.openFolder()
-        setSidebarMode('files')
-        setSidebarVisible(true)
+        openFileSearch()
       } else if (key === 'o') {
         event.preventDefault()
         void documents.openFile()
@@ -1313,6 +1386,7 @@ function DocumentApp() {
           setFindOpen(true)
         }}
         onSearchOpen={() => setFindOpen(true)}
+        onSearchDocument={openFileSearch}
         onOpenWith={(application) => void openWith(application)}
         onOpenInLlm={(application) => void openInLlm(application)}
         onOpen={() => void documents.openFile()}
@@ -1406,8 +1480,24 @@ function DocumentApp() {
                   onClose={() => setFindOpen(false)}
                 />
               ) : null}
-              {viewMode === 'edit' ? <FormattingToolbar locale={settings.locale} onFormat={format} /> : null}
             </DocumentTools>
+            {viewMode === 'edit' ? (
+              <FloatingFormatBar
+                locale={settings.locale}
+                heading={formatting.heading}
+                commands={formatting.commands}
+                onFormat={format}
+                onBlockStyle={(style, language) => editorRef.current?.setBlockStyle(style, language)}
+                onListStyle={(style) => editorRef.current?.setListStyle(style)}
+                onLink={(text, url) => {
+                  const selection = editorRef.current?.getLinkSelection()
+                  if (selection) editorRef.current?.insertLink(text, url, selection.from, selection.to)
+                }}
+                getBlockStyle={() => editorRef.current?.getBlockStyle() ?? null}
+                getListStyle={() => editorRef.current?.getListStyle() ?? null}
+                getLinkSelection={() => editorRef.current?.getLinkSelection() ?? null}
+              />
+            ) : null}
             {viewMode === 'edit' ? (
               <Suspense fallback={<div className="editor-loading" />}>
                 <EditorPane
@@ -1428,6 +1518,7 @@ function DocumentApp() {
                   onInitialPositionApplied={clearPendingEditorPosition}
                   onStateChange={documents.reportEditorState}
                   onSelectionStatsChange={setSelectionStats}
+                  onFormattingChange={setFormatting}
                   initialFormat={pendingFormat}
                   onInitialFormatApplied={() => setPendingFormat(null)}
                   initialRevealSelection={pendingRevealSelection}
@@ -1556,6 +1647,22 @@ function DocumentApp() {
         onExportPdf={() => exportPdf()}
         onClose={() => setExportOpen(false)}
       />
+      <FileSearchPalette
+        open={fileSearchOpen}
+        locale={settings.locale}
+        projectFiles={projectSearch.files}
+        recents={searchRecents}
+        projectName={searchProjectName}
+        truncated={projectSearch.truncated}
+        onOpen={openSearchResult}
+        onOpenFolder={() => {
+          setFileSearchOpen(false)
+          void documents.openFolder()
+          setSidebarMode('files')
+          setSidebarVisible(true)
+        }}
+        onClose={() => setFileSearchOpen(false)}
+      />
       {defaultHandlerPrompt ? (
         <div className="dialog-backdrop">
           <section className="conflict-dialog" role="dialog" aria-modal="true">
@@ -1579,33 +1686,10 @@ function DocumentApp() {
         locale={settings.locale}
         items={settings.toolbar}
         displayMode={settings.toolbarDisplay}
+        hasLlmTargets={applications.some((application) => application.kind === 'llm' && application.available)}
         onChange={(toolbar) => patch({ toolbar })}
         onDisplayModeChange={(toolbarDisplay) => patch({ toolbarDisplay })}
         onClose={() => setToolbarOpen(false)}
-      />
-      <CustomizeThemeSheet
-        open={customizeThemeOpen}
-        locale={settings.locale}
-        theme={settings.theme}
-        themePreset={settings.themePreset}
-        look={readingLook}
-        onApply={(look) => {
-          applyReadingLook(look)
-          setCustomizeThemeOpen(false)
-        }}
-        onCancel={() => setCustomizeThemeOpen(false)}
-        onResetTheme={() => {
-          chooseThemePreset(settings.themePreset)
-          applyReadingLook({
-            documentFont: THEME_PRESETS[settings.themePreset].font,
-            themeColors: {},
-            boldText: THEME_PRESETS[settings.themePreset].boldText,
-            readerCustomized: false,
-            characterSpacingPercent: 0,
-            wordSpacingPercent: 0,
-            marginsPercent: 0,
-          })
-        }}
       />
       <SettingsDialog
         open={settingsOpen}
@@ -1651,6 +1735,30 @@ function DocumentApp() {
         onInstallCli={installCliAction}
         onClose={() => {
           setSettingsOpen(false)
+        }}
+      />
+      <CustomizeThemeSheet
+        open={customizeThemeOpen}
+        locale={settings.locale}
+        theme={settings.theme}
+        themePreset={settings.themePreset}
+        look={readingLook}
+        onApply={(look) => {
+          applyReadingLook(look)
+          setCustomizeThemeOpen(false)
+        }}
+        onCancel={() => setCustomizeThemeOpen(false)}
+        onResetTheme={() => {
+          chooseThemePreset(settings.themePreset)
+          applyReadingLook({
+            documentFont: THEME_PRESETS[settings.themePreset].font,
+            themeColors: {},
+            boldText: THEME_PRESETS[settings.themePreset].boldText,
+            readerCustomized: false,
+            characterSpacingPercent: 0,
+            wordSpacingPercent: 0,
+            marginsPercent: 0,
+          })
         }}
       />
     </main>
