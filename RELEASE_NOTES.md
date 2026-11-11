@@ -11,6 +11,7 @@ TextMark 0.11.0 完成对 Markdown Preview v0.0.72（上游当前版本）的桌
 - 阅读渲染对齐：脚注区与源码映射；`\[18\]` 转义引用按字面文本渲染而非数学公式；目录条目锚定到真实标题行（含空标题防护）；有序列表编号列宽按该列表最大序号位数固定，切换模式与缩放时列不位移。
 - 外观：主题预设扩至九款（Original…Midnight，与上游 ThemePreset 逐一对应）；「自定义主题」面板以色板/重置/完成走查校正，并修复从设置 ▸ 外观打开时面板被设置对话框遮挡的层级缺陷。
 - 措辞与结构：侧栏模式选择器改「目录 / 项目导航器」、自动保存文案对齐上游 zh「自动保存」、显示简介去掉面板内关闭按钮（与上游一致，经工具栏或 View ▸ Inspector 关闭）、分享浮层「共享」行归位。
+- 编辑画布折行：覆盖 CodeMirror 基础的 `break-spaces`，改按上游 `#editor .cm-content.cm-lineWrapping { white-space: pre-wrap }`——行尾空格悬于最后一个字形之外，编辑态与阅读页折行逐字一致。
 - 关闭流程：补齐 `core:window:allow-close` 能力，红绿灯关闭在有未保存文稿时正确弹出保存询问、保存后关闭窗口（此前保存后关闭会被权限拒绝）。
 - 验收：新增真实桌面 e2e——wdio + Tauri driver 驱动带 `e2e` feature 的原生调试二进制，覆盖启动渲染、窗口几何、偏好持久化、原生菜单启用态往返、系统粘贴板逐项断言、剪贴板图片落盘、保存/冲突/改名/删除重建等 23 个场景，全部通过；前端 56 个测试文件 592 项测试、TypeScript、ESLint、格式、构建、包体积预算（main+worker 323 KiB）与 Rust fmt/check/clippy/test（含 `--features e2e`）全部通过。逐面对比与证据边界见 `outputs/desktop-review-20260918/TextMark-v0.0.72-桌面UI完全一致对比表-v1.0.md`。
 

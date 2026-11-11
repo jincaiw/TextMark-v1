@@ -2057,6 +2057,14 @@ select:focus-visible {
   padding: calc(32px + var(--document-tools-height, 0px)) 0 48px;
   caret-color: var(--accent);
 }
+/* CodeMirror's base theme wraps with `break-spaces`, which counts trailing
+   spaces inside the measure and can push a line's last word onto the next
+   line; the reference overrides it to `pre-wrap` (EditorHTML.swift
+   `#editor .cm-content.cm-lineWrapping`) so trailing spaces hang outside the
+   final glyph exactly as they do on the reading page. */
+.editor-pane .cm-content.cm-lineWrapping {
+  white-space: pre-wrap;
+}
 .editor-pane.content-full .cm-content {
   max-width: none;
 }

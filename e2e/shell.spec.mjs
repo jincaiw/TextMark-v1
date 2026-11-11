@@ -410,6 +410,20 @@ describe('TextMark toolbar click matrix', () => {
     await expect(await $('.app-shell')).not.toHaveClassContaining('mode-edit')
     await edit.click()
     await expect(await $('.app-shell')).toHaveClassContaining('mode-edit')
+    // Upstream EditorHTML.swift overrides CodeMirror's base-theme
+    // `break-spaces` with `pre-wrap` on the wrapping canvas, so trailing
+    // spaces hang outside the measure exactly as on the reading page.
+    let wrapping = null
+    await browser.waitUntil(
+      async () => {
+        wrapping = await browser.execute(() => {
+          const content = document.querySelector('.editor-pane .cm-content')
+          return content ? getComputedStyle(content).whiteSpace : null
+        })
+        return wrapping === 'pre-wrap'
+      },
+      { timeoutMsg: `editor canvas white-space is ${JSON.stringify(wrapping)}, expected pre-wrap`, timeout: 10000 },
+    )
     await edit.click()
     await expect(await $('.app-shell')).not.toHaveClassContaining('mode-edit')
   })

@@ -53,6 +53,7 @@
 |---|---|---|---|---|
 | 浮动格式簇（macOS 26 玻璃） | DocumentWindowController+FormattingBar.swift：五胶囊结构、钉右上、click-through、tint 实时 | FloatingFormatBar 同构（B6），⇧⌘O/格式条不再依赖 .document-tools 高度 | 一致 | U, B, D |
 | 格式化语义 | entry-cm.js（同为 CodeMirror） | formatEditing.ts 直接移植 exec 表（toggleInlineMark/setHeading/列表互转/块样式/链接转义） | 一致 | U(24+12 项) |
+| 编辑画布空白模型 | `#editor .cm-content.cm-lineWrapping { white-space: pre-wrap }`（EditorHTML.swift:144，行尾空格悬于字距外） | App.css 同款覆盖（压过 CodeMirror 基础 `break-spaces`）；真实桌面用例断言 `.cm-content` 计算样式 `white-space: pre-wrap` | 一致 | D |
 | 编辑态切换 | 工具栏按钮 | 桌面 on/off 用例 | 一致 | D |
 | 查找/替换 | ⌘F / ⌘⌥F | 桌面 find bar 用例 + ⌘⌥F 真实按键命中（driver 可投递该和弦） | 一致 | D |
 | 文档级缩放 | pageZoom | fontSize 乘数（等价可见结果；#638 缺陷结构性不可能） | 一致（实现不同，判 N/A 差异） | D, S |
